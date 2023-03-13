@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "d20-governance"
+version = "0.1.0"
+description = "A governance game."
+readme = "README.md"
+packages = [{include = "d20_governance"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+discord = "^2.2.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
