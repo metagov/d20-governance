@@ -2,12 +2,14 @@
 name = "d20-governance"
 version = "0.1.0"
 description = "A governance game."
+authors = ["d20-team"]
 readme = "README.md"
 packages = [{include = "d20_governance"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
 discord = "^2.2.2"
+poetry-dotenv-plugin = "^0.1.0"
 
 [build-system]
 requires = ["poetry-core"]
