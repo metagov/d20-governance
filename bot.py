@@ -2,9 +2,8 @@ import discord
 import random
 import os
 import asyncio
-import re
 from dotenv import load_dotenv
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ext.commands import has_permissions, MissingPermissions
 
 description = '''A bot for experimenting with governance'''
@@ -24,14 +23,33 @@ token = os.getenv("DISCORD_TOKEN")
 if token is None:
     raise ValueError("DISCORD_TOKEN environment variable not set")
 
+# Timeouts
+waiting_timeout = 600  # The window for starting a game will time out after 10 minutes
+# The game will auto-archive if there is no game play within 24 hours
+playing_timeout = 86400
+
+# Presets
+replace_vowels = False
 
 # Events
+
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
 
 # Commands
+@bot.command()
+async def test_game(ctx):
+    """
+    For testing the game. Bypasses join step.
+    """
+    print("Testing...")
+    await ctx.send("Starting game")
+    await make_game(ctx)
+
+
 @bot.command()
 async def start_game(ctx, num_players: int = None):
     """
@@ -43,6 +61,7 @@ async def start_game(ctx, num_players: int = None):
     Example: 
       /start_game 4
     """
+    print("Starting...")
     if num_players is None:
         await ctx.send("Specify the number of players needed to start the game. Type `/ help start_game` for more information.")
         return
@@ -53,24 +72,16 @@ async def start_game(ctx, num_players: int = None):
         await ctx.send("The maximum number of players that can play at once is 20")
         return
     else:
-        await ctx.send(f"The game will start after {num_players - 1} players type join...")
+        await ctx.send(f"The game will start after {num_players} players type join...")
+        await waiting(ctx, num_players)
+# TODO: Prevent access to test_game and start_game outside of #game-creation channel
 
-        # Set timeout for starting game
-        waiting_timeout = 600  # The window for starting a game will time out after 10 minutes
-        # The game will auto-archive if there is no game play within 24 hours
-        playing_timeout = 86400
 
-        # Set game state and timeout
-        state = "waiting_for_players"
-
-        # Create temporary channel
-        temp_channel = None
-
-        # Set up vowel replacement event
-        replace_vowels = False
-
-    # Waiting for Players
-    while state == "waiting_for_players":
+# Game States and Functions
+# Waiting For Players
+async def waiting(ctx, num_players):
+    print("Waiting...")
+    while True:
         try:
             message = await bot.wait_for("message", timeout=waiting_timeout, check=lambda m: m.author != bot.user and m.content.lower() == "join")
         except asyncio.TimeoutError:
@@ -85,54 +96,68 @@ async def start_game(ctx, num_players: int = None):
         members = []
         async for member in ctx.guild.fetch_members(limit=num_players):
             members.append(member)
-        if len(members) == num_players:
-            overwrites = {
-                ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                ctx.guild.me: discord.PermissionOverwrite(read_messages=True)
-            }
-            category = discord.utils.get(ctx.guild.categories, name="play")
-            temp_channel = await category.create_text_channel(name="d20-play", overwrites=overwrites)
-            await ctx.send(f"Temporary channel {temp_channel.mention} has been created.")
-            await temp_channel.send("**d20 Play Has Begun**")
-            await temp_channel.send(
-                "**The Intro:**\n\n"
-                "You have returned from an internet sabbath, "
-                "and a communication collapse has swept over the internet's "
-                "communication platforms. The usual ways of having conversations "
-                "and making decisions online have been scrambled.\n\n"
-                "Structures for making decisions and constraints on your ability "
-                "to communicate are randomly imposed on this communication environment. "
-                "You must now use new tools to piece together meaning, "
-                "negotiate conversation, and make collective decisions "
-                "in spite of this chaos.\n"
-            )
-            commands_list = await temp_channel.send(
-                "**Available Commands:\n**"
-                "'deciding'\n"
-                "'task_one'\n"
-                "'culture'\n"
-                "'obscure'\n"
-                "'end_obscurity'\n"
-                "'secret_message'\n"
-                "'quit'"
-            )
-            state = "playing"
-            # TODO: Remove this list of available commands and have them set to a timer
-            # TODO: Have a message here broadcasting the commands that the players have available to themselves
-            # TODO: Make temporary channels have unique names appended to base "d20-play"
-            # The appended text can be set by user or increment by number of active channels and order created
+        if len(members) == num_players + 1:  # plus 1 to account for bot as member
+            await make_game(ctx)
+    # TODO: Turn the joining process into an emoji-based register instead of typing "join"
 
+# Making The Game
+
+
+async def make_game(ctx):
+    print("Making...")
+    overwrites = {
+        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        ctx.guild.me: discord.PermissionOverwrite(read_messages=True)
+    }
+    category = discord.utils.get(ctx.guild.categories, name="play")
+    temp_channel = await category.create_text_channel(name="d20-play", overwrites=overwrites)
+    await ctx.send(f"Temporary channel {temp_channel.mention} has been created.")
+    await temp_channel.send("**d20 Play Has Begun**")
+    await temp_channel.send(
+        "**The Intro:**\n\n"
+        "You have returned from an internet sabbath, "
+        "and a communication collapse has swept over the internet's "
+        "communication platforms. The usual ways of having conversations "
+        "and making decisions online have been scrambled.\n\n"
+        "Structures for making decisions and constraints on your ability "
+        "to communicate are randomly imposed on this communication environment. "
+        "You must now use new tools to piece together meaning, "
+        "negotiate conversation, and make collective decisions "
+        "in spite of this chaos.\n"
+    )
+    commands_list = await temp_channel.send(
+        "**Available Commands:\n**"
+        "'decisions'\n"
+        "'task_one'\n"
+        "'culture'\n"
+        "'obscure'\n"
+        "'end_obscurity'\n"
+        "'secret_message'\n"
+        "'quit'"
+    )
+    await playing(ctx, temp_channel, replace_vowels)
+    # TODO: Remove this list of available commands and have them set to a timer
+    # TODO: Have a message here broadcasting the commands that the players have available to themselves
+    # TODO: Make temporary channels have unique names appended to base "d20-play"
+    # The appended text can be set by user or increment by number of active channels and order created
+
+# Playing The Game
+
+
+async def playing(ctx, temp_channel, replace_vowels):
+    print("Playing...")
     # Playing The Game
-    while state == "playing":
+    while True:
         try:
             message = await bot.wait_for("message", timeout=playing_timeout, check=lambda m: m.author != bot.user)
         except asyncio.TimeoutError:
             await temp_channel.send("Game timed out after no plays in 24 hours.")
-            state = "game_end"
+            await ending(ctx, temp_channel)
 
         # Cultural Constraints on Messages
         # Secrecy: Randomly Send Messages to DMs
         async def send_msg_to_random_player():
+            print("Sending random DM...")
             players = [
                 member for member in message.channel.members if not member.bot]
             random_player = random.choice(players)
@@ -145,8 +170,10 @@ async def start_game(ctx, num_players: int = None):
         # Obscurity: Replace Vowles with Spaces
         # Switch vowel replacement
         if message.content.lower() == "obscure":
+            print("Obscurity turned on...")
             replace_vowels = True
         if message.content.lower() == "end_obscurity":
+            print("Obscurity turned off...")
             replace_vowels = False
 
         # Vowel replacement
@@ -160,7 +187,8 @@ async def start_game(ctx, num_players: int = None):
         # TODO: Change to be conditional on Cultural Module value "Obscure"
 
         # Decision Module Triggers
-        if message.content.lower() == "deciding":
+        if message.content.lower() == "decisions":
+            print("Selecting decision module...")
             await temp_channel.send(
                 "*Randomly selecting decision module...*"
             )
@@ -187,6 +215,7 @@ async def start_game(ctx, num_players: int = None):
 
         # Task Triggers
         if message.content.lower() == "task_one":
+            print("Sending prompt one...")
             # Prompt players to submit their proposal for the community mascot
             await temp_channel.send(
                 "**Your first task is to decide what type of entity your community's mascot should be.**"
@@ -207,9 +236,12 @@ async def start_game(ctx, num_players: int = None):
             # TODO: Collect and store the proposals in a data structure
             # TODO: Make a way to vote on the proposals using the current decision module
             # TODO: Store the successful submission in a data structure
+        # TODO: Add a task that lets the players name their team and have that name appended to the channel name
+        # Transform #d20-play to #d20-[name-of-team] (safety mechanisms for conforming to server guidlines?)
 
         # Cultural Modules Triggers
         if message.content.lower() == "culture":
+            print("Cultural module decision...")
             # Prompt players to vote on a new cultural value to adopt as an organization
             sent_message = await temp_channel.send(
                 "Decide a new cultural value to adopt for your organization:\n"
@@ -237,28 +269,34 @@ async def start_game(ctx, num_players: int = None):
             # TODO: Apply the chosen communication constraint based on the new value
 
         # Submission Triggers
-        # TODO: Implement the timer to prompt players to submit their proposals
+        # TODO: Implement the timer to prompt players to submit their complete proposals
 
         # Quit game
         if message.content.lower() == "quit":
+            print("Quiting...")
             await temp_channel.send(f"{message.author.name} has quit the game!")
-            state = "game_end"
+            await ending(ctx, temp_channel)
+            # TODO: Set channel ID so this trigger can't be called in any other channel
 
-        if state == "game_end":
-            # Archive temporary channel
-            archive_category = discord.utils.get(
-                ctx.guild.categories, name="archive")
-            if temp_channel is not None:
-                await message.channel.send(f"**The game is over. This channel is now archived.**")
-                await temp_channel.edit(category=archive_category)
-                overwrites = {
-                    ctx.guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False),
-                    ctx.guild.me: discord.PermissionOverwrite(
-                        read_messages=True, send_messages=False)
-                }
-                await temp_channel.edit(overwrites=overwrites)
-            break
-        # await asyncio.sleep(1)  # Check every second
+# Archiving The Game
 
+
+async def ending(ctx, temp_channel):
+    print("Archiving...")
+    # Archive temporary channel
+    archive_category = discord.utils.get(
+        ctx.guild.categories, name="archive")
+    if temp_channel is not None:
+        await temp_channel.send(f"**The game is over. This channel is now archived.**")
+        await temp_channel.edit(category=archive_category)
+        overwrites = {
+            ctx.guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False),
+            ctx.guild.me: discord.PermissionOverwrite(
+                read_messages=True, send_messages=False)
+        }
+        await temp_channel.edit(overwrites=overwrites)
+    print("Archived...")
+    return
+    # TODO: Prevent bot from being able to send messages to arcvhived channels
 
 bot.run(token=token)
