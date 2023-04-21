@@ -1,0 +1,36 @@
+game:
+  title: "Whimsical Governance Adventure"
+  intro: "**The Intro:**
+
+    You have just stumbled upon a whimsical online realm,
+    where the inhabitants communicate and govern themselves in peculiar ways.
+
+    Unusual decision-making structures and communication constraints are the norm here.
+    As a newcomer, you must adapt to these unconventional methods,
+    piecing together meaning, navigating conversations, and making collective decisions
+    in this delightful chaos."
+
+  commands:
+  - decisions
+  - culture
+  - obscure
+  - end_obscurity
+  - secret_message
+  - quit
+
+  stages:
+      - name: "design-flag"
+        message: "**Your first task is to collaboratively design a flag for your community. Each member should propose one element (e.g., a color, shape, or symbol) to include on the flag. Once all the elements have been proposed, vote for your favorite using the ✅ emoji. The top three elements with the highest number of votes will be incorporated into the flag.**"
+        action: "vote"
+        timeout_mins: 4
+
+      - name: "establish-tradition"
+        message: "**Next, create a unique tradition for your community. Each member should suggest a quirky and imaginative tradition that the community can practice together. Once all suggestions have been submitted, vote for your favorite using the ✅ emoji. The tradition with the highest number of votes will be adopted by your community.**"
+        action: "vote"
+        timeout_mins: 4
+
+      - name: "select-spokescreature"
+        message: "**Finally, it's time to select a spokescreature to represent your community in interactions with other whimsical realms. Propose various magical or mythical creatures and vote for your favorite using the ✅ emoji. The creature with the highest number of votes will become your community's spokescreature.**"
+        action: "vote"
+        timeout_mins: 5
+

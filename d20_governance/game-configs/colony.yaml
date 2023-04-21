@@ -1,0 +1,52 @@
+game:
+  title: "Planet Governance"
+  intro: "**The Intro:**
+
+    Welcome to Planet Governance! You are part of a group of new settlers who have just arrived on an uncharted planet. Your mission is to establish a thriving colony and create a sustainable governance system that ensures the well-being of all settlers.
+
+    Throughout the game, you will face various challenges and decisions that will shape the future of your community. Embrace your roles, engage in discussions, and allocate resources wisely to build a successful and inclusive society on this new planet."
+
+  commands:
+  - decisions
+  - culture
+  - obscure
+  - end_obscurity
+  - secret_message
+  - quit
+
+  stages:
+      - name: "role-assignment"
+        message: "**Role Assignment:**
+
+        To start your journey, each participant will be assigned a role representing different expertise and responsibilities within the colony. The bot will randomly assign roles such as Scientist, Engineer, Farmer, Doctor, and Artist. Once assigned, take a moment to introduce yourself and your role to the group."
+        action: "role-assignment"
+        timeout_mins: 5
+
+      - name: "colony-discussion"
+        message: "**Colony Discussion:**
+
+        Now that roles have been assigned, discuss and decide the top three priorities for your new colony. Consider the needs and goals of each role, and try to find a balance that promotes growth, sustainability, and well-being for all settlers. You have 5 minutes to complete this task."
+        action: "discussion"
+        timeout_mins: 5
+
+      - name: "resource-allocation"
+        message: "**Resource Allocation:**
+
+        You have a limited amount of resources to invest in the development of your colony. The bot will provide the total available resources and a list of projects/initiatives related to your priorities. As a group, decide how to allocate these resources to achieve the best outcome for your colony. You have 5 minutes to complete this task."
+        action: "resource-allocation"
+        timeout_mins: 5
+
+      - name: "colony-roleplay"
+        message: "**Colony Roleplay:**
+
+        A series of events will now unfold in your colony. The bot will present scenarios that challenge your governance system, resource allocation decisions, and priorities. In your assigned roles, engage in role-play to address these events and make collective decisions to adapt and evolve your governance system. You have 5 minutes to complete this task."
+        action: "role-playing"
+        timeout_mins: 5
+
+      - name: "colony-reflection"
+        message: "**Colony Reflection:**
+
+        As your journey on Planet Governance comes to an end, reflect on your experiences and the governance system you have built. Discuss the challenges you faced, the decisions you made, and the lessons you learned about governance. What aspects of your governance system worked well, and what could be improved? You have 5 minutes to complete this task."
+        action: "discussion"
+        timeout_mins: 5
+

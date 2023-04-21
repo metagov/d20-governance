@@ -10,6 +10,10 @@ packages = [{include = "d20_governance"}]
 python = "^3.10"
 discord = "^2.2.2"
 poetry-dotenv-plugin = "^0.1.0"
+pyaml = "^21.10.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
 
 [build-system]
 requires = ["poetry-core"]
