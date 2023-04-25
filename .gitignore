@@ -3,5 +3,4 @@
 .venv
 .gitignore
 dev_logs/
-d20-governance/playground.py
-d20-governance/modal-test.py 
+d20_governance/playground/
