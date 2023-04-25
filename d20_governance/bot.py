@@ -6,6 +6,9 @@ import emoji
 from dotenv import load_dotenv
 from discord.ext import commands
 import yaml
+from langchain.prompts import PromptTemplate
+from langchain.llms import OpenAI
+from langchain.chains import LLMChain
 
 description = """A bot for experimenting with governance"""
 
@@ -16,8 +19,7 @@ intents.dm_messages = True
 intents.messages = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="/",
-                   description=description, intents=intents)
+bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
@@ -26,13 +28,16 @@ if token is None:
 
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
-GAME_TIMEOUT = 86400  # The game will auto-archive if there is no game play within 24 hours
+GAME_TIMEOUT = (
+    86400  # The game will auto-archive if there is no game play within 24 hours
+)
 
 # Const
 CONFIG_PATH = "d20_governance/config.yaml"
 
 # Init
-REPLACE_VOWELS = False
+OBSCURITY = False
+ELOQUENCE = False
 TEMP_CHANNEL = None
 
 
@@ -71,11 +76,7 @@ async def setup_server(guild):
     print("---")
     print(f"Checking setup for server: '{guild.name}'")
     print("Checking if necessary categories exist...")
-    server_categories = [
-        "d20-explore",
-        "d20-quests",
-        "d20-archive"
-    ]
+    server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
         if not category:
@@ -88,21 +89,19 @@ async def setup_server(guild):
     print("Checking if necessary channels exist...")
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(
-            read_messages=True, send_messages=True)
+            read_messages=True, send_messages=True
+        )
     }
-    agora_category = discord.utils.get(
-        guild.categories, name="d20-explore")
-    agora_channel = discord.utils.get(
-        guild.text_channels, name="d20-agora")
+    agora_category = discord.utils.get(guild.categories, name="d20-explore")
+    agora_channel = discord.utils.get(guild.text_channels, name="d20-agora")
     if not agora_channel:
         # Create channel in the d20-explore category and apply permisions
         agora_channel = await guild.create_text_channel(
-            name="d20-agora",
-            overwrites=overwrites,
-            category=agora_category
+            name="d20-agora", overwrites=overwrites, category=agora_category
         )
         print(
-            f"Created channel '{agora_channel.name}' under category '{agora_category}'.")
+            f"Created channel '{agora_channel.name}' under category '{agora_category}'."
+        )
     else:
         print("The necessary channels exist.")
 
@@ -159,20 +158,28 @@ async def channel_name_check(ctx):
     agora_channel = discord.utils.get(ctx.guild.channels, name="d20-agora")
     if agora_channel is None:
         embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.", color=discord.Color.red())
-        embed.add_field(name=f"Missing channel: {agora_channel.name}",
-                        value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
-                              f"The `{agora_channel.name}` channel was not found on this server.\n\n"
-                              f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
-                              f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
-                              f"**Note:** The channel name must be exactly `{agora_channel.name}`.")
+            title="Error - This command cannot be run in this channel.",
+            color=discord.Color.red(),
+        )
+        embed.add_field(
+            name=f"Missing channel: {agora_channel.name}",
+            value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
+            f"The `{agora_channel.name}` channel was not found on this server.\n\n"
+            f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
+            f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
+            f"**Note:** The channel name must be exactly `{agora_channel.name}`.",
+        )
         await ctx.send(embed=embed)
         return False
     if not agora_channel:
         embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.", color=discord.Color.red())
-        embed.add_field(name=f"Wrong Channel: run in {agora_channel.name}",
-                        value=f"This command can only be run in the `{agora_channel.name}` channel.")
+            title="Error - This command cannot be run in this channel.",
+            color=discord.Color.red(),
+        )
+        embed.add_field(
+            name=f"Wrong Channel: run in {agora_channel.name}",
+            value=f"This command can only be run in the `{agora_channel.name}` channel.",
+        )
         await ctx.send(embed=embed)
         return False
     else:
@@ -224,11 +231,13 @@ async def setup(ctx):
         # Users that joined can view channel
         ctx.guild.me: discord.PermissionOverwrite(read_messages=True),
     }
-    quests_category = discord.utils.get(
-        ctx.guild.categories, name="d20-quests")
+    quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
     # I can't remember why we set this temp_channel var in the global scope...
     global TEMP_CHANNEL
-    TEMP_CHANNEL = await quests_category.create_text_channel(name=f"d20-{quest_name}-{len(quests_category.channels) + 1}", overwrites=overwrites)
+    TEMP_CHANNEL = await quests_category.create_text_channel(
+        name=f"d20-{quest_name}-{len(quests_category.channels) + 1}",
+        overwrites=overwrites,
+    )
     await ctx.send(f"Temporary channel {TEMP_CHANNEL.mention} has been created.")
     await start_of_quest(ctx, config)
 
@@ -290,8 +299,7 @@ async def start_of_quest(ctx, game_config):
 async def end(ctx, temp_channel):
     print("Archiving...")
     # Archive temporary channel
-    archive_category = discord.utils.get(
-        ctx.guild.categories, name='d20-archive')
+    archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
     if temp_channel is not None:
         await temp_channel.send(f"**The game is over. This channel is now archived.**")
         await temp_channel.edit(category=archive_category)
@@ -310,6 +318,7 @@ async def end(ctx, temp_channel):
 
 
 # GAME COMMANDS
+
 
 # Cultural Constraints on Messages
 async def secret_message(ctx):
@@ -334,6 +343,7 @@ async def send_msg_to_random_player():
 async def ctest(ctx):
     await culture_options_msg(ctx)
 
+
 # Culture Modules
 culture_modules = [
     "💐 Eloquence",
@@ -349,7 +359,7 @@ culture_modules = [
 culture_emojis = []
 for module in culture_modules:
     # Extract 'emoji' string produced by the emoji_list attribute for each culture module
-    emojis = [e['emoji'] for e in emoji.emoji_list(module)]
+    emojis = [e["emoji"] for e in emoji.emoji_list(module)]
     if len(emojis) > 0:
         # Append extracted emojis to the culture_emoji list
         culture_emojis.append(emojis[0])
@@ -378,6 +388,7 @@ async def dtest(ctx):
     starting_decision_module = await set_starting_decision_module(ctx)
     await decision_options_msg(ctx, starting_decision_module)
 
+
 # Decision Modules
 decision_modules = [
     "👎 Approval Voting",
@@ -391,7 +402,7 @@ decision_modules = [
 decision_emojis = []
 for module in decision_modules:
     # Extract 'emoji' string produced by the emoji_list attribute for each culture module
-    emojis = [e['emoji'] for e in emoji.emoji_list(module)]
+    emojis = [e["emoji"] for e in emoji.emoji_list(module)]
     if len(emojis) > 0:
         # Append extracted emojis to the culture_emoji list
         decision_emojis.append(emojis[0])
@@ -442,7 +453,9 @@ async def set_starting_decision_module(ctx):
     # TODO: Store this in a file per quest to reference later
 
 
-async def decision_options_msg(ctx, current_decision_module=None, starting_decision_module=None):
+async def decision_options_msg(
+    ctx, current_decision_module=None, starting_decision_module=None
+):
     decision_module = current_decision_module or starting_decision_module
     print("A list of decision modules are presented")
     decision_how = "how decisions are made"
@@ -457,15 +470,17 @@ async def decision_options_msg(ctx, current_decision_module=None, starting_decis
 
 
 @bot.command()
-async def info(ctx, culture_module=None, current_decision_module=None, starting_decision_module=None):
+async def info(
+    ctx,
+    culture_module=None,
+    current_decision_module=None,
+    starting_decision_module=None,
+):
     # TODO Pass starting or current decision module into the info command
     decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats",
-                          color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n",
-                    value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n",
-                    value=f"{culture_module}")
+    embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
+    embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
+    embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
     await ctx.send(embed=embed)
 
 
@@ -480,10 +495,23 @@ async def majority_voting():
 
 # TODO: This is a WIP -- Need to think through a modular system for decision and culture interactions
 # TODO: Trigger a decisionon based on input
-async def decision(ctx, culture_how=None, culture_modules=None, decision_how=None, decision_modules=None, decision_module=None):
+async def decision(
+    ctx,
+    culture_how=None,
+    culture_modules=None,
+    decision_how=None,
+    decision_modules=None,
+    decision_module=None,
+):
     print("Decisions event triggered.")
-    print(ctx, culture_how, culture_modules,
-          decision_how, decision_modules, decision_module)
+    print(
+        ctx,
+        culture_how,
+        culture_modules,
+        decision_how,
+        decision_modules,
+        decision_module,
+    )
     how = culture_how or decision_how
     await ctx.send(f"Make your decision about {how} using {decision_module}")
     # If passed a culture_message, select a culture based on decision_type
@@ -544,22 +572,13 @@ async def culture(ctx):
     # TODO: Apply the chosen communication constraint based on the new value
 
 
-async def obscure(ctx):
+async def toggle_obscurity(ctx):
     """
-    Start obscurity, start the replace vowels function
+    Toggle the replace vowels function
     """
     print("Obscurity on...")
-    global REPLACE_VOWELS
-    REPLACE_VOWELS = True
-
-
-async def end_obscurity(ctx):
-    """
-    End obscurity, stop the replace vowels function
-    """
-    print("Obscurity off...")
-    global REPLACE_VOWELS
-    REPLACE_VOWELS = False
+    global OBSCURITY
+    OBSCURITY = not OBSCURITY
 
 
 # Process Commands
@@ -569,6 +588,7 @@ async def quit(ctx):
     print("Quiting...")
     await ctx.send(f"{ctx.author.name} has quit the game!")
     # TODO: Implement the logic for quitting the game and ending it for the user
+
 
 # End Game
 
@@ -580,19 +600,48 @@ async def end_game(ctx):
     print("Game ended.")
 
 
+async def eloquence_filter(text):
+    llm = OpenAI(temperature=0.9)
+    prompt = PromptTemplate(
+        input_variables=["input_text"],
+        template="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: {input_text}",
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain.run(text)
+
+
+@bot.command()
+async def eloquence(ctx):
+    global ELOQUENCE
+    ELOQUENCE = not ELOQUENCE
+    if ELOQUENCE:
+        await ctx.send(
+            "Eloquence mode activated. Messages will now be processed through an LLM."
+        )
+    else:
+        await ctx.send(
+            "Eloquence mode deactivated. Messages will no longer be processed through an LLM."
+        )
+
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:  # Ignore messages sent by the bot itself
         return
-    if REPLACE_VOWELS and not message == "end_obscurity":
+
+    if OBSCURITY and not message.content.startswith("toggle_obscurity"):
         vowels = "aeiou"
         message_content = message.content.lower()
-        message_content = "".join(
-            [" " if c in vowels else c for c in message_content])
+        message_content = "".join([" " if c in vowels else c for c in message_content])
         await message.delete()
         await TEMP_CHANNEL.send(f"{message.author.mention} posted: {message_content}")
+    elif ELOQUENCE and not message.content.startswith("eloquence"):
+        eloquent_text = await eloquence_filter(message.content)
+        await message.delete()
+        await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
 
     # Process the commands after handling custom message processing
     await bot.process_commands(message)
+
 
 bot.run(token=token)

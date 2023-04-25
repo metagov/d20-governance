@@ -9,8 +9,7 @@ game:
   commands:
   - decisions
   - culture
-  - obscure
-  - end_obscurity
+  - toggle_obscurity
   - secret_message
   - quit
 
