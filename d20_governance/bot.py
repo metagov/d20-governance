@@ -19,8 +19,7 @@ intents.dm_messages = True
 intents.messages = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="/",
-                   description=description, intents=intents)
+bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
@@ -40,6 +39,9 @@ CONFIG_PATH = "d20_governance/config.yaml"
 OBSCURITY = False
 ELOQUENCE = False
 TEMP_CHANNEL = None
+
+# Stores the number of messages sent by each user
+user_message_count = {}
 
 
 def read_config(file_path):
@@ -240,8 +242,7 @@ async def setup(ctx):
         # Users that joined can view channel
         ctx.guild.me: discord.PermissionOverwrite(read_messages=True),
     }
-    quests_category = discord.utils.get(
-        ctx.guild.categories, name="d20-quests")
+    quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
     # I can't remember why we set this temp_channel var in the global scope...
     global TEMP_CHANNEL
     TEMP_CHANNEL = await quests_category.create_text_channel(
@@ -308,8 +309,7 @@ async def start_of_quest(ctx, game_config):
 async def end(ctx, temp_channel):
     print("Archiving...")
     # Archive temporary channel
-    archive_category = discord.utils.get(
-        ctx.guild.categories, name="d20-archive")
+    archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
     if temp_channel is not None:
         await temp_channel.send(f"**The game is over. This channel is now archived.**")
         await temp_channel.edit(category=archive_category)
@@ -403,7 +403,8 @@ async def set_starting_decision_module(ctx):
 
 
 async def decision_options_msg(
-        ctx, current_decision_module=None, starting_decision_module=None):
+    ctx, current_decision_module=None, starting_decision_module=None
+):
     decision_module = current_decision_module or starting_decision_module
     print("A list of decision modules are presented")
     decision_how = "how decisions are made"
@@ -426,12 +427,9 @@ async def info(
 ):
     # TODO Pass starting or current decision module into the info command
     decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats",
-                          color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n",
-                    value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n",
-                    value=f"{culture_module}")
+    embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
+    embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
+    embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
     await ctx.send(embed=embed)
 
 
@@ -499,6 +497,7 @@ async def decision(
             else:
                 pass
 
+
 # Decision Modules
 # TODO: Implement majority voting function
 # TODO: Add params (threshold)
@@ -510,11 +509,12 @@ async def majority_voting():
     """
     pass
 
+
 # Cultural Modules - Commands
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == 'd20-agora')
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def secret_message(ctx):
     """
     Secrecy: Randomly Send Messages to DMs
@@ -535,7 +535,7 @@ async def send_msg_to_random_player():
 
 @bot.command()
 # Check for the correct channel if invoked in discord
-@commands.check(lambda ctx: ctx.channel.name == 'd20-agora')
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def toggle_obscurity(ctx):
     """
     Toggle the replace vowels function
@@ -564,7 +564,7 @@ async def end_game(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == 'd20-agora')
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def eloquence(ctx):
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
@@ -576,6 +576,23 @@ async def eloquence(ctx):
         await ctx.send(
             "Eloquence mode deactivated. Messages will no longer be processed through an LLM."
         )
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def diversity(ctx):
+    # Display the message count for each user
+    message = "Message count by user:\n"
+
+    # Sort the user_message_count dictionary by message count in descending order
+    sorted_user_message_count = sorted(
+        user_message_count.items(), key=lambda x: x[1], reverse=True
+    )
+
+    for user_id, count in sorted_user_message_count:
+        user = await ctx.guild.fetch_member(user_id)
+        message += f"{user.name}: {count}\n"
+    await ctx.send(message)
 
 
 async def eloquence_filter(text):
@@ -596,22 +613,33 @@ async def on_message(message):
     if message.author == bot.user:  # Ignore messages sent by the bot itself
         return
 
-    if OBSCURITY and not message.content.startswith(("/eloquence", "/test", "/help" "/propose_quest", "/toggle_obscurity")):
+    # If message is a command, proceed directly to processing
+    if message.content.startswith("/"):
+        await bot.process_commands(message)
+        return
+
+    # Increment message count for the user
+    user_id = message.author.id
+    if user_id not in user_message_count:
+        user_message_count[user_id] = 0
+    user_message_count[user_id] += 1
+
+    if OBSCURITY:
         vowels = "aeiou"
         message_content = message.content.lower()
-        message_content = "".join(
-            [" " if c in vowels else c for c in message_content])
+        message_content = "".join([" " if c in vowels else c for c in message_content])
         await message.delete()
-        await message.channel.send(f"{message.author.mention} posted: {message_content}")
-    elif ELOQUENCE and not message.content.startswith(("/eloquence", "/test", "/propose_quest", "help", "/toggle_obscurity")):
+        await message.channel.send(
+            f"{message.author.mention} posted: {message_content}"
+        )
+    elif ELOQUENCE:
         await message.delete()
-        processing_message = await message.channel.send(f"Making {message.author.mention}'s post eloquent")
+        processing_message = await message.channel.send(
+            f"Making {message.author.mention}'s post eloquent"
+        )
         eloquent_text = await eloquence_filter(message.content)
         await processing_message.delete()
         await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
-
-    # Process the commands after handling custom message processing
-    await bot.process_commands(message)
 
 
 @bot.check
