@@ -34,3 +34,9 @@ game:
         action: "vote"
         timeout_mins: 5
 
+      - name: "obscure-patterns"
+        message: "**The Obscurity:**\n\n
+        As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
+        action: "obscure"
+        timeout_mins: 5
+

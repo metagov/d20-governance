@@ -11,6 +11,7 @@ python = "^3.10"
 discord = "^2.2.2"
 poetry-dotenv-plugin = "^0.1.0"
 pyaml = "^21.10.1"
+emoji = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
