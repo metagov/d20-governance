@@ -1,6 +1,7 @@
 import discord
 import random
 import os
+import io
 import asyncio
 import emoji
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ import yaml
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
+from PIL import Image, ImageDraw, ImageFont
 
 description = """A bot for experimenting with governance"""
 
@@ -233,8 +235,8 @@ async def setup(ctx):
     """
     print("Setting up...")
     # Read config yaml
-    config = read_config(CONFIG_PATH)
-    quest_name = config["game"]["title"]
+    game_config = read_config(CONFIG_PATH)
+    quest_name = game_config["game"]["title"]
 
     # Create a temporary channel in the d20-quests category
     overwrites = {
@@ -251,7 +253,42 @@ async def setup(ctx):
         overwrites=overwrites,
     )
     await ctx.send(f"Temporary channel {TEMP_CHANNEL.mention} has been created.")
-    await start_of_quest(ctx, config)
+    await start_of_quest(ctx, game_config)
+
+
+async def start_of_quest(ctx, game_config):
+    """
+    Start a quest and create a new channel
+    """
+    # Define game_config variables
+    stages = game_config["game"]["stages"]
+    intro = game_config["game"]["intro"]
+    commands = game_config["game"]["meta_commands"]
+    print(intro)
+
+    # Turn intro message into image
+    intro_img = messages_to_image(intro)
+    img_bytes = io.BytesIO()
+    intro_img.save(img_bytes, format="PNG")
+    img_bytes.seek(0)
+
+    # Send quest intro message
+    await TEMP_CHANNEL.send(file=discord.File(img_bytes, "output.png"))
+    img_bytes.close()
+
+    # Send commands message
+    available_commands = "**Available Commands:**\n" + "\n".join(
+        [f"'{command}'" for command in commands]
+    )
+    await TEMP_CHANNEL.send(available_commands)
+
+    for stage in stages:
+        name = stage["name"]
+        print(f"Processing stage {name}")
+        result = await process_stage(stage)
+        if not result:
+            await ctx.send(f"Error processing stage {stage}")
+            break
 
 
 async def process_stage(stage):
@@ -261,8 +298,16 @@ async def process_stage(stage):
     message = stage["message"]
     event = stage["action"]
     timeout = stage["timeout_mins"] * 60
-    # Send the prompt to the channel
-    await TEMP_CHANNEL.send(message)
+
+    # Turn stage message into image
+    message_img = messages_to_image(message)
+    img_bytes = io.BytesIO()
+    message_img.save(img_bytes, format="PNG")
+    img_bytes.seek(0)
+
+    # Send image as message
+    await TEMP_CHANNEL.send(file=discord.File(img_bytes, "output.png"))
+    img_bytes.close()
 
     # Call the command corresponding to the event
     event_func = bot.get_command(event).callback
@@ -280,6 +325,16 @@ async def process_stage(stage):
     await asyncio.sleep(timeout)
 
     return True
+
+
+def messages_to_image(
+    input_message, font_path="assets/fonts/bubble_love_demo.otf", font_size=20
+):
+    image = Image.new("RGB", (400, 400), color=(255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype(font_path, font_size)
+    draw.text((10, 10), input_message, font=font, fill=(0, 0, 0))
+    return image
 
 
 async def start_of_quest(ctx, game_config):
