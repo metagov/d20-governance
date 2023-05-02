@@ -39,6 +39,7 @@ CONFIG_PATH = "d20_governance/config.yaml"
 OBSCURITY = False
 ELOQUENCE = False
 TEMP_CHANNEL = None
+OBSCURITY_MODE = "scramble"
 
 # Stores the number of messages sent by each user
 user_message_count = {}
@@ -534,19 +535,91 @@ async def send_msg_to_random_player():
 
 
 @bot.command()
-# Check for the correct channel if invoked in discord
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def toggle_obscurity(ctx):
+async def obscurity(ctx):
     """
-    Toggle the replace vowels function
+    Toggle the obscurity mode
     """
-    await ctx.channel.send("Obscurity toggled")
-    print("Obscurity toggled")
     global OBSCURITY
+    global OBSCURITY_MODE
     OBSCURITY = not OBSCURITY
 
+    if OBSCURITY:
+        await ctx.channel.send(f"Obscurity is on. Mode: {OBSCURITY_MODE}")
+    else:
+        await ctx.channel.send(f"Obscurity is off.")
 
-# Process Commands
+    print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
+
+
+def scramble_word(word):
+    if len(word) <= 3:
+        return word
+    else:
+        middle = list(word[1:-1])
+        random.shuffle(middle)
+        return word[0] + "".join(middle) + word[-1]
+
+
+def scramble(text):
+    words = text.split()
+    scrambled_words = [scramble_word(word) for word in words]
+    return " ".join(scrambled_words)
+
+
+def replace_vowels(text):
+    vowels = "aeiou"
+    message_content = text.lower()
+    return "".join([" " if c in vowels else c for c in message_content])
+
+
+def pig_latin_word(word):
+    if word[0] in "aeiouAEIOU":
+        return word + "yay"
+    else:
+        first_consonant_cluster = ""
+        rest_of_word = word
+        for letter in word:
+            if letter not in "aeiouAEIOU":
+                first_consonant_cluster += letter
+                rest_of_word = rest_of_word[1:]
+            else:
+                break
+        return rest_of_word + first_consonant_cluster + "ay"
+
+
+def pig_latin(text):
+    words = text.split()
+    pig_latin_words = [pig_latin_word(word) for word in words]
+    return " ".join(pig_latin_words)
+
+
+def camel_case(text):
+    words = text.split()
+    camel_case_words = [word.capitalize() for word in words]
+    return "".join(camel_case_words)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def obscurity_mode(ctx, mode: str):
+    """
+    Set the obscurity mode. Valid options are "scramble", "replace_vowels", "pig_latin", "camel_case"
+    """
+    global OBSCURITY_MODE
+
+    # A list of available obscurity modes
+    available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
+
+    if mode not in available_modes:
+        await ctx.channel.send(
+            f"Invalid obscurity mode. Available modes: {', '.join(available_modes)}"
+        )
+    else:
+        OBSCURITY_MODE = mode
+        await ctx.channel.send(f"Obscurity mode set to: {mode}")
+
+
 # Quit
 @bot.command()
 async def quit(ctx):
@@ -625,12 +698,11 @@ async def on_message(message):
     user_message_count[user_id] += 1
 
     if OBSCURITY:
-        vowels = "aeiou"
-        message_content = message.content.lower()
-        message_content = "".join([" " if c in vowels else c for c in message_content])
         await message.delete()
+        obscurity_function = globals()[OBSCURITY_MODE]
+        obscured_message = obscurity_function(message.content)
         await message.channel.send(
-            f"{message.author.mention} posted: {message_content}"
+            f"{message.author.mention} posted: {obscured_message}"
         )
     elif ELOQUENCE:
         await message.delete()
