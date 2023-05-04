@@ -15,6 +15,7 @@ emoji = "^2.2.0"
 langchain = "^0.0.149"
 openai = "^0.27.4"
 pillow = "^9.5.0"
+requests = "^2.29.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
