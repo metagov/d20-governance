@@ -2,8 +2,10 @@ import discord
 import random
 import os
 import io
+import requests
 import asyncio
 import emoji
+import base64
 from dotenv import load_dotenv
 from discord.ext import commands
 import yaml
@@ -21,12 +23,20 @@ intents.dm_messages = True
 intents.messages = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="/", description=description, intents=intents)
+bot = commands.Bot(command_prefix="/",
+                   description=description, intents=intents)
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
 if token is None:
     raise ValueError("DISCORD_TOKEN environment variable not set")
+
+engine_id = "stable-diffusion-v1-5"
+api_host = os.getenv('API_HOST', 'https://api.stability.ai')
+stability_token = os.getenv("STABILITY_API_KEY")
+if stability_token is None:
+    raise Exception("Missing Stability API key.")
+
 
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
@@ -36,6 +46,7 @@ GAME_TIMEOUT = (
 
 # Const
 CONFIG_PATH = "d20_governance/config.yaml"
+FONT_PATH = "assets/fonts/bubble_love_demo.otf"
 
 # Init
 OBSCURITY = False
@@ -245,7 +256,8 @@ async def setup(ctx):
         # Users that joined can view channel
         ctx.guild.me: discord.PermissionOverwrite(read_messages=True),
     }
-    quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
+    quests_category = discord.utils.get(
+        ctx.guild.categories, name="d20-quests")
     # I can't remember why we set this temp_channel var in the global scope...
     global TEMP_CHANNEL
     TEMP_CHANNEL = await quests_category.create_text_channel(
@@ -264,19 +276,16 @@ async def start_of_quest(ctx, game_config):
     stages = game_config["game"]["stages"]
     intro = game_config["game"]["intro"]
     commands = game_config["game"]["meta_commands"]
-    print(intro)
 
-    # Turn intro message into image
-    intro_img = messages_to_image(intro)
-    img_bytes = io.BytesIO()
-    intro_img.save(img_bytes, format="PNG")
-    img_bytes.seek(0)
+    # Generate intro image and send to temporary channel
+    image = generate_image(intro)
+    image = overlay_text(image, intro)
+    image.save('generated_image.png')  # Save the image to a file
+    # Post the image to the Discord channel
+    await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
+    os.remove('generated_image.png')  # Clean up the image file
 
-    # Send quest intro message
-    await TEMP_CHANNEL.send(file=discord.File(img_bytes, "output.png"))
-    img_bytes.close()
-
-    # Send commands message
+    # Send commands message to temporary channel
     available_commands = "**Available Commands:**\n" + "\n".join(
         [f"'{command}'" for command in commands]
     )
@@ -299,15 +308,13 @@ async def process_stage(stage):
     event = stage["action"]
     timeout = stage["timeout_mins"] * 60
 
-    # Turn stage message into image
-    message_img = messages_to_image(message)
-    img_bytes = io.BytesIO()
-    message_img.save(img_bytes, format="PNG")
-    img_bytes.seek(0)
-
-    # Send image as message
-    await TEMP_CHANNEL.send(file=discord.File(img_bytes, "output.png"))
-    img_bytes.close()
+    # Generate stage message into image and send to temporary channel
+    image = generate_image(message)
+    image = overlay_text(image, message)
+    image.save('generated_image.png')  # Save the image to a file
+    # Post the image to the Discord channel
+    await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
+    os.remove('generated_image.png')  # Clean up the image file
 
     # Call the command corresponding to the event
     event_func = bot.get_command(event).callback
@@ -327,45 +334,88 @@ async def process_stage(stage):
     return True
 
 
-def messages_to_image(
-    input_message, font_path="assets/fonts/bubble_love_demo.otf", font_size=20
-):
-    image = Image.new("RGB", (400, 400), color=(255, 255, 255))
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype(font_path, font_size)
-    draw.text((10, 10), input_message, font=font, fill=(0, 0, 0))
-    return image
-
-
-async def start_of_quest(ctx, game_config):
-    """
-    Start a quest and create a new channel
-    """
-    # Define stages
-    stages = game_config["game"]["stages"]
-    # Send quest intro message
-    await TEMP_CHANNEL.send(game_config["game"]["intro"])
-    # Define commands
-    commands = game_config["game"]["meta_commands"]
-    available_commands = "**Available Commands:**\n" + "\n".join(
-        [f"'{command}'" for command in commands]
+def generate_image(prompt):
+    response = requests.post(
+        f"{api_host}/v1/generation/{engine_id}/text-to-image",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {stability_token}"
+        },
+        json={
+            "text_prompts": [
+                {
+                    "text": f"{prompt}"
+                }
+            ],
+            "cfg_scale": 7,
+            "clip_guidance_preset": "FAST_BLUE",
+            "height": 512,
+            "width": 512,
+            "samples": 1,
+            "steps": 10,  # minimum 10 steps, more steps longer generation time
+        },
     )
-    await TEMP_CHANNEL.send(available_commands)
 
-    for stage in stages:
-        name = stage["name"]
-        print(f"Processing stage {name}")
-        result = await process_stage(stage)
-        if not result:
-            await ctx.send(f"Error processing stage {stage}")
-            break
+    if response.status_code != 200:
+        raise Exception("Non-200 response: " + str(response.text))
+
+    data = response.json()
+
+    image_data = base64.b64decode(data["artifacts"][0]["base64"])
+    with open('generated_image.png', 'wb') as f:
+        f.write(image_data)
+
+    return Image.open('generated_image.png')
+
+
+def wrap_text(text, font, max_width):
+    lines = []
+    words = text.split()
+    current_line = words[0]
+
+    for word in words[1:]:
+        if font.getsize(current_line + ' ' + word)[0] <= max_width:
+            current_line += ' ' + word
+        else:
+            lines.append(current_line)
+            current_line = word
+
+    lines.append(current_line)
+    return lines
+
+
+def overlay_text(image, text):
+    """
+    Overlay text on images
+    """
+    draw = ImageDraw.Draw(image)
+    font_size = 25
+    font = ImageFont.truetype(FONT_PATH, font_size)
+
+    max_width = image.size[0] - 20
+    wrapped_text = wrap_text(text, font, max_width)
+
+    text_height = font_size + len(wrapped_text)
+    image_width, image_height = image.size
+    y_offset = (image_height - text_height) // 5
+
+    for line in wrapped_text:
+        text_width, _ = draw.textsize(line, font)
+        position = ((image_width - text_width) // 2, y_offset)
+        draw.text(position, line, (0, 0, 0), font,
+                  stroke_width=2, stroke_fill=(255, 255, 255))
+        y_offset += font_size
+
+    return image
 
 
 # Archive the game
 async def end(ctx, temp_channel):
     print("Archiving...")
     # Archive temporary channel
-    archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
+    archive_category = discord.utils.get(
+        ctx.guild.categories, name="d20-archive")
     if temp_channel is not None:
         await temp_channel.send(f"**The game is over. This channel is now archived.**")
         await temp_channel.edit(category=archive_category)
@@ -383,13 +433,44 @@ async def end(ctx, temp_channel):
     # TODO: Prevent bot from being able to send messages to arcvhived channels
 
 
-# GAME COMMANDS
+# TEST COMMANDS
 @bot.command()
-async def cdemo(ctx):
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def gentest(ctx):
+    """
+    Test stability image generation
+    """
+    text = "Obscurity"
+    image = generate_image(text)
+    image = overlay_text(image, text)
+
+    # Save the image to a file
+    image.save('generated_image.png')
+
+    # Post the image to the Discord channel
+    await ctx.send(file=discord.File('generated_image.png'))
+
+    # Clean up the image file
+    os.remove('generated_image.png')
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def ctest(ctx):
     """
     A way to test and demo the culture messaging functionality
     """
     await culture_options_msg(ctx)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def dtest(ctx):
+    """
+    Test and demo the decision message functionality
+    """
+    starting_decision_module = await set_starting_decision_module(ctx)
+    await decision_options_msg(ctx, starting_decision_module)
 
 
 async def culture_options_msg(ctx):
@@ -407,13 +488,20 @@ async def culture_options_msg(ctx):
     await decision(ctx, culture_how)
 
 
-@bot.command()
-async def ddemo(ctx):
-    """
-    Test and demo the decision message functionality
-    """
-    starting_decision_module = await set_starting_decision_module(ctx)
-    await decision_options_msg(ctx, starting_decision_module)
+async def decision_options_msg(
+    ctx, current_decision_module=None, starting_decision_module=None
+):
+    decision_module = current_decision_module or starting_decision_module
+    print("A list of decision modules are presented")
+    decision_how = "how decisions are made"
+    msg = await ctx.send(
+        "Select a new decision making module to adopt for your group:\n"
+        f"{list_decision_modules}"
+    )
+    # Add reactions to the sent message based on emojis in culture_modules list
+    for emoji in decision_emojis:
+        await msg.add_reaction(emoji)
+    await decision(ctx, decision_how, decision_module=decision_module)
 
 
 async def set_starting_decision_module(ctx):
@@ -457,21 +545,7 @@ async def set_starting_decision_module(ctx):
         pass
     # TODO: Store this in a file per quest to reference later
 
-
-async def decision_options_msg(
-    ctx, current_decision_module=None, starting_decision_module=None
-):
-    decision_module = current_decision_module or starting_decision_module
-    print("A list of decision modules are presented")
-    decision_how = "how decisions are made"
-    msg = await ctx.send(
-        "Select a new decision making module to adopt for your group:\n"
-        f"{list_decision_modules}"
-    )
-    # Add reactions to the sent message based on emojis in culture_modules list
-    for emoji in decision_emojis:
-        await msg.add_reaction(emoji)
-    await decision(ctx, decision_how, decision_module=decision_module)
+# META GAME COMMANDS
 
 
 @bot.command()
@@ -483,9 +557,12 @@ async def info(
 ):
     # TODO Pass starting or current decision module into the info command
     decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
+    embed = discord.Embed(title="Current Stats",
+                          color=discord.Color.dark_gold())
+    embed.add_field(name="Current Decision Module:\n",
+                    value=f"{decision_module}\n\n")
+    embed.add_field(name="Current Culture Module:\n",
+                    value=f"{culture_module}")
     await ctx.send(embed=embed)
 
 
@@ -558,7 +635,7 @@ async def decision(
 # TODO: Implement majority voting function
 # TODO: Add params (threshold)
 
-
+# DECISION FUNCTIONS
 async def majority_voting():
     """
     Majority voting: A majority voting function
@@ -566,9 +643,7 @@ async def majority_voting():
     pass
 
 
-# Cultural Modules - Commands
-
-
+# CULTURE COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def secret_message(ctx):
@@ -600,9 +675,24 @@ async def obscurity(ctx):
     OBSCURITY = not OBSCURITY
 
     if OBSCURITY:
-        await ctx.channel.send(f"Obscurity is on. Mode: {OBSCURITY_MODE}")
+        embed = discord.Embed(title="Culture: Obscurity",
+                              color=discord.Color.dark_gold())
+        # embed.set_thumbnail(url="url-to-github-eloquence-img")
+        embed.add_field(name="ACTIVATED:",
+                        value="Obscurity is on.",
+                        inline=False)
+        embed.add_field(name="Mode:",
+                        value=f"{OBSCURITY_MODE}",
+                        inline=False)
+        await ctx.send(embed=embed)
     else:
-        await ctx.channel.send(f"Obscurity is off.")
+        embed = discord.Embed(title="Culture: Eloquence",
+                              color=discord.Color.dark_gold())
+        # embed.set_thumbnail(url="url-to-github-eloquence-img")
+        embed.add_field(name="ACTIVATED:",
+                        value="Obscurity is off.",
+                        inline=False)
+        await ctx.send(embed=embed)
 
     print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
 
@@ -697,13 +787,23 @@ async def eloquence(ctx):
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
     if ELOQUENCE:
-        await ctx.send(
-            "Eloquence mode activated. Messages will now be processed through an LLM."
-        )
+        embed = discord.Embed(title="Culture: Eloquence",
+                              color=discord.Color.dark_gold())
+        # embed.set_thumbnail(url="url-to-github-eloquence-img")
+        embed.add_field(name="ACTIVATED:",
+                        value="Messages will now be process through an LLM.",
+                        inline=False)
+        embed.add_field(name="LLM Prompt:",
+                        value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
+                        inline=False)
+        await ctx.send(embed=embed)
     else:
-        await ctx.send(
-            "Eloquence mode deactivated. Messages will no longer be processed through an LLM."
-        )
+        embed = discord.Embed(title="Culture: Eloquence",
+                              color=discord.Color.dark_gold())
+        embed.add_field(name="DEACTIVATED",
+                        value="Messages will no longer be processed through an LLM",
+                        inline=False)
+        await ctx.send(embed=embed)
 
 
 @bot.command()
