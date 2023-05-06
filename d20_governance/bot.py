@@ -57,6 +57,28 @@ ELOQUENCE = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
+
+def read_config(file_path):
+    """
+    Function for reading a yaml file
+    """
+    with open(file_path, "r") as f:
+        config = yaml.safe_load(f)
+    return config
+
+
+# Set Config Variables
+QUEST_CONFIG = read_config(CONFIG_PATH)
+QUEST_GAME = QUEST_CONFIG["game"]
+QUEST_TITLE = QUEST_GAME["title"]
+QUEST_INTRO = QUEST_GAME["intro"]
+QUEST_COMMANDS = QUEST_GAME["meta_commands"]
+QUEST_STAGE = QUEST_GAME["stages"][0]
+QUEST_STAGE_NAMES = QUEST_STAGE["name"]
+QUEST_STAGE_MESSAGES = QUEST_STAGE["message"]
+QUEST_STAGE_ACTIONS = QUEST_STAGE["action"]
+QUEST_STAGE_TIMEOUT = QUEST_STAGE["timeout_mins"] * 60
+
 # Stores the number of messages sent by each user
 user_message_count = {}
 
@@ -76,42 +98,36 @@ class JoinLeaveView(discord.ui.View):
             await interaction.response.send_message(f"{player_name} has joined the quest!")
             needed_players = self.num_players - len(self.joined_players)
             embed = discord.Embed(title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
-                                  description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")
+                                  description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")  # Note: Not possible to mention author in embeds
             await interaction.message.edit(embed=embed, view=self)
 
             if len(self.joined_players) == self.num_players:
+                # remove join and leave buttons
                 await interaction.message.edit(view=None)
-                TEMP_CHANNEL, game_config = await setup(self.ctx, self.joined_players)
-                print(TEMP_CHANNEL)
+                # return variables from setup()
+                TEMP_CHANNEL = await setup(self.ctx, self.joined_players)
                 embed = discord.Embed(title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
                                       description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}")
                 await interaction.message.edit(embed=embed)
-                await start_of_quest(self.ctx, game_config)
+                await start_of_quest(self.ctx)
 
         else:
+            # Ephemeral means only the person who took the action will see this message
             await interaction.response.send_message("You have already joined the quest. Wait until enough people have joined for the quest to start.", ephemeral=True)
 
     @discord.ui.button(style=discord.ButtonStyle.red, label="Leave", custom_id="leave_button")
     async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         player_name = interaction.user.name
         if player_name in self.joined_players:
+            # if players is in the list of joined players remove them from the list
             self.joined_players.remove(player_name)
-            await interaction.response.send_message(f"{player_name} has abandoned the quest!")
+            await interaction.response.send_message(f"{player_name} has abandoned the quest before it even began!")
             needed_players = self.num_players - len(self.joined_players)
             embed = discord.Embed(title=f"{self.ctx.author.mention} Has Proposed a Quest: Join or Leave",
                                   description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")
             await interaction.message.edit(embed=embed, view=self)
         else:
             await interaction.response.send_message("You can only leave a quest if you have signaled you would join it", ephemeral=True)
-
-
-def read_config(file_path):
-    """
-    Function for reading a yaml file
-    """
-    with open(file_path, "r") as f:
-        config = yaml.safe_load(f)
-    return config
 
 
 # Decision Modules
@@ -246,31 +262,23 @@ async def propose_quest(ctx, num_players: int = None):
             "Specify the number of players needed to start the game. Type `/ help start_game` for more information."
         )
         return
-    if num_players < 1:
+    if num_players < 1:  # FIXME: Change back to 2 after testing with others
         await ctx.send("The game requires at least 2 players to start")
         return
     if num_players > 20:
         await ctx.send("The maximum number of players that can play at once is 20")
         return
     else:
-        await wait_for_players(ctx, num_players)
-    # TODO: Turn this into a modal interaction
+        print("Waiting...")
+        view = JoinLeaveView(ctx, num_players)
 
+        embed = discord.Embed(
+            title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave")
 
-async def wait_for_players(ctx, num_players):
-    """
-    Game State: Create a wait period for players to join before starting up quest
-    """
-    print("Waiting...")
-    view = JoinLeaveView(ctx, num_players)
-
-    embed = discord.Embed(
-        title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave")
-
-    await ctx.send(
-        embed=embed,
-        view=view
-    )
+        await ctx.send(
+            embed=embed,
+            view=view
+        )
 
 
 async def setup(ctx, joined_players):
@@ -278,11 +286,8 @@ async def setup(ctx, joined_players):
     Game State: Setup the config and create unique quest channel
     """
     print("Setting up...")
-    # Read config yaml
-    game_config = read_config(CONFIG_PATH)
-    quest_name = game_config["game"]["title"]
 
-    # Add necessary permissions for the bot
+    # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
 
     # Create a dictionary containing overwrites for each player that joined,
@@ -302,27 +307,26 @@ async def setup(ctx, joined_players):
     }
     quests_category = discord.utils.get(
         ctx.guild.categories, name="d20-quests")
-    # I can't remember why we set this temp_channel var in the global scope...
+
     global TEMP_CHANNEL
+
+    # create and name the channel with the quest_name from the yaml file
+    # and add a number do distinguish channels
     TEMP_CHANNEL = await quests_category.create_text_channel(
-        name=f"d20-{quest_name}-{len(quests_category.channels) + 1}",
+        name=f"d20-{QUEST_TITLE}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    return TEMP_CHANNEL, game_config
+
+    return TEMP_CHANNEL
 
 
-async def start_of_quest(ctx, game_config):
+async def start_of_quest(ctx):
     """
     Start a quest and create a new channel
     """
-    # Define game_config variables
-    stages = game_config["game"]["stages"]
-    intro = game_config["game"]["intro"]
-    commands = game_config["game"]["meta_commands"]
-
     # Generate intro image and send to temporary channel
-    image = generate_image(intro)
-    image = overlay_text(image, intro)
+    image = generate_image(QUEST_INTRO)
+    image = overlay_text(image, QUEST_INTRO)
     image.save('generated_image.png')  # Save the image to a file
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
@@ -330,37 +334,32 @@ async def start_of_quest(ctx, game_config):
 
     # Send commands message to temporary channel
     available_commands = "**Available Commands:**\n" + "\n".join(
-        [f"'{command}'" for command in commands]
+        [f"'{command}'" for command in QUEST_COMMANDS]
     )
     await TEMP_CHANNEL.send(available_commands)
 
-    for stage in stages:
-        name = stage["name"]
+    for name in QUEST_STAGE_NAMES:
         print(f"Processing stage {name}")
-        result = await process_stage(stage)
+        result = await process_stage()
         if not result:
-            await ctx.send(f"Error processing stage {stage}")
+            await ctx.send(f"Error processing stage {name}")
             break
 
 
-async def process_stage(stage):
+async def process_stage():
     """
     Run stages from yaml config
     """
-    message = stage["message"]
-    event = stage["action"]
-    timeout = stage["timeout_mins"] * 60
-
     # Generate stage message into image and send to temporary channel
-    image = generate_image(message)
-    image = overlay_text(image, message)
+    image = generate_image(QUEST_STAGE_MESSAGES)
+    image = overlay_text(image, QUEST_STAGE_MESSAGES)
     image.save('generated_image.png')  # Save the image to a file
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
     os.remove('generated_image.png')  # Clean up the image file
 
     # Call the command corresponding to the event
-    event_func = bot.get_command(event).callback
+    event_func = bot.get_command(QUEST_STAGE_ACTIONS).callback
 
     # Get the last message object from the channel to set context
     message_obj = await TEMP_CHANNEL.fetch_message(TEMP_CHANNEL.last_message_id)
@@ -372,7 +371,7 @@ async def process_stage(stage):
     await event_func(ctx=ctx)
 
     # Wait for the timeout period
-    await asyncio.sleep(timeout)
+    await asyncio.sleep(QUEST_STAGE_TIMEOUT)
 
     return True
 
