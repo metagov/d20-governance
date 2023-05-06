@@ -1,7 +1,6 @@
 import discord
 import random
 import os
-import io
 import requests
 import asyncio
 import emoji
@@ -13,6 +12,7 @@ from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
 from PIL import Image, ImageDraw, ImageFont
+from typing import Set
 
 description = """A bot for experimenting with governance"""
 
@@ -27,15 +27,17 @@ bot = commands.Bot(command_prefix="/",
                    description=description, intents=intents)
 
 load_dotenv()
-token = os.getenv("DISCORD_TOKEN")
-if token is None:
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+if DISCORD_TOKEN is None:
     raise ValueError("DISCORD_TOKEN environment variable not set")
 
-engine_id = "stable-diffusion-v1-5"
-api_host = os.getenv('API_HOST', 'https://api.stability.ai')
-stability_token = os.getenv("STABILITY_API_KEY")
-if stability_token is None:
+STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
+if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
+
+API_HOST = os.getenv('API_HOST')
+if API_HOST is None:
+    raise Exception("Missing API Host.")
 
 
 # Timeouts
@@ -45,6 +47,7 @@ GAME_TIMEOUT = (
 )
 
 # Const
+ENGINE_ID = "stable-diffusion-v1-5"
 CONFIG_PATH = "d20_governance/config.yaml"
 FONT_PATH = "assets/fonts/bubble_love_demo.otf"
 
@@ -56,6 +59,50 @@ OBSCURITY_MODE = "scramble"
 
 # Stores the number of messages sent by each user
 user_message_count = {}
+
+
+class JoinLeaveView(discord.ui.View):
+    def __init__(self, ctx: commands.Context, num_players: int):
+        super().__init__(timeout=None)
+        self.ctx = ctx
+        self.num_players = num_players
+        self.joined_players: Set[str] = set()
+
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Join", custom_id="join_button")
+    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player_name = interaction.user.name
+        if player_name not in self.joined_players:
+            self.joined_players.add(player_name)
+            await interaction.response.send_message(f"{player_name} has joined the quest!")
+            needed_players = self.num_players - len(self.joined_players)
+            embed = discord.Embed(title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
+                                  description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")
+            await interaction.message.edit(embed=embed, view=self)
+
+            if len(self.joined_players) == self.num_players:
+                await interaction.message.edit(view=None)
+                TEMP_CHANNEL, game_config = await setup(self.ctx, self.joined_players)
+                print(TEMP_CHANNEL)
+                embed = discord.Embed(title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
+                                      description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}")
+                await interaction.message.edit(embed=embed)
+                await start_of_quest(self.ctx, game_config)
+
+        else:
+            await interaction.response.send_message("You have already joined the quest. Wait until enough people have joined for the quest to start.", ephemeral=True)
+
+    @discord.ui.button(style=discord.ButtonStyle.red, label="Leave", custom_id="leave_button")
+    async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        player_name = interaction.user.name
+        if player_name in self.joined_players:
+            self.joined_players.remove(player_name)
+            await interaction.response.send_message(f"{player_name} has abandoned the quest!")
+            needed_players = self.num_players - len(self.joined_players)
+            embed = discord.Embed(title=f"{self.ctx.author.mention} Has Proposed a Quest: Join or Leave",
+                                  description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")
+            await interaction.message.edit(embed=embed, view=self)
+        else:
+            await interaction.response.send_message("You can only leave a quest if you have signaled you would join it", ephemeral=True)
 
 
 def read_config(file_path):
@@ -199,62 +246,59 @@ async def propose_quest(ctx, num_players: int = None):
             "Specify the number of players needed to start the game. Type `/ help start_game` for more information."
         )
         return
-    if num_players < 2:
+    if num_players < 1:
         await ctx.send("The game requires at least 2 players to start")
         return
     if num_players > 20:
         await ctx.send("The maximum number of players that can play at once is 20")
         return
     else:
-        await ctx.send(f"The game will start after {num_players} players type join...")
         await wait_for_players(ctx, num_players)
     # TODO: Turn this into a modal interaction
 
 
 async def wait_for_players(ctx, num_players):
     """
-    Game State: Create a wait period for players to join before setting up quest
+    Game State: Create a wait period for players to join before starting up quest
     """
     print("Waiting...")
-    while True:
-        try:
-            message = await bot.wait_for(
-                "message",
-                timeout=START_TIMEOUT,
-                check=lambda m: m.author != bot.user and m.content.lower() == "join",
-            )
-        except asyncio.TimeoutError:
-            await ctx.send("Game timed out. Not enough players joined.")
-            break
+    view = JoinLeaveView(ctx, num_players)
 
-        # Process join message
-        player_name = message.author.name
-        await ctx.send(f"{player_name} has joined the game!")
+    embed = discord.Embed(
+        title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave")
 
-        # Check if enough players have joined
-        members = []
-        async for member in ctx.guild.fetch_members(limit=num_players):
-            members.append(member)
-        if len(members) == num_players + 1:  # plus 1 to account for bot as member
-            await setup(ctx)
-    # TODO: Turn the joining process into an emoji-based register instead of typing "join"
+    await ctx.send(
+        embed=embed,
+        view=view
+    )
 
 
-async def setup(ctx):
+async def setup(ctx, joined_players):
     """
-    Game State: Setup the config and create quest channel
+    Game State: Setup the config and create unique quest channel
     """
     print("Setting up...")
     # Read config yaml
     game_config = read_config(CONFIG_PATH)
     quest_name = game_config["game"]["title"]
 
+    # Add necessary permissions for the bot
+    bot_permissions = discord.PermissionOverwrite(read_messages=True)
+
+    # Create a dictionary containing overwrites for each player that joined,
+    # giving them read_messages access to the temp channel
+    player_overwrites = {
+        ctx.guild.get_member_named(player): discord.PermissionOverwrite(read_messages=True)
+        for player in joined_players
+    }
+
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
         ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
         # Users that joined can view channel
-        ctx.guild.me: discord.PermissionOverwrite(read_messages=True),
+        ctx.guild.me: bot_permissions,
+        **player_overwrites  # Merge player_overwrites with the main overwrites dictionary
     }
     quests_category = discord.utils.get(
         ctx.guild.categories, name="d20-quests")
@@ -264,8 +308,7 @@ async def setup(ctx):
         name=f"d20-{quest_name}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    await ctx.send(f"Temporary channel {TEMP_CHANNEL.mention} has been created.")
-    await start_of_quest(ctx, game_config)
+    return TEMP_CHANNEL, game_config
 
 
 async def start_of_quest(ctx, game_config):
@@ -336,11 +379,11 @@ async def process_stage(stage):
 
 def generate_image(prompt):
     response = requests.post(
-        f"{api_host}/v1/generation/{engine_id}/text-to-image",
+        f"{API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": f"Bearer {stability_token}"
+            "Authorization": f"Bearer {STABILITY_TOKEN}"
         },
         json={
             "text_prompts": [
@@ -677,7 +720,8 @@ async def obscurity(ctx):
     if OBSCURITY:
         embed = discord.Embed(title="Culture: Obscurity",
                               color=discord.Color.dark_gold())
-        # embed.set_thumbnail(url="url-to-github-eloquence-img")
+        embed.set_thumbnail(
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png")
         embed.add_field(name="ACTIVATED:",
                         value="Obscurity is on.",
                         inline=False)
@@ -686,9 +730,10 @@ async def obscurity(ctx):
                         inline=False)
         await ctx.send(embed=embed)
     else:
-        embed = discord.Embed(title="Culture: Eloquence",
+        embed = discord.Embed(title="Culture: Obscurity",
                               color=discord.Color.dark_gold())
-        # embed.set_thumbnail(url="url-to-github-eloquence-img")
+        embed.set_thumbnail(
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png")
         embed.add_field(name="ACTIVATED:",
                         value="Obscurity is off.",
                         inline=False)
@@ -789,7 +834,8 @@ async def eloquence(ctx):
     if ELOQUENCE:
         embed = discord.Embed(title="Culture: Eloquence",
                               color=discord.Color.dark_gold())
-        # embed.set_thumbnail(url="url-to-github-eloquence-img")
+        embed.set_thumbnail(
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png")
         embed.add_field(name="ACTIVATED:",
                         value="Messages will now be process through an LLM.",
                         inline=False)
@@ -800,6 +846,8 @@ async def eloquence(ctx):
     else:
         embed = discord.Embed(title="Culture: Eloquence",
                               color=discord.Color.dark_gold())
+        embed.set_thumbnail(
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png")
         embed.add_field(name="DEACTIVATED",
                         value="Messages will no longer be processed through an LLM",
                         inline=False)
@@ -906,4 +954,4 @@ async def channel_name_check(ctx):
         return True
 
 
-bot.run(token=token)
+bot.run(token=DISCORD_TOKEN)
