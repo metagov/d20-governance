@@ -15,13 +15,13 @@ game:
   - /help
 
   stages:
-      - name: "obscure-patterns"
+      - stage: "obscure-patterns"
         message: "**The Obscurity:**\n\n
         As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
         action: "obscurity"
         timeout_mins: 1
 
-      - name: "secret-message"
+      - stage: "secret-message"
         message: "**The Secret Message:**\n\n
         Amidst the secrecy of obscurity, one of you receives a secret message from an unknown sender.\n
         The message contains information about an upcoming decision. Will this information assymetry affect how this community makes decisions?\n
@@ -30,7 +30,7 @@ game:
         decision: "reveal"
         timeout_mins: 2
 
-      - name: "obscurity-ends"
+      - stage: "obscurity-ends"
         message: "Suddenly, a bright light pierces through the darkness**\n\n 
         The location of the group is revealed.\n
         The obscurity ends as the group is exposed to the surroundings. 
@@ -39,7 +39,7 @@ game:
         action: "obscurity"
         timeout_mins: 2
 
-      - name: "design-flag"
+      - stage: "design-flag"
         message: "**Your community is enamaoured with joy of clarity**\n\n
         The very air is suffused with a vitality born of absolute perspicuity. Speech flows from each tongue with enchanting eloquence, as though the mundane strictures of daily life were an insipid memory unworthy of recall.\n 
         Buoyed by this whimsy, your esteemed group elects to join forces and craft a standard. Pray, offer up a single element (be it hue, shape, or semblance) to adorn the banner.\n
@@ -47,17 +47,17 @@ game:
         action: "eloquence"
         timeout_mins: 3
 
-      - name: "establish-tradition"
+      - stage: "establish-tradition"
         message: "**Next, create a unique tradition for your community. Each member should suggest a quirky and imaginative tradition that the community can practice together. Once all suggestions have been submitted, vote for your favorite using the ✅ emoji. The tradition with the highest number of votes will be adopted by your community.**"
         action: "vote"
         timeout_mins: 2
 
-      - name: "select-spokescreature"
+      - stage: "select-spokescreature"
         message: "**Finally, it's time to select a spokescreature to represent your community in interactions with other whimsical realms. Propose various magical or mythical creatures and vote for your favorite using the ✅ emoji. The creature with the highest number of votes will become your community's spokescreature.**"
         action: "vote"
         timeout_mins: 2
 
-      - name: "obscure-patterns"
+      - stage: "obscure-patterns"
         message: "**The Obscurity:**\n\n
         As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
         action: "obscurity"

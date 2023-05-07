@@ -1,18 +1,11 @@
 import discord
-import random
 import os
-import requests
 import asyncio
-import emoji
-import base64
-from dotenv import load_dotenv
 from discord.ext import commands
-import yaml
-from langchain.prompts import PromptTemplate
-from langchain.llms import OpenAI
-from langchain.chains import LLMChain
-from PIL import Image, ImageDraw, ImageFont
 from typing import Set
+from d20_governance.utils import *
+from d20_governance.constants import *
+
 
 description = """A bot for experimenting with governance"""
 
@@ -25,62 +18,6 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/",
                    description=description, intents=intents)
-
-load_dotenv()
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-if DISCORD_TOKEN is None:
-    raise ValueError("DISCORD_TOKEN environment variable not set")
-
-STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
-if STABILITY_TOKEN is None:
-    raise Exception("Missing Stability API key.")
-
-API_HOST = os.getenv('API_HOST')
-if API_HOST is None:
-    raise Exception("Missing API Host.")
-
-
-# Timeouts
-START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
-GAME_TIMEOUT = (
-    86400  # The game will auto-archive if there is no game play within 24 hours
-)
-
-# Const
-ENGINE_ID = "stable-diffusion-v1-5"
-CONFIG_PATH = "d20_governance/config.yaml"
-FONT_PATH = "assets/fonts/bubble_love_demo.otf"
-
-# Init
-OBSCURITY = False
-ELOQUENCE = False
-TEMP_CHANNEL = None
-OBSCURITY_MODE = "scramble"
-
-
-def read_config(file_path):
-    """
-    Function for reading a yaml file
-    """
-    with open(file_path, "r") as f:
-        config = yaml.safe_load(f)
-    return config
-
-
-# Set Config Variables
-QUEST_CONFIG = read_config(CONFIG_PATH)
-QUEST_GAME = QUEST_CONFIG["game"]
-QUEST_TITLE = QUEST_GAME["title"]
-QUEST_INTRO = QUEST_GAME["intro"]
-QUEST_COMMANDS = QUEST_GAME["meta_commands"]
-QUEST_STAGE = QUEST_GAME["stages"][0]
-QUEST_STAGE_NAMES = QUEST_STAGE["name"]
-QUEST_STAGE_MESSAGES = QUEST_STAGE["message"]
-QUEST_STAGE_ACTIONS = QUEST_STAGE["action"]
-QUEST_STAGE_TIMEOUT = QUEST_STAGE["timeout_mins"] * 60
-
-# Stores the number of messages sent by each user
-user_message_count = {}
 
 
 class JoinLeaveView(discord.ui.View):
@@ -130,51 +67,6 @@ class JoinLeaveView(discord.ui.View):
             await interaction.response.send_message("You can only leave a quest if you have signaled you would join it", ephemeral=True)
 
 
-# Decision Modules
-decision_modules = [
-    "👎 Approval Voting",
-    "🪗 Consensus",
-    "🥇 Ranked Choice",
-    "☑️ Majority Voting",
-]
-
-# Dynamically extract emojis from the decision_modules list
-# Prepare list
-decision_emojis = []
-for module in decision_modules:
-    # Extract 'emoji' string produced by the emoji_list attribute for each culture module
-    emojis = [e["emoji"] for e in emoji.emoji_list(module)]
-    if len(emojis) > 0:
-        # Append extracted emojis to the culture_emoji list
-        decision_emojis.append(emojis[0])
-
-# Prepare list of culture modules
-list_decision_modules = "\n".join(decision_modules)
-
-# Culture Modules
-culture_modules = [
-    "💐 Eloquence",
-    "🤫 Secrecy",
-    "🪨 Rituals",
-    "🪢 Friendship",
-    "🤝 Solidarity",
-    "🥷 Obscurity",
-]
-
-# Dynamically extract emojis from the culture_modules list
-# Prepare list
-culture_emojis = []
-for module in culture_modules:
-    # Extract 'emoji' string produced by the emoji_list attribute for each culture module
-    emojis = [e["emoji"] for e in emoji.emoji_list(module)]
-    if len(emojis) > 0:
-        # Append extracted emojis to the culture_emoji list
-        culture_emojis.append(emojis[0])
-
-# Prepare list of culture modules
-list_culture_modules = "\n".join(culture_modules)
-
-
 @bot.event
 async def on_ready():
     """
@@ -192,55 +84,6 @@ async def on_guild_join(guild):
     """
     print(f"D20 Bot has been invited to server `{guild.name}`")
     await setup_server(guild)
-
-
-async def setup_server(guild):
-    """
-    Function to set up the server by checking and creating categories and channels as needed.
-    """
-    print("---")
-    print(f"Checking setup for server: '{guild.name}'")
-    print("Checking if necessary categories exist...")
-    server_categories = ["d20-explore", "d20-quests", "d20-archive"]
-    for category_name in server_categories:
-        category = discord.utils.get(guild.categories, name=category_name)
-        if not category:
-            category = await guild.create_category(category_name)
-            print(f"Created category: {category.name}")
-        else:
-            print(f"Necessary categorie '{category.name}' already exists.")
-
-    # Define the d20-agora channel
-    print("Checking if necessary channels exist...")
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(
-            read_messages=True, send_messages=True
-        )
-    }
-    agora_category = discord.utils.get(guild.categories, name="d20-explore")
-    agora_channel = discord.utils.get(guild.text_channels, name="d20-agora")
-    if not agora_channel:
-        # Create channel in the d20-explore category and apply permisions
-        agora_channel = await guild.create_text_channel(
-            name="d20-agora", overwrites=overwrites, category=agora_category
-        )
-        print(
-            f"Created channel '{agora_channel.name}' under category '{agora_category}'."
-        )
-    else:
-        print("The necessary channels exist.")
-
-
-@bot.command()
-# Check that command is run in the d20-agora channel
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def test(ctx):
-    """
-    Command to test the game. Bypasses the join step
-    """
-    print("Testing...")
-    await ctx.send("Starting game")
-    await setup(ctx)
 
 
 @bot.command()
@@ -291,9 +134,9 @@ async def setup(ctx, joined_players):
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
 
     # Create a dictionary containing overwrites for each player that joined,
-    # giving them read_messages access to the temp channel
+    # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
-        ctx.guild.get_member_named(player): discord.PermissionOverwrite(read_messages=True)
+        ctx.guild.get_member_named(player): discord.PermissionOverwrite(read_messages=True, manage_messages=False)
         for player in joined_players
     }
 
@@ -329,37 +172,44 @@ async def start_of_quest(ctx):
     image = overlay_text(image, QUEST_INTRO)
     image.save('generated_image.png')  # Save the image to a file
     # Post the image to the Discord channel
-    await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
+    intro_image_message = await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
     os.remove('generated_image.png')  # Clean up the image file
+    await intro_image_message.pin()  # Pin the available commands message
 
     # Send commands message to temporary channel
-    available_commands = "**Available Commands:**\n" + "\n".join(
-        [f"'{command}'" for command in QUEST_COMMANDS]
+    available_commands = "\n".join(
+        [f"`{command}`" for command in QUEST_COMMANDS]
     )
-    await TEMP_CHANNEL.send(available_commands)
+    embed = discord.Embed(
+        title="Available Commands",
+        description=available_commands,
+        color=discord.Color.blue()
+    )
+    commands_message = await TEMP_CHANNEL.send(embed=embed)
+    await commands_message.pin()  # Pin the available commands message
 
-    for name in QUEST_STAGE_NAMES:
-        print(f"Processing stage {name}")
-        result = await process_stage()
+    for stage in QUEST_STAGE:
+        print(f"Processing stage {stage}")
+        result = await process_stages()
         if not result:
-            await ctx.send(f"Error processing stage {name}")
+            await ctx.send(f"Error processing stage {stage}")
             break
 
 
-async def process_stage():
+async def process_stages():
     """
     Run stages from yaml config
     """
     # Generate stage message into image and send to temporary channel
-    image = generate_image(QUEST_STAGE_MESSAGES)
-    image = overlay_text(image, QUEST_STAGE_MESSAGES)
+    image = generate_image(QUEST_STAGE_MESSAGE)
+    image = overlay_text(image, QUEST_STAGE_MESSAGE)
     image.save('generated_image.png')  # Save the image to a file
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
     os.remove('generated_image.png')  # Clean up the image file
 
     # Call the command corresponding to the event
-    event_func = bot.get_command(QUEST_STAGE_ACTIONS).callback
+    event_func = bot.get_command(QUEST_STAGE_ACTION).callback
 
     # Get the last message object from the channel to set context
     message_obj = await TEMP_CHANNEL.fetch_message(TEMP_CHANNEL.last_message_id)
@@ -376,84 +226,10 @@ async def process_stage():
     return True
 
 
-def generate_image(prompt):
-    response = requests.post(
-        f"{API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Authorization": f"Bearer {STABILITY_TOKEN}"
-        },
-        json={
-            "text_prompts": [
-                {
-                    "text": f"{prompt}"
-                }
-            ],
-            "cfg_scale": 7,
-            "clip_guidance_preset": "FAST_BLUE",
-            "height": 512,
-            "width": 512,
-            "samples": 1,
-            "steps": 10,  # minimum 10 steps, more steps longer generation time
-        },
-    )
-
-    if response.status_code != 200:
-        raise Exception("Non-200 response: " + str(response.text))
-
-    data = response.json()
-
-    image_data = base64.b64decode(data["artifacts"][0]["base64"])
-    with open('generated_image.png', 'wb') as f:
-        f.write(image_data)
-
-    return Image.open('generated_image.png')
-
-
-def wrap_text(text, font, max_width):
-    lines = []
-    words = text.split()
-    current_line = words[0]
-
-    for word in words[1:]:
-        if font.getsize(current_line + ' ' + word)[0] <= max_width:
-            current_line += ' ' + word
-        else:
-            lines.append(current_line)
-            current_line = word
-
-    lines.append(current_line)
-    return lines
-
-
-def overlay_text(image, text):
-    """
-    Overlay text on images
-    """
-    draw = ImageDraw.Draw(image)
-    font_size = 25
-    font = ImageFont.truetype(FONT_PATH, font_size)
-
-    max_width = image.size[0] - 20
-    wrapped_text = wrap_text(text, font, max_width)
-
-    text_height = font_size + len(wrapped_text)
-    image_width, image_height = image.size
-    y_offset = (image_height - text_height) // 5
-
-    for line in wrapped_text:
-        text_width, _ = draw.textsize(line, font)
-        position = ((image_width - text_width) // 2, y_offset)
-        draw.text(position, line, (0, 0, 0), font,
-                  stroke_width=2, stroke_fill=(255, 255, 255))
-        y_offset += font_size
-
-    return image
-
-
-# Archive the game
 async def end(ctx, temp_channel):
+    """
+    Archive the quest and channel
+    """
     print("Archiving...")
     # Archive temporary channel
     archive_category = discord.utils.get(
@@ -515,81 +291,7 @@ async def dtest(ctx):
     await decision_options_msg(ctx, starting_decision_module)
 
 
-async def culture_options_msg(ctx):
-    print("A list of culture modules are presented")
-    culture_how = "how culture is defined"
-    msg = await ctx.send(
-        "Decide a new cultural value to adopt for your organization:\n"
-        f"{list_culture_modules}"
-    )
-    # Add reactions to the sent message based on emojis in culture_modules list
-    for emoji in culture_emojis:
-        await msg.add_reaction(emoji)
-    # TODO: Collect and count the votes for each value
-    # TODO: Apply the chosen communication constraint based on the new value
-    await decision(ctx, culture_how)
-
-
-async def decision_options_msg(
-    ctx, current_decision_module=None, starting_decision_module=None
-):
-    decision_module = current_decision_module or starting_decision_module
-    print("A list of decision modules are presented")
-    decision_how = "how decisions are made"
-    msg = await ctx.send(
-        "Select a new decision making module to adopt for your group:\n"
-        f"{list_decision_modules}"
-    )
-    # Add reactions to the sent message based on emojis in culture_modules list
-    for emoji in decision_emojis:
-        await msg.add_reaction(emoji)
-    await decision(ctx, decision_how, decision_module=decision_module)
-
-
-async def set_starting_decision_module(ctx):
-    print("Randomly assign a starting decision module")
-    # TODO: Probably a better way of coding this up
-    rand = random.randint(1, 4)
-    print(decision_modules[0])
-    if rand == 1:
-        starting_decision_module = decision_modules[0]
-        await ctx.send(f"**Your Starting Decision Module: {starting_decision_module}**")
-        # await ctx.send(file=discord.File("assets/CR_Consensus.png")) # TODO: select correct image
-        await ctx.send(
-            f"Your organization has is now using a **{starting_decision_module}** decision making structure."
-        )
-        return starting_decision_module
-    if rand == 2:
-        starting_decision_module = decision_modules[1]
-        await ctx.send(f"**Your Starting Decision Module: {starting_decision_module}**")
-        await ctx.send(file=discord.File("assets/CR_Consensus.png"))
-        await ctx.send(
-            f"Your organization has is now using a **{starting_decision_module}** decision making structure."
-        )
-        return starting_decision_module
-    if rand == 3:
-        starting_decision_module = decision_modules[2]
-        await ctx.send(f"**Your Starting Decision Module: {starting_decision_module}**")
-        # await ctx.send(file=discord.File("assets/CR_Consensus.png")) # TODO: select correct image
-        await ctx.send(
-            f"Your organization has is now using a **{starting_decision_module}** decision making structure."
-        )
-        return starting_decision_module
-    if rand == 4:
-        starting_decision_module = decision_modules[3]
-        await ctx.send(f"**Your Starting Decision Module: {starting_decision_module}**")
-        # await ctx.send(file=discord.File("assets/CR_Consensus.png")) # TODO: select correct image
-        await ctx.send(
-            f"Your organization has is now using a **{starting_decision_module}** decision making structure."
-        )
-        return starting_decision_module
-    else:
-        pass
-    # TODO: Store this in a file per quest to reference later
-
 # META GAME COMMANDS
-
-
 @bot.command()
 async def info(
     ctx,
@@ -608,81 +310,9 @@ async def info(
     await ctx.send(embed=embed)
 
 
-# TODO: This is a WIP -- Need to think through a modular system for decision and culture interactions
-# TODO: Trigger a decisionon based on input
-async def decision(
-    ctx,
-    culture_how=None,
-    culture_modules=None,
-    decision_how=None,
-    decision_modules=None,
-    decision_module=None,
-):
-    print("Decisions event triggered.")
-    print(
-        ctx,
-        culture_how,
-        culture_modules,
-        decision_how,
-        decision_modules,
-        decision_module,
-    )
-    how = culture_how or decision_how
-    await ctx.send(f"Make your decision about {how} using {decision_module}")
-    # If passed a culture_message, select a culture based on decision_type
-    if culture_how == True:
-        for culture_module in culture_modules:
-            if decision_module == "approval_voting":
-                pass
-            if decision_module == "consensus":
-                pass
-            if decision_module == "ranked_choice":
-                pass
-            if decision_module == "majority_voting":
-                print("decision module is majority voting")
-                await majority_voting()
-                # TODO: implement a majority vote for selecting one of the culture_modules
-                pass
-            else:
-                pass
-    # If passed a decision message, select a new decision module based on durrent decision module
-    if decision_how:
-        for decision_module in decision_modules:
-            if decision_module == "approval_voting":
-                decision_definition = "approval_voting"
-                # TODO: Send message with decision information to channel
-                return decision_definition
-            if decision_module == "consensus":
-                decision_definition = "consensus"
-                await ctx.send("**Your Decision Module: Consensus**")
-                await ctx.send(file=discord.File("assets/CR_Consensus.png"))
-                await ctx.send(
-                    "Your organization has is now using a **consensus-based** decision making structure./n"
-                    "Everyone must agree on a decision for it to pass"
-                )
-                return decision_definition
-            if decision_module == "ranked_choice":
-                decision_definition = "ranked_choice"
-                # TODO: Send message with decision information to channel
-                return decision_definition
-            if decision_module == "majority_voting":
-                decision_definition = "majority_voting"
-                # TODO: Send message with decision information to channel
-                return decision_definition
-            else:
-                pass
-
-
 # Decision Modules
 # TODO: Implement majority voting function
 # TODO: Add params (threshold)
-
-# DECISION FUNCTIONS
-async def majority_voting():
-    """
-    Majority voting: A majority voting function
-    """
-    pass
 
 
 # CULTURE COMMANDS
@@ -694,16 +324,6 @@ async def secret_message(ctx):
     """
     print("Secret message command triggered.")
     await send_msg_to_random_player()
-
-
-async def send_msg_to_random_player():
-    print("Sending random DM...")
-    players = [member for member in TEMP_CHANNEL.members if not member.bot]
-    random_player = random.choice(players)
-    dm_channel = await random_player.create_dm()
-    await dm_channel.send(
-        "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
-    )
 
 
 @bot.command()
@@ -739,54 +359,6 @@ async def obscurity(ctx):
         await ctx.send(embed=embed)
 
     print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
-
-
-def scramble_word(word):
-    if len(word) <= 3:
-        return word
-    else:
-        middle = list(word[1:-1])
-        random.shuffle(middle)
-        return word[0] + "".join(middle) + word[-1]
-
-
-def scramble(text):
-    words = text.split()
-    scrambled_words = [scramble_word(word) for word in words]
-    return " ".join(scrambled_words)
-
-
-def replace_vowels(text):
-    vowels = "aeiou"
-    message_content = text.lower()
-    return "".join([" " if c in vowels else c for c in message_content])
-
-
-def pig_latin_word(word):
-    if word[0] in "aeiouAEIOU":
-        return word + "yay"
-    else:
-        first_consonant_cluster = ""
-        rest_of_word = word
-        for letter in word:
-            if letter not in "aeiouAEIOU":
-                first_consonant_cluster += letter
-                rest_of_word = rest_of_word[1:]
-            else:
-                break
-        return rest_of_word + first_consonant_cluster + "ay"
-
-
-def pig_latin(text):
-    words = text.split()
-    pig_latin_words = [pig_latin_word(word) for word in words]
-    return " ".join(pig_latin_words)
-
-
-def camel_case(text):
-    words = text.split()
-    camel_case_words = [word.capitalize() for word in words]
-    return "".join(camel_case_words)
 
 
 @bot.command()
@@ -868,19 +440,6 @@ async def diversity(ctx):
         user = await ctx.guild.fetch_member(user_id)
         message += f"{user.name}: {count}\n"
     await ctx.send(message)
-
-
-async def eloquence_filter(text):
-    """
-    A LLM filter for messages during the /eloquence command/function
-    """
-    llm = OpenAI(temperature=0.9)
-    prompt = PromptTemplate(
-        input_variables=["input_text"],
-        template="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: {input_text}",
-    )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    return chain.run(text)
 
 
 @bot.event
