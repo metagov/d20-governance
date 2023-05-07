@@ -46,7 +46,7 @@ class JoinLeaveView(discord.ui.View):
                 embed = discord.Embed(title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
                                       description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}")
                 await interaction.message.edit(embed=embed)
-                await start_of_quest(self.ctx)
+                await start_quest(self.ctx)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -86,8 +86,8 @@ async def on_guild_join(guild):
     await setup_server(guild)
 
 
+# QUEST START AND PROGRESSION
 @bot.command()
-# Check that command is run in the d20-agora channel
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def propose_quest(ctx, num_players: int = None):
     """
@@ -163,7 +163,7 @@ async def setup(ctx, joined_players):
     return TEMP_CHANNEL
 
 
-async def start_of_quest(ctx):
+async def start_quest(ctx):
     """
     Start a quest and create a new channel
     """
@@ -226,7 +226,7 @@ async def process_stages():
     return True
 
 
-async def end(ctx, temp_channel):
+async def end(ctx):
     """
     Archive the quest and channel
     """
@@ -234,9 +234,9 @@ async def end(ctx, temp_channel):
     # Archive temporary channel
     archive_category = discord.utils.get(
         ctx.guild.categories, name="d20-archive")
-    if temp_channel is not None:
-        await temp_channel.send(f"**The game is over. This channel is now archived.**")
-        await temp_channel.edit(category=archive_category)
+    if TEMP_CHANNEL is not None:
+        await TEMP_CHANNEL.send(f"**The game is over. This channel is now archived.**")
+        await TEMP_CHANNEL.edit(category=archive_category)
         overwrites = {
             ctx.guild.default_role: discord.PermissionOverwrite(
                 read_messages=True, send_messages=False
@@ -245,74 +245,10 @@ async def end(ctx, temp_channel):
                 read_messages=True, send_messages=False
             ),
         }
-        await temp_channel.edit(overwrites=overwrites)
+        await TEMP_CHANNEL.edit(overwrites=overwrites)
     print("Archived...")
     return
     # TODO: Prevent bot from being able to send messages to arcvhived channels
-
-
-# TEST COMMANDS
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def gentest(ctx):
-    """
-    Test stability image generation
-    """
-    text = "Obscurity"
-    image = generate_image(text)
-    image = overlay_text(image, text)
-
-    # Save the image to a file
-    image.save('generated_image.png')
-
-    # Post the image to the Discord channel
-    await ctx.send(file=discord.File('generated_image.png'))
-
-    # Clean up the image file
-    os.remove('generated_image.png')
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def ctest(ctx):
-    """
-    A way to test and demo the culture messaging functionality
-    """
-    await culture_options_msg(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def dtest(ctx):
-    """
-    Test and demo the decision message functionality
-    """
-    starting_decision_module = await set_starting_decision_module(ctx)
-    await decision_options_msg(ctx, starting_decision_module)
-
-
-# META GAME COMMANDS
-@bot.command()
-async def info(
-    ctx,
-    culture_module=None,
-    current_decision_module=None,
-    starting_decision_module=None,
-):
-    # TODO Pass starting or current decision module into the info command
-    decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats",
-                          color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n",
-                    value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n",
-                    value=f"{culture_module}")
-    await ctx.send(embed=embed)
-
-
-# Decision Modules
-# TODO: Implement majority voting function
-# TODO: Add params (threshold)
 
 
 # CULTURE COMMANDS
@@ -381,22 +317,6 @@ async def obscurity_mode(ctx, mode: str):
         await ctx.channel.send(f"Obscurity mode set to: {mode}")
 
 
-# Quit
-@bot.command()
-async def quit(ctx):
-    print("Quiting...")
-    await ctx.send(f"{ctx.author.name} has quit the game!")
-    # TODO: Implement the logic for quitting the game and ending it for the user
-
-
-# End Game
-@bot.command()
-async def end_game(ctx):
-    print("Ending game...")
-    await end(ctx, TEMP_CHANNEL)
-    print("Game ended.")
-
-
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def eloquence(ctx):
@@ -442,6 +362,86 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
+# META GAME COMMANDS
+@bot.command()
+async def info(
+    ctx,
+    culture_module=None,
+    current_decision_module=None,
+    starting_decision_module=None,
+):
+    # TODO Pass starting or current decision module into the info command
+    decision_module = current_decision_module or starting_decision_module
+    embed = discord.Embed(title="Current Stats",
+                          color=discord.Color.dark_gold())
+    embed.add_field(name="Current Decision Module:\n",
+                    value=f"{decision_module}\n\n")
+    embed.add_field(name="Current Culture Module:\n",
+                    value=f"{culture_module}")
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def quit(ctx):
+    """
+    Individually quit the quest
+    """
+    print("Quiting...")
+    await ctx.send(f"{ctx.author.name} has quit the game!")
+    # TODO: Implement the logic for quitting the game and ending it for the user
+
+
+@bot.command()
+async def dissolve(ctx):
+    """
+    Trigger end of game
+    """
+    print("Ending game...")
+    await end(ctx, TEMP_CHANNEL)
+    print("Game ended.")
+
+
+# TEST COMMANDS
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def gentest(ctx):
+    """
+    Test stability image generation
+    """
+    text = "Obscurity"
+    image = generate_image(text)
+    image = overlay_text(image, text)
+
+    # Save the image to a file
+    image.save('generated_image.png')
+
+    # Post the image to the Discord channel
+    await ctx.send(file=discord.File('generated_image.png'))
+
+    # Clean up the image file
+    os.remove('generated_image.png')
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def ctest(ctx):
+    """
+    A way to test and demo the culture messaging functionality
+    """
+    await culture_options_msg(ctx)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def dtest(ctx):
+    """
+    Test and demo the decision message functionality
+    """
+    starting_decision_module = await set_starting_decision_module(ctx)
+    await decision_options_msg(ctx, starting_decision_module)
+
+
+# ON MESSAGE
 @bot.event
 async def on_message(message):
     if message.author == bot.user:  # Ignore messages sent by the bot itself
@@ -475,6 +475,7 @@ async def on_message(message):
         await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
 
 
+# BOT CHANNEL CHECKS
 @bot.check
 async def channel_name_check(ctx):
     """
@@ -510,6 +511,5 @@ async def channel_name_check(ctx):
         return False
     else:
         return True
-
 
 bot.run(token=DISCORD_TOKEN)
