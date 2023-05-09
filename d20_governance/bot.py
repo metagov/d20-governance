@@ -185,7 +185,6 @@ async def setup(ctx, joined_players):
     return TEMP_CHANNEL
 
 
-@bot.command()
 async def start_quest(ctx):
     """
     Start a quest and create a new channel
