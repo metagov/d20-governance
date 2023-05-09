@@ -299,16 +299,11 @@ async def obscurity(ctx, mode: str = None):
     if mode is None:
         OBSCURITY = not OBSCURITY
         embed = discord.Embed(
-            title=f"Culture: Obscurity {'On!' if OBSCURITY else 'Off!'}",
+            title=f"Culture: Obscurity {'activated!' if OBSCURITY else 'deactivated!'}",
             color=discord.Color.dark_gold(),
         )
         if OBSCURITY:
             embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
-    elif not OBSCURITY:
-        embed = discord.Embed(
-            title="Error - Obscurity mode cannot be set while obscurity is off. Toggle /obscurity first.",
-            color=discord.Color.red(),
-        )
     elif mode not in available_modes:
         embed = discord.Embed(
             title=f"Error - The mode '{mode}' is not available.",
