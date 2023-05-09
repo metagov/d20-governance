@@ -11,12 +11,12 @@ game:
     - quit
 
   stages:
-    - name: "choose-mascot"
+    - stage: "choose-mascot"
       message: "**Your first task is to decide what type of entity your community's mascot should be. Propose mascot ideas and vote using the ✅ emoji. \n\nThe mascot with the highest number of votes wins.**"
       action: "vote"
       timeout_mins: 3
 
-    - name: "elect-dictator"
+    - stage: "elect-dictator"
       message: "**It's time to elect a benevolent dictator for your community. Each member should nominate one person (including themselves) for the position. Once all nominations are in, vote for your preferred leader using the ✅ emoji. The nominee with the highest number of votes will become the benevolent dictator. You have 5 minutes to complete this task.**"
       action: "vote"
       timeout_mins: 3
