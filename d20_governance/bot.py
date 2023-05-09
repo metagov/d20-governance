@@ -477,7 +477,7 @@ async def dissolve(ctx):
 # TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def gentest(ctx):
+async def test_generation(ctx):
     """
     Test stability image generation
     """
@@ -497,7 +497,7 @@ async def gentest(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def ctest(ctx):
+async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
     """
@@ -506,7 +506,7 @@ async def ctest(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def dtest(ctx):
+async def test_decision_module(ctx):
     """
     Test and demo the decision message functionality
     """
@@ -550,7 +550,7 @@ async def on_message(message):
 
 # BOT CHANNEL CHECKS
 @bot.check
-async def channel_name_check(ctx):
+async def validate_channels(ctx):
     """
     Check that the test_game and start_game commands are run in the `d20-agora` channel
     """
