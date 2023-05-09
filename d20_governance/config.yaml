@@ -47,9 +47,9 @@ game:
         action: "eloquence"
         timeout_mins: 3
 
-      - stage: "establish-tradition"
-        message: "**Next, create a unique tradition for your community. Each member should suggest a quirky and imaginative tradition that the community can practice together. Once all suggestions have been submitted, vote for your favorite using the ✅ emoji. The tradition with the highest number of votes will be adopted by your community.**"
-        action: "vote"
+      - stage: "establish-culture"
+        message: "**Next, select a new culture for your community by voting for one option. The winning culture will be adopted by your community.**"
+        action: "vote 'Which culture should we adopt?' 'transparency' 'secrecy' 'autonomy'"
         timeout_mins: 2
 
       - stage: "select-spokescreature"

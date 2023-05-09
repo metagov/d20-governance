@@ -185,6 +185,7 @@ async def setup(ctx, joined_players):
     return TEMP_CHANNEL
 
 
+@bot.command()
 async def start_quest(ctx):
     """
     Start a quest and create a new channel
@@ -210,28 +211,31 @@ async def start_quest(ctx):
     commands_message = await TEMP_CHANNEL.send(embed=embed)
     await commands_message.pin()  # Pin the available commands message
 
-    for stage in QUEST_STAGE:
-        print(f"Processing stage {stage}")
-        result = await process_stages()
+    for stage in QUEST_STAGES:
+        print(f"Processing stage {stage['stage']}")
+        result = await process_stage(stage)
         if not result:
             await ctx.send(f"Error processing stage {stage}")
             break
 
 
-async def process_stages():
+async def process_stage(stage):
     """
     Run stages from yaml config
     """
     # Generate stage message into image and send to temporary channel
-    image = generate_image(QUEST_STAGE_MESSAGE)
-    image = overlay_text(image, QUEST_STAGE_MESSAGE)
+    message = stage[QUEST_STAGE_MESSAGE]
+    image = generate_image(message)
+    image = overlay_text(image, message)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
 
     # Call the command corresponding to the event
-    event_func = bot.get_command(QUEST_STAGE_ACTION).callback
+    action_string = stage[QUEST_STAGE_ACTION]
+    command_name, *args = parse_action_string(action_string)
+    command = bot.get_command(command_name)
 
     # Get the last message object from the channel to set context
     message_obj = await TEMP_CHANNEL.fetch_message(TEMP_CHANNEL.last_message_id)
@@ -239,11 +243,12 @@ async def process_stages():
     # Create a context object for the message
     ctx = await bot.get_context(message_obj)
 
-    # Call the command function with with the context object
-    await event_func(ctx=ctx)
+    # Call the command function with the context object and the arguments
+    await command.callback(ctx, *args)
 
     # Wait for the timeout period
-    await asyncio.sleep(QUEST_STAGE_TIMEOUT)
+    timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
+    await asyncio.sleep(timeout_seconds)
 
     return True
 
@@ -384,7 +389,7 @@ async def diversity(ctx):
 
 
 @bot.command()
-async def poll(ctx, question: str, *options: str):
+async def vote(ctx, question: str, *options: str):
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
         return
@@ -423,12 +428,15 @@ async def poll(ctx, question: str, *options: str):
             total_votes += results[options[i]]
 
     results_text = f"Total votes: {total_votes}\n\n"
+    winning_vote = None
+    winning_vote_count = 0
     for option, votes in results.items():
-        results_text += (
-            f"{option}: {votes} votes ({(votes / total_votes) * 100:.2f}%)\n"
-            if total_votes
-            else f"{option}: 0 votes (0%)\n"
-        )
+        percentage = (votes / total_votes) * 100 if total_votes else 0
+        results_text += f"{option}: {votes} votes ({percentage:.2f}%)\n"
+
+        if votes > winning_vote_count:
+            winning_vote = option
+            winning_vote_count = votes
 
     embed = discord.Embed(
         title=f"{question} - Results",
@@ -436,6 +444,13 @@ async def poll(ctx, question: str, *options: str):
         color=discord.Color.dark_gold(),
     )
     await ctx.send(embed=embed)
+
+    if winning_vote:
+        await ctx.send(
+            f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
+        )
+    else:
+        await ctx.send("No votes were cast.")
 
 
 # META GAME COMMANDS
