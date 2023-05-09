@@ -192,9 +192,9 @@ def parse_action_string(action_string):
     return shlex.split(action_string)
 
 
-async def send_msg_to_random_player():
+async def send_msg_to_random_player(temp_channel):
     print("Sending random DM...")
-    players = [member for member in TEMP_CHANNEL.members if not member.bot]
+    players = [member for member in temp_channel.members if not member.bot]
     random_player = random.choice(players)
     dm_channel = await random_player.create_dm()
     await dm_channel.send(
@@ -348,3 +348,16 @@ async def decision(
                 return decision_definition
             else:
                 pass
+
+
+async def execute_action(bot, action_string, temp_channel):
+    command_name, *args = parse_action_string(action_string)
+    command = bot.get_command(command_name)
+
+    # Get the last message object from the channel to set context
+    message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+
+    # Create a context object for the message
+    ctx = await bot.get_context(message_obj)
+
+    return await command.callback(ctx, *args)

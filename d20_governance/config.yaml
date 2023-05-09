@@ -50,6 +50,7 @@ game:
       - stage: "establish-culture"
         message: "**Next, select a new culture for your community by voting for one option. The winning culture will be adopted by your community.**"
         action: "vote 'Which culture should we adopt?' 'transparency' 'secrecy' 'autonomy'"
+        apply_outcome: True
         timeout_mins: 2
 
       - stage: "select-spokescreature"

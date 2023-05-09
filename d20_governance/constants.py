@@ -50,6 +50,7 @@ QUEST_STAGES = QUEST_GAME["stages"]
 QUEST_STAGE_MESSAGE = "message"
 QUEST_STAGE_ACTION = "action"
 QUEST_STAGE_TIMEOUT = "timeout_mins"
+QUEST_APPLY_OUTCOME = "apply_outcome"
 
 # Stores the number of messages sent by each user
 user_message_count = {}

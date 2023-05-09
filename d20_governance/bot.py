@@ -233,17 +233,15 @@ async def process_stage(stage):
 
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]
-    command_name, *args = parse_action_string(action_string)
-    command = bot.get_command(command_name)
+    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL)
+    apply_outcome = None
+    try:
+        apply_outcome = stage[QUEST_APPLY_OUTCOME]
+    except KeyError:
+        pass
 
-    # Get the last message object from the channel to set context
-    message_obj = await TEMP_CHANNEL.fetch_message(TEMP_CHANNEL.last_message_id)
-
-    # Create a context object for the message
-    ctx = await bot.get_context(message_obj)
-
-    # Call the command function with the context object and the arguments
-    await command.callback(ctx, *args)
+    if apply_outcome is True:
+        await execute_action(bot, action_outcome, TEMP_CHANNEL)
 
     # Wait for the timeout period
     timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
@@ -277,6 +275,41 @@ async def end(ctx):
 
 
 # CULTURE COMMANDS
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def transparency(ctx):
+    embed = discord.Embed(
+        title="New Culture: Transparency",
+        description="The community has chosen to adopt a culture of transparency.",
+        color=discord.Color.green(),
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def secrecy(ctx):
+    embed = discord.Embed(
+        title="New Culture: Secrecy",
+        description="The community has chosen to adopt a culture of secrecy.",
+        color=discord.Color.red(),
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def autonomy(ctx):
+    embed = discord.Embed(
+        title="New Culture: Autonomy",
+        description="The community has chosen to adopt a culture of autonomy.",
+        color=discord.Color.blue(),
+    )
+    await ctx.send(embed=embed)
+
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def secret_message(ctx):
@@ -284,7 +317,7 @@ async def secret_message(ctx):
     Secrecy: Randomly Send Messages to DMs
     """
     print("Secret message command triggered.")
-    await send_msg_to_random_player()
+    await send_msg_to_random_player(TEMP_CHANNEL)
 
 
 @bot.command()
@@ -388,6 +421,7 @@ async def diversity(ctx):
 
 
 @bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
@@ -449,7 +483,8 @@ async def vote(ctx, question: str, *options: str):
             f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
         )
     else:
-        await ctx.send("No votes were cast.")
+        await ctx.send("No winning vote.")
+    return winning_vote
 
 
 # META GAME COMMANDS
