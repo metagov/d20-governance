@@ -18,6 +18,16 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
+# Iterate over the main modules
+for module in GOVERNANCE_STACK_MODULES:
+    module_name = module["name"]
+    print(f"Module Name: {module_name}")
+
+    # Check for submodules and iterate over them
+    if "modules" in module:
+        for submodule in module["modules"]:
+            submodule_name = submodule["name"]
+            print(f"  Submodule Name: {submodule_name}")
 
 class JoinLeaveView(discord.ui.View):
     def __init__(self, ctx: commands.Context, num_players: int):
@@ -416,6 +426,15 @@ async def dissolve(ctx):
 
 
 # TEST COMMANDS
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def test_png_creation(ctx):
+    create_svg_snapshot()
+    with open("output.png", "rb") as f:
+        png_file = discord.File(f, "output.svg")
+        await ctx.send(file=png_file)
+
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def gentest(ctx):

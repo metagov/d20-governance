@@ -2,6 +2,8 @@ import discord
 import requests
 import random
 import base64
+import svgwrite
+import cairosvg
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
@@ -47,8 +49,6 @@ async def setup_server(guild):
         print("The necessary channels exist.")
 
 # Image Utils
-
-
 def generate_image(prompt):
     response = requests.post(
         f"{API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
@@ -124,9 +124,59 @@ def overlay_text(image, text):
 
     return image
 
+
+def create_svg_snapshot():
+    # Print Module Name
+    names = GOVERNANCE_STACK_MODULE_NAME
+    for name in names:
+        print(name)
+    
+    # Print sub_module name
+    sub_modules = GOVERNANCE_STACK_SUB_MODULES
+    for sub_module in sub_modules:
+        print(sub_module)
+    
+    # Initialize the SVG drawing
+    dwg = svgwrite.Drawing(None, profile="tiny", size=("600px", "400px"))
+
+    # Draw the modules based on the YAML data
+    module_y = 10
+    for module in GOVERNANCE_STACK_MODULES:
+        # Draw the icon
+        dwg.add(dwg.circle(center=("30px", f"{module_y}px"), r="10px", fill="black", stroke="black"))
+
+        # Draw the module name text
+        dwg.add(dwg.text(module["name"], insert=("60px", f"{module_y + 5}px"), font_size="14px"))
+
+        module_y += 30
+
+        # Draw submodules if any
+        if "modules" in module:
+            sub_y = 10
+            for sub_module in module["modules"]:
+                # Draw the icon
+                dwg.add(dwg.circle(center=("60px", f"{module_y + sub_y}px"), r="10px", fill="black", stroke="black"))
+
+                # Draw the submodule name text
+                dwg.add(dwg.text(sub_module["name"], insert=("90px", f"{module_y + sub_y + 5}px"), font_size="14px"))
+
+                sub_y += 30
+            
+            module_y += sub_y
+
+    # Save the SVG content to a variable
+    svg_content = dwg.tostring()
+
+    # Convert the SVG content to a PNG ByteArray
+    png_data = cairosvg.svg2png(bytestring=svg_content)
+
+    # Save the ByteArray as a PNG file
+    with open("output.png", "wb") as f:
+        f.write(png_data)
+
+
+
 # Culture Utils
-
-
 def scramble_word(word):
     if len(word) <= 3:
         return word
@@ -213,8 +263,6 @@ async def culture_options_msg(ctx):
     await decision(ctx, culture_how)
 
 # Decision Utils
-
-
 async def majority_voting():
     """
     Majority voting: A majority voting function
