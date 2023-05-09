@@ -16,8 +16,7 @@ intents.dm_messages = True
 intents.messages = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="/",
-                   description=description, intents=intents)
+bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
 
 class JoinLeaveView(discord.ui.View):
@@ -27,15 +26,23 @@ class JoinLeaveView(discord.ui.View):
         self.num_players = num_players
         self.joined_players: Set[str] = set()
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Join", custom_id="join_button")
-    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        style=discord.ButtonStyle.green, label="Join", custom_id="join_button"
+    )
+    async def join_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         player_name = interaction.user.name
         if player_name not in self.joined_players:
             self.joined_players.add(player_name)
-            await interaction.response.send_message(f"{player_name} has joined the quest!")
+            await interaction.response.send_message(
+                f"{player_name} has joined the quest!"
+            )
             needed_players = self.num_players - len(self.joined_players)
-            embed = discord.Embed(title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
-                                  description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")  # Note: Not possible to mention author in embeds
+            embed = discord.Embed(
+                title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
+                description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
+            )  # Note: Not possible to mention author in embeds
             await interaction.message.edit(embed=embed, view=self)
 
             if len(self.joined_players) == self.num_players:
@@ -43,28 +50,44 @@ class JoinLeaveView(discord.ui.View):
                 await interaction.message.edit(view=None)
                 # return variables from setup()
                 TEMP_CHANNEL = await setup(self.ctx, self.joined_players)
-                embed = discord.Embed(title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
-                                      description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}")
+                embed = discord.Embed(
+                    title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
+                    description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
+                )
                 await interaction.message.edit(embed=embed)
                 await start_quest(self.ctx)
 
         else:
             # Ephemeral means only the person who took the action will see this message
-            await interaction.response.send_message("You have already joined the quest. Wait until enough people have joined for the quest to start.", ephemeral=True)
+            await interaction.response.send_message(
+                "You have already joined the quest. Wait until enough people have joined for the quest to start.",
+                ephemeral=True,
+            )
 
-    @discord.ui.button(style=discord.ButtonStyle.red, label="Leave", custom_id="leave_button")
-    async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        style=discord.ButtonStyle.red, label="Leave", custom_id="leave_button"
+    )
+    async def leave_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         player_name = interaction.user.name
         if player_name in self.joined_players:
             # if players is in the list of joined players remove them from the list
             self.joined_players.remove(player_name)
-            await interaction.response.send_message(f"{player_name} has abandoned the quest before it even began!")
+            await interaction.response.send_message(
+                f"{player_name} has abandoned the quest before it even began!"
+            )
             needed_players = self.num_players - len(self.joined_players)
-            embed = discord.Embed(title=f"{self.ctx.author.mention} Has Proposed a Quest: Join or Leave",
-                                  description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}")
+            embed = discord.Embed(
+                title=f"{self.ctx.author.mention} Has Proposed a Quest: Join or Leave",
+                description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
+            )
             await interaction.message.edit(embed=embed, view=self)
         else:
-            await interaction.response.send_message("You can only leave a quest if you have signaled you would join it", ephemeral=True)
+            await interaction.response.send_message(
+                "You can only leave a quest if you have signaled you would join it",
+                ephemeral=True,
+            )
 
 
 @bot.event
@@ -116,12 +139,10 @@ async def propose_quest(ctx, num_players: int = None):
         view = JoinLeaveView(ctx, num_players)
 
         embed = discord.Embed(
-            title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave")
-
-        await ctx.send(
-            embed=embed,
-            view=view
+            title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave"
         )
+
+        await ctx.send(embed=embed, view=view)
 
 
 async def setup(ctx, joined_players):
@@ -136,7 +157,9 @@ async def setup(ctx, joined_players):
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
-        ctx.guild.get_member_named(player): discord.PermissionOverwrite(read_messages=True, manage_messages=False)
+        ctx.guild.get_member_named(player): discord.PermissionOverwrite(
+            read_messages=True, manage_messages=False
+        )
         for player in joined_players
     }
 
@@ -146,10 +169,9 @@ async def setup(ctx, joined_players):
         ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
         # Users that joined can view channel
         ctx.guild.me: bot_permissions,
-        **player_overwrites  # Merge player_overwrites with the main overwrites dictionary
+        **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
     }
-    quests_category = discord.utils.get(
-        ctx.guild.categories, name="d20-quests")
+    quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
 
     global TEMP_CHANNEL
 
@@ -170,20 +192,20 @@ async def start_quest(ctx):
     # Generate intro image and send to temporary channel
     image = generate_image(QUEST_INTRO)
     image = overlay_text(image, QUEST_INTRO)
-    image.save('generated_image.png')  # Save the image to a file
+    image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
-    intro_image_message = await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
-    os.remove('generated_image.png')  # Clean up the image file
+    intro_image_message = await TEMP_CHANNEL.send(
+        file=discord.File("generated_image.png")
+    )
+    os.remove("generated_image.png")  # Clean up the image file
     await intro_image_message.pin()  # Pin the available commands message
 
     # Send commands message to temporary channel
-    available_commands = "\n".join(
-        [f"`{command}`" for command in QUEST_COMMANDS]
-    )
+    available_commands = "\n".join([f"`{command}`" for command in QUEST_COMMANDS])
     embed = discord.Embed(
         title="Available Commands",
         description=available_commands,
-        color=discord.Color.blue()
+        color=discord.Color.blue(),
     )
     commands_message = await TEMP_CHANNEL.send(embed=embed)
     await commands_message.pin()  # Pin the available commands message
@@ -203,10 +225,10 @@ async def process_stages():
     # Generate stage message into image and send to temporary channel
     image = generate_image(QUEST_STAGE_MESSAGE)
     image = overlay_text(image, QUEST_STAGE_MESSAGE)
-    image.save('generated_image.png')  # Save the image to a file
+    image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
-    await TEMP_CHANNEL.send(file=discord.File('generated_image.png'))
-    os.remove('generated_image.png')  # Clean up the image file
+    await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
+    os.remove("generated_image.png")  # Clean up the image file
 
     # Call the command corresponding to the event
     event_func = bot.get_command(QUEST_STAGE_ACTION).callback
@@ -232,8 +254,7 @@ async def end(ctx):
     """
     print("Archiving...")
     # Archive temporary channel
-    archive_category = discord.utils.get(
-        ctx.guild.categories, name="d20-archive")
+    archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
     if TEMP_CHANNEL is not None:
         await TEMP_CHANNEL.send(f"**The game is over. This channel is now archived.**")
         await TEMP_CHANNEL.edit(category=archive_category)
@@ -264,57 +285,43 @@ async def secret_message(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def obscurity(ctx):
+async def obscurity(ctx, mode: str = None):
     """
-    Toggle the obscurity mode
+    Toggle the obscurity mode or set it. Valid options are "scramble", "replace_vowels", "pig_latin", "camel_case". If no parameter is passed,
+    obscurity will be toggled on or off.
     """
     global OBSCURITY
-    global OBSCURITY_MODE
-    OBSCURITY = not OBSCURITY
-
-    if OBSCURITY:
-        embed = discord.Embed(title="Culture: Obscurity",
-                              color=discord.Color.dark_gold())
-        embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png")
-        embed.add_field(name="ACTIVATED:",
-                        value="Obscurity is on.",
-                        inline=False)
-        embed.add_field(name="Mode:",
-                        value=f"{OBSCURITY_MODE}",
-                        inline=False)
-        await ctx.send(embed=embed)
-    else:
-        embed = discord.Embed(title="Culture: Obscurity",
-                              color=discord.Color.dark_gold())
-        embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png")
-        embed.add_field(name="ACTIVATED:",
-                        value="Obscurity is off.",
-                        inline=False)
-        await ctx.send(embed=embed)
-
-    print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def obscurity_mode(ctx, mode: str):
-    """
-    Set the obscurity mode. Valid options are "scramble", "replace_vowels", "pig_latin", "camel_case"
-    """
     global OBSCURITY_MODE
 
     # A list of available obscurity modes
     available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
-
-    if mode not in available_modes:
-        await ctx.channel.send(
-            f"Invalid obscurity mode. Available modes: {', '.join(available_modes)}"
+    embed = None
+    if mode is None:
+        OBSCURITY = not OBSCURITY
+        embed = discord.Embed(
+            title=f"Culture: Obscurity {'activated!' if OBSCURITY else 'deactivated!'}",
+            color=discord.Color.dark_gold(),
+        )
+        if OBSCURITY:
+            embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
+    elif mode not in available_modes:
+        embed = discord.Embed(
+            title=f"Error - The mode '{mode}' is not available.",
+            color=discord.Color.red(),
         )
     else:
         OBSCURITY_MODE = mode
-        await ctx.channel.send(f"Obscurity mode set to: {mode}")
+        OBSCURITY = True
+        embed = discord.Embed(
+            title="Culture: Obscurity On!", color=discord.Color.dark_gold()
+        )
+        embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
+
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png"
+    )
+    await ctx.send(embed=embed)
+    print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
 
 
 @bot.command()
@@ -323,25 +330,35 @@ async def eloquence(ctx):
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
     if ELOQUENCE:
-        embed = discord.Embed(title="Culture: Eloquence",
-                              color=discord.Color.dark_gold())
+        embed = discord.Embed(
+            title="Culture: Eloquence", color=discord.Color.dark_gold()
+        )
         embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png")
-        embed.add_field(name="ACTIVATED:",
-                        value="Messages will now be process through an LLM.",
-                        inline=False)
-        embed.add_field(name="LLM Prompt:",
-                        value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
-                        inline=False)
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png"
+        )
+        embed.add_field(
+            name="ACTIVATED:",
+            value="Messages will now be process through an LLM.",
+            inline=False,
+        )
+        embed.add_field(
+            name="LLM Prompt:",
+            value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
+            inline=False,
+        )
         await ctx.send(embed=embed)
     else:
-        embed = discord.Embed(title="Culture: Eloquence",
-                              color=discord.Color.dark_gold())
+        embed = discord.Embed(
+            title="Culture: Eloquence", color=discord.Color.dark_gold()
+        )
         embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png")
-        embed.add_field(name="DEACTIVATED",
-                        value="Messages will no longer be processed through an LLM",
-                        inline=False)
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png"
+        )
+        embed.add_field(
+            name="DEACTIVATED",
+            value="Messages will no longer be processed through an LLM",
+            inline=False,
+        )
         await ctx.send(embed=embed)
 
 
@@ -372,12 +389,9 @@ async def info(
 ):
     # TODO Pass starting or current decision module into the info command
     decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats",
-                          color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n",
-                    value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n",
-                    value=f"{culture_module}")
+    embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
+    embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
+    embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
     await ctx.send(embed=embed)
 
 
@@ -413,13 +427,13 @@ async def gentest(ctx):
     image = overlay_text(image, text)
 
     # Save the image to a file
-    image.save('generated_image.png')
+    image.save("generated_image.png")
 
     # Post the image to the Discord channel
-    await ctx.send(file=discord.File('generated_image.png'))
+    await ctx.send(file=discord.File("generated_image.png"))
 
     # Clean up the image file
-    os.remove('generated_image.png')
+    os.remove("generated_image.png")
 
 
 @bot.command()
@@ -511,5 +525,6 @@ async def channel_name_check(ctx):
         return False
     else:
         return True
+
 
 bot.run(token=DISCORD_TOKEN)
