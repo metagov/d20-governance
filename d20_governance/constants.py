@@ -31,7 +31,10 @@ GAME_TIMEOUT = (
 # Const
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
-CONFIG_PATH = "d20_governance/config.yaml"
+QUEST_CONFIG_PATH = "d20_governance/config.yaml"
+GOVERNANCE_STACK_CONFIG_PATH = (
+    "d20_governance/governance-stack-configs/governance-stack-config.yaml"
+)
 FONT_PATH = "assets/fonts/bubble_love_demo.otf"
 
 # Init
@@ -40,8 +43,14 @@ ELOQUENCE = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
-# Set Config Variables
-QUEST_CONFIG = read_config(CONFIG_PATH)
+# Set Governance Stack Yaml Variables
+GOVERNANCE_STACK_CONFIG = read_config(GOVERNANCE_STACK_CONFIG_PATH)
+GOVERNANCE_STACK_MODULES = GOVERNANCE_STACK_CONFIG["rule"]["modules"][0]
+GOVERNANCE_STACK_MODULE_NAME = GOVERNANCE_STACK_MODULES["name"]
+GOVERNANCE_STACK_SUB_MODULES = GOVERNANCE_STACK_MODULES["modules"]
+
+# Set Quest Config Variables
+QUEST_CONFIG = read_config(QUEST_CONFIG_PATH)
 QUEST_GAME = QUEST_CONFIG["game"]
 QUEST_TITLE = QUEST_GAME["title"]
 QUEST_INTRO = QUEST_GAME["intro"]
