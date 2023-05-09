@@ -383,6 +383,61 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
+@bot.command()
+async def poll(ctx, question: str, *options: str):
+    if len(options) <= 1:
+        await ctx.send("Error: A poll must have at least two options.")
+        return
+    if len(options) > 10:
+        await ctx.send("Error: A poll cannot have more than 10 options.")
+        return
+
+    emoji_list = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+    options_text = ""
+    for i, option in enumerate(options):
+        options_text += f"{emoji_list[i]} {option}\n"
+
+    embed = discord.Embed(
+        title=question, description=options_text, color=discord.Color.dark_gold()
+    )
+    poll_message = await ctx.send(embed=embed)
+
+    for i in range(len(options)):
+        await poll_message.add_reaction(emoji_list[i])
+
+    await asyncio.sleep(60)  # Poll duration: 60 seconds
+
+    poll_message = await ctx.channel.fetch_message(
+        poll_message.id
+    )  # Refresh message to get updated reactions
+    reactions = poll_message.reactions
+    results = {}
+    total_votes = 0
+
+    for i, reaction in enumerate(reactions):
+        if reaction.emoji in emoji_list:
+            results[options[i]] = (
+                reaction.count - 1
+            )  # Subtract 1 to ignore the bot's own reaction
+            total_votes += results[options[i]]
+
+    results_text = f"Total votes: {total_votes}\n\n"
+    for option, votes in results.items():
+        results_text += (
+            f"{option}: {votes} votes ({(votes / total_votes) * 100:.2f}%)\n"
+            if total_votes
+            else f"{option}: 0 votes (0%)\n"
+        )
+
+    embed = discord.Embed(
+        title=f"{question} - Results",
+        description=results_text,
+        color=discord.Color.dark_gold(),
+    )
+    await ctx.send(embed=embed)
+
+
 # META GAME COMMANDS
 @bot.command()
 async def info(
