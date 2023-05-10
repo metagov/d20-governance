@@ -13,47 +13,47 @@ rule:
   modules:
     - moduleID: values
       name: Values
-      icon: null
+      icon: assets/imgs/CommunityRule/palette.svg
       summary: Servant leadership, singular vision, voluntarism
       modules: []
     - moduleID: membership
       name: Membership
-      icon: null
+      icon: assets/imgs/CommunityRule/building.svg
       summary: >-
         Participation is open to anyone who wants to join, but the Benevolent
         Dictator can remove participants at will.
       modules: []
     - moduleID: autocracy
       name: Autocracy
-      icon: null
+      icon: assets/imgs/CommunityRule/building.svg
       summary: >-
         The Benevolent Dictator has authority and can change the group's
         governance as necessary.
       modules:
         - moduleID: delegation
           name: Delegation
-          icon: null
+          icon: assets/imgs/CommunityRule/rotate.svg
           summary: >-
             The Benevolent Dictator can invite participants to help with managing 
             the group.
           modules: []
         - moduleID: expiration
           name: Expiration
-          icon: null
+          icon: assets/imgs/CommunityRule/rotate.svg
           summary: >-
             When the group is sufficiently mature, the Benevolent  Dictator will
             establish a more inclusive structure.
           modules: []
         - moduleID: executive
           name: Executive
-          icon: null
+          icon: assets/imgs/CommunityRule/building.svg
           summary: >-
             The Benevolent Dictator is responsible for implementing—or delegating
             implementation of—policies and other decisions.
           modules: []
         - moduleID: lobbying
           name: Lobbying
-          icon: null
+          icon: assets/imgs/CommunityRule/rotate.svg
           summary: >-
             If participants are not happy with the Benevolent Dictator's
             leadership, they may voice their concerns or leave the group.

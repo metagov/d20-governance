@@ -10,6 +10,9 @@ from langchain.chains import LLMChain
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.constants import *
 import shlex
+import xml.etree.ElementTree as ET
+from svgwrite.extensions import Inkscape
+from io import BytesIO
 
 
 # Setup Utils
@@ -124,29 +127,35 @@ def overlay_text(image, text):
     return image
 
 
+def add_svg_icon(dwg, svg_path, x, y, height=20, width=20):
+    if svg_path is None:
+        return
+
+    # Convert the SVG icon to a PNG using CairoSVG
+    png_data = cairosvg.svg2png(url=svg_path, output_width=width, output_height=height)
+
+    # Encode the PNG as a base64 string
+    encoded_png = base64.b64encode(png_data).decode("utf-8")
+
+    # Add an <image> element referencing the base64-encoded PNG data
+    dwg.add(
+        dwg.image(
+            href=f"data:image/png;base64,{encoded_png}",
+            insert=(x, y),
+            size=(width, height),
+        )
+    )
+
+
 def create_svg_snapshot():
-    # Print Module Name
-    names = GOVERNANCE_STACK_MODULE_NAME
-    for name in names:
-        print(name)
-
-    # Print sub_module name
-    sub_modules = GOVERNANCE_STACK_SUB_MODULES
-    for sub_module in sub_modules:
-        print(sub_module)
-
     # Initialize the SVG drawing
     dwg = svgwrite.Drawing(None, profile="tiny", size=("600px", "400px"))
 
     # Draw the modules based on the YAML data
     module_y = 10
     for module in GOVERNANCE_STACK_MODULES:
-        # Draw the icon
-        dwg.add(
-            dwg.circle(
-                center=("30px", f"{module_y}px"), r="10px", fill="black", stroke="black"
-            )
-        )
+        # Add the SVG icon for the current module
+        add_svg_icon(dwg, module["icon"], 20, module_y - 10)
 
         # Draw the module name text
         dwg.add(
@@ -162,14 +171,7 @@ def create_svg_snapshot():
             sub_y = 10
             for sub_module in module["modules"]:
                 # Draw the icon
-                dwg.add(
-                    dwg.circle(
-                        center=("60px", f"{module_y + sub_y}px"),
-                        r="10px",
-                        fill="black",
-                        stroke="black",
-                    )
-                )
+                add_svg_icon(dwg, sub_module["icon"], 50, module_y + sub_y - 10)
 
                 # Draw the submodule name text
                 dwg.add(

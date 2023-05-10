@@ -6,6 +6,7 @@ from typing import Set
 from d20_governance.utils import *
 from d20_governance.constants import *
 
+print(GOVERNANCE_STACK_DATA)
 
 description = """A bot for experimenting with governance"""
 
@@ -18,16 +19,6 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
-# Iterate over the main modules
-for module in GOVERNANCE_STACK_MODULES:
-    module_name = module["name"]
-    print(f"Module Name: {module_name}")
-
-    # Check for submodules and iterate over them
-    if "modules" in module:
-        for submodule in module["modules"]:
-            submodule_name = submodule["name"]
-            print(f"  Submodule Name: {submodule_name}")
 
 
 class JoinLeaveView(discord.ui.View):
@@ -536,7 +527,7 @@ async def dissolve(ctx):
 async def test_png_creation(ctx):
     create_svg_snapshot()
     with open("output.png", "rb") as f:
-        png_file = discord.File(f, "output.svg")
+        png_file = discord.File(f, "output.png")
         await ctx.send(file=png_file)
 
 
