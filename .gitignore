@@ -3,5 +3,5 @@
 .venv
 .gitignore
 dev_logs/
-d20_governance/playground/
+d20_governance/playground
 **/__pycache__/**

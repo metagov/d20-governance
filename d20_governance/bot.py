@@ -6,8 +6,6 @@ from typing import Set
 from d20_governance.utils import *
 from d20_governance.constants import *
 
-print(GOVERNANCE_STACK_DATA)
-
 description = """A bot for experimenting with governance"""
 
 intents = discord.Intents.default()
@@ -517,18 +515,46 @@ async def dissolve(ctx):
     Trigger end of game
     """
     print("Ending game...")
-    await end(ctx, TEMP_CHANNEL)
+    await end(ctx)
     print("Game ended.")
+
+    # Call generate_governance_stack_gif() to create a GIT from the saved snapshots
+    generate_governance_stack_gif()
+
+    await ctx.send("Here is a gif of your governance journey:")
+
+    # Open the generated GIF and send it to Discord
+    with open("governance_journey.gif", "rb") as f:
+        gif_file = discord.File(f, "governance_journey.gif")
+        await ctx.send(file=gif_file)
+        os.remove("governance_journey.gif")
 
 
 # TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_png_creation(ctx):
-    create_svg_snapshot()
-    with open("output.png", "rb") as f:
-        png_file = discord.File(f, "output.png")
-        await ctx.send(file=png_file)
+async def test_create_snapshot(ctx):
+    create_governance_stack_png_snapshot()
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def test_show_governance(ctx):
+    # Find all PNGs in the governance_stack folder
+    snapshot_files = glob.glob(f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/*.png")
+
+    # Check if there are any snapshots in the folder
+    if len(snapshot_files) == 0:
+        await ctx.send("No governance stack snapshots found.")
+    else:
+        # Find the most recently created snapshot in the folder
+        latest_snapshot = max(snapshot_files, key=os.path.getctime)
+
+        # Open the most recent snapshot and send it to Discord
+        with open(latest_snapshot, "rb") as f:
+            png_file = discord.File(f, f"{os.path.basename(latest_snapshot)}")
+            await ctx.send(file=png_file)
+            print(f"{os.path.basename(latest_snapshot)}")
 
 
 @bot.command()
@@ -651,4 +677,7 @@ async def validate_channels(ctx):
         return True
 
 
-bot.run(token=DISCORD_TOKEN)
+try:
+    bot.run(token=DISCORD_TOKEN)
+finally:
+    cleanup_governance_snapshots()

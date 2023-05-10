@@ -2,16 +2,14 @@ import discord
 import requests
 import random
 import base64
-import svgwrite
 import cairosvg
+import glob
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.constants import *
 import shlex
-import xml.etree.ElementTree as ET
-from svgwrite.extensions import Inkscape
 from io import BytesIO
 
 
@@ -61,8 +59,10 @@ def generate_image(prompt):
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Authorization": f"Bearer {STABILITY_TOKEN}",
+            "Authorization": f"Bearer {STABILITY_TOKEN}",
         },
         json={
+            "text_prompts": [{"text": f"{prompt}"}],
             "text_prompts": [{"text": f"{prompt}"}],
             "cfg_scale": 7,
             "clip_guidance_preset": "FAST_BLUE",
@@ -107,7 +107,7 @@ def overlay_text(image, text):
     """
     draw = ImageDraw.Draw(image)
     font_size = 25
-    font = ImageFont.truetype(FONT_PATH, font_size)
+    font = ImageFont.truetype(FONT_PATH_BUBBLE, font_size)
 
     max_width = image.size[0] - 20
     wrapped_text = wrap_text(text, font, max_width)
@@ -127,74 +127,132 @@ def overlay_text(image, text):
     return image
 
 
-def add_svg_icon(dwg, svg_path, x, y, height=20, width=20):
-    if svg_path is None:
-        return
+def create_governance_stack_png_snapshot():
+    global FILE_COUNT
 
-    # Convert the SVG icon to a PNG using CairoSVG
-    png_data = cairosvg.svg2png(url=svg_path, output_width=width, output_height=height)
+    # Initialize a temporary image canvas to perform width calculations
+    temp_img = Image.new("RGBA", (1, 1), (255, 255, 255, 255))
+    temp_draw = ImageDraw.Draw(temp_img)
 
-    # Encode the PNG as a base64 string
-    encoded_png = base64.b64encode(png_data).decode("utf-8")
+    # Set the font for the text
+    parent_font = ImageFont.truetype(FONT_PATH_LATO, 20)
+    sub_font = ImageFont.truetype(FONT_PATH_LATO, 16)
 
-    # Add an <image> element referencing the base64-encoded PNG data
-    dwg.add(
-        dwg.image(
-            href=f"data:image/png;base64,{encoded_png}",
-            insert=(x, y),
-            size=(width, height),
-        )
-    )
+    # Calculate the canvas width required to fit the content
+    module_width_total = (
+        30 + len(GOVERNANCE_STACK_MODULES) * 20
+    )  # Icon width + module margin
+    for module in GOVERNANCE_STACK_MODULES:
+        if "modules" in module:
+            submodule_text_width = [
+                temp_draw.textsize(submodule["name"], font=sub_font)[0]
+                for submodule in module["modules"]
+            ]
+            module_width_total += (
+                sum(submodule_text_width) + len(submodule_text_width) * 65
+            )  # Submodules total width
+        module_width_total += (
+            temp_draw.textsize(module["name"], font=parent_font)[0] + 50
+        )  # Module name width
 
-
-def create_svg_snapshot():
-    # Initialize the SVG drawing
-    dwg = svgwrite.Drawing(None, profile="tiny", size=("600px", "400px"))
+    # Initialize the actual image canvas with responsive width
+    img = Image.new("RGBA", (module_width_total, 80), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
 
     # Draw the modules based on the YAML data
-    module_y = 10
+    module_x = 20
     for module in GOVERNANCE_STACK_MODULES:
-        # Add the SVG icon for the current module
-        add_svg_icon(dwg, module["icon"], 20, module_y - 10)
+        # Add the SVG(icon) for the current module
+        add_svg_icon(draw, module["icon"], module_x, 25)
 
-        # Draw the module name text
-        dwg.add(
-            dwg.text(
-                module["name"], insert=("60px", f"{module_y + 5}px"), font_size="14px"
-            )
-        )
+        # Draw the module name text, vertically centered with the icon
+        draw.text((module_x + 40, 30), module["name"], font=parent_font, fill=(0, 0, 0))
 
-        module_y += 30
+        # Initialize module_width and sub_x
+        module_width = draw.textsize(module["name"], font=parent_font)[0]
+        sub_x = module_x + module_width + 50
 
         # Draw submodules if any
         if "modules" in module:
-            sub_y = 10
             for sub_module in module["modules"]:
-                # Draw the icon
-                add_svg_icon(dwg, sub_module["icon"], 50, module_y + sub_y - 10)
+                # Draw the submodule icon
+                add_svg_icon(draw, sub_module["icon"], sub_x, 25)
 
-                # Draw the submodule name text
-                dwg.add(
-                    dwg.text(
-                        sub_module["name"],
-                        insert=("90px", f"{module_y + sub_y + 5}px"),
-                        font_size="14px",
-                    )
+                # Draw the submodule name text, vertically centered with the icon
+                draw.text(
+                    (sub_x + 35, 33), sub_module["name"], font=sub_font, fill=(0, 0, 0)
                 )
 
-                sub_y += 30
+                # Draw a smaller rectangle around the icon and text for the submodule, with a vertical gap
+                sub_text_width = draw.textsize(sub_module["name"], font=sub_font)[0]
+                draw.rectangle(
+                    [(sub_x - 5, 25), (sub_x + sub_text_width + 40, 60)],
+                    outline=(0, 0, 0),
+                )
 
-            module_y += sub_y
+                # Update sub_x for the next submodule
+                sub_x += 45 + sub_text_width + 20
 
-    # Save the SVG content to a variable
-    svg_content = dwg.tostring()
+            # Calculate the total width for the parent module including submodules
+            total_width = sub_x - module_x + 20
+        else:
+            total_width = module_width + 40
 
-    # Convert the SVG content to a PNG ByteArray
-    png_data = cairosvg.svg2png(bytestring=svg_content)
+        # Draw a rectangle around the module (parent module) and all its submodules with vertical padding
+        draw.rectangle(
+            [(module_x - 5, 20), (module_x + total_width, 65)],
+            outline=(0, 0, 0),
+            width=2,
+        )
 
-    # Save the ByteArray as a PNG file
-    with open("output.png", "wb") as f:
-        f.write(png_data)
+        # Update module_x for the next module
+        module_x += total_width + 20
+
+    # Crop the image to make the canvas responsive to the content with a 10px margin on all sides
+    img_cropped = img.crop((0, 0, module_x, 80))
+
+    # Save the output image to a PNG file
+    if FILE_COUNT is not None:
+        img_cropped.save(
+            f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_{FILE_COUNT}.png"
+        )
+    else:
+        img_cropped.save("governance_stack_snapshot.png")
+
+    FILE_COUNT += 1  # Increate the file sounce for the next snapshot
+
+
+def add_svg_icon(draw, icon_path, x, y, width=30, height=30):
+    # Convert the SVG to a PIL Image
+    svg_in_memory = BytesIO(cairosvg.svg2png(url=icon_path))
+    icon_img = Image.open(svg_in_memory)
+
+    # Resize the SVG icon
+    icon_img = icon_img.resize((width, height), Image.ANTIALIAS)
+
+    # Draw the SVG icon onto the image canvas
+    draw.bitmap((x, y), icon_img)
+
+
+def generate_governance_stack_gif():
+    frames = []
+    snapshot_files = sorted(
+        glob.glob(f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png")
+    )
+    for filename in snapshot_files:
+        frames.append(Image.open(filename))
+
+    frames[0].save(
+        "governance_journey.gif",
+        save_all=True,
+        append_images=frames[1:],
+        duration=200,  # milliseconds
+        loop=0,
+    )
+
+    # Cleanup: delete the snapshot files fromf {the GOVERNANCE_STACK_SNAPSHOTS_PATH} folder
+    for filename in snapshot_files:
+        os.remove(filename)
 
 
 # Culture Utils
@@ -419,14 +477,9 @@ async def decision(
                 pass
 
 
-async def execute_action(bot, action_string, temp_channel):
-    command_name, *args = parse_action_string(action_string)
-    command = bot.get_command(command_name)
-
-    # Get the last message object from the channel to set context
-    message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
-
-    # Create a context object for the message
-    ctx = await bot.get_context(message_obj)
-
-    return await command.callback(ctx, *args)
+def cleanup_governance_snapshots():
+    snapshot_files = glob.glob(
+        f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png"
+    )
+    for filename in snapshot_files:
+        os.remove(filename)

@@ -22,6 +22,10 @@ STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
 if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
 
+API_HOST = os.getenv("API_HOST")
+if API_HOST is None:
+    raise Exception("Missing API Host.")
+
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
 GAME_TIMEOUT = (
@@ -31,11 +35,12 @@ GAME_TIMEOUT = (
 # Const
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
-QUEST_CONFIG_PATH = "d20_governance/config.yaml"
-GOVERNANCE_STACK_CONFIG_PATH = (
-    "d20_governance/governance-stack-configs/governance-stack-config.yaml"
-)
-FONT_PATH = "assets/fonts/bubble_love_demo.otf"
+QUEST_CONFIG_PATH = "d20_governance/quest-config.yaml"
+GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance-stack-config.yaml"
+FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
+FONT_PATH_LATO = "assets/fonts/Lato-Regular.ttf"
+FILE_COUNT = 0  # Global variable to store the count of created files
+GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 
 # Init
 OBSCURITY = False
