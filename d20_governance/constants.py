@@ -22,10 +22,6 @@ STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
 if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
 
-API_HOST = os.getenv('API_HOST')
-if API_HOST is None:
-    raise Exception("Missing API Host.")
-
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
 GAME_TIMEOUT = (
@@ -33,6 +29,7 @@ GAME_TIMEOUT = (
 )
 
 # Const
+STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 CONFIG_PATH = "d20_governance/config.yaml"
 FONT_PATH = "assets/fonts/bubble_love_demo.otf"
@@ -43,18 +40,17 @@ ELOQUENCE = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
-
 # Set Config Variables
 QUEST_CONFIG = read_config(CONFIG_PATH)
 QUEST_GAME = QUEST_CONFIG["game"]
 QUEST_TITLE = QUEST_GAME["title"]
 QUEST_INTRO = QUEST_GAME["intro"]
 QUEST_COMMANDS = QUEST_GAME["meta_commands"]
-QUEST_STAGES = QUEST_GAME["stages"][0]
-QUEST_STAGE = QUEST_STAGES["stage"]
-QUEST_STAGE_MESSAGE = QUEST_STAGES["message"]
-QUEST_STAGE_ACTION = QUEST_STAGES["action"]
-QUEST_STAGE_TIMEOUT = QUEST_STAGES["timeout_mins"] * 60
+QUEST_STAGES = QUEST_GAME["stages"]
+QUEST_STAGE_MESSAGE = "message"
+QUEST_STAGE_ACTION = "action"
+QUEST_STAGE_TIMEOUT = "timeout_mins"
+QUEST_APPLY_OUTCOME = "apply_outcome"
 
 # Stores the number of messages sent by each user
 user_message_count = {}
