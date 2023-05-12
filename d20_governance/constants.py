@@ -41,6 +41,8 @@ FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
 FONT_PATH_LATO = "assets/fonts/Lato-Regular.ttf"
 FILE_COUNT = 0  # Global variable to store the count of created files
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
+MAX_MODULE_LEVELS = 5
+MODULE_PADDING = 10
 
 # Init
 OBSCURITY = False
@@ -49,8 +51,8 @@ TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
 # Set Governance Stack Yaml Variables
-GOVERNANCE_STACK_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
-GOVERNANCE_STACK_MODULES = GOVERNANCE_STACK_DATA["rule"]["modules"]
+GOVERNANCE_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
+GOVERNANCE_MODULES = GOVERNANCE_DATA["modules"]
 
 # Set Quest Config Variables
 QUEST_DATA = read_config(QUEST_CONFIG_PATH)

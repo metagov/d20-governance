@@ -514,6 +514,8 @@ async def dissolve(ctx):
     """
     Trigger end of game
     """
+    global FILE_COUNT
+
     print("Ending game...")
     await end(ctx)
     print("Game ended.")
@@ -529,11 +531,20 @@ async def dissolve(ctx):
         await ctx.send(file=gif_file)
         os.remove("governance_journey.gif")
 
+    FILE_COUNT = 0
+
 
 # TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_create_snapshot(ctx):
+    create_governance_stack_png_snapshot()
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def test_randomize_snapshot(ctx):
+    shuffle_modules()
     create_governance_stack_png_snapshot()
 
 
