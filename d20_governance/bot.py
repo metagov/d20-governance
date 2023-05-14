@@ -3,8 +3,10 @@ import os
 import asyncio
 from discord.ext import commands
 from typing import Set
-from d20_governance.utils import *
-from d20_governance.constants import *
+from utils import *
+from constants import *
+from cultures import *
+from decisions import *
 
 description = """A bot for experimenting with governance"""
 
@@ -521,7 +523,7 @@ async def dissolve(ctx):
     print("Game ended.")
 
     # Call generate_governance_stack_gif() to create a GIT from the saved snapshots
-    generate_governance_stack_gif()
+    generate_governance_journey_gif()
 
     await ctx.send("Here is a gif of your governance journey:")
 
@@ -538,14 +540,14 @@ async def dissolve(ctx):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_create_snapshot(ctx):
-    create_governance_stack_png_snapshot()
+    make_governance_snapshot()
 
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_randomize_snapshot(ctx):
     shuffle_modules()
-    create_governance_stack_png_snapshot()
+    make_governance_snapshot()
 
 
 @bot.command()
