@@ -35,6 +35,7 @@ START_TIMEOUT = 600  # The window for starting a game will time out after 10 min
 GAME_TIMEOUT = (
     86400  # The game will auto-archive if there is no game play within 24 hours
 )
+VOTE_DURATION_SECONDS = 10 
 
 # Const
 # Stabiliy

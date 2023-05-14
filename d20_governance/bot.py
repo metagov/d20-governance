@@ -438,33 +438,52 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def vote(ctx, governance_type: str):
-    if governance_type is None:
-        await ctx.send("Invalid governance type: {governance_type}")
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user.bot:
         return
 
-    emoji_list = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    if hasattr(bot, "vote_poll_message") and reaction.message.id == bot.vote_poll_message.id:
+        if user.id in bot.vote_voters:
+            await reaction.remove(user)
+            await user.send(f"Naughty naughty! You cannot vote twice!", delete_after=VOTE_DURATION_SECONDS)
+        else:
+            bot.vote_voters.add(user.id)
 
-    module_names = []
-    module_names, base_yaml, data = get_module_type_list(governance_type, module_names)
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def vote(ctx, question: str, *options: str):
+    if len(options) <= 1:
+        await ctx.send("Error: A poll must have at least two options.")
+        return
+    if len(options) > 10:
+        await ctx.send("Error: A poll cannot have more than 10 options.")
+        return
+
+    emoji_list = [chr(0x1F1E6 + i) for i in range(26)]  # A-Z
 
     options_text = ""
-    for i, option in enumerate(module_names):
+    for i, option in enumerate(options):
         options_text += f"{emoji_list[i]} {option}\n"
 
     embed = discord.Embed(
-        title="Please select a module from the list:",
-        description=options_text,
-        color=discord.Color.dark_gold(),
+        title=question, description=options_text, color=discord.Color.dark_gold()
     )
     poll_message = await ctx.send(embed=embed)
 
-    for i in range(len(module_names)):
+    for i in range(len(options)):
         await poll_message.add_reaction(emoji_list[i])
 
-    await asyncio.sleep(60)  # Poll duration: 60 seconds
+    # Initialize the set of voters and store the poll message
+    bot.vote_voters = set()
+    bot.vote_poll_message = poll_message
+
+    await asyncio.sleep(VOTE_DURATION_SECONDS) # wait for votes to be cast
+
+    # Remove the bot's reactions
+    bot_member = discord.utils.find(lambda m: m.id == bot.user.id, ctx.guild.members)
+    for i in range(len(options)):
+        await poll_message.remove_reaction(emoji_list[i], bot_member)
 
     poll_message = await ctx.channel.fetch_message(
         poll_message.id
@@ -475,13 +494,12 @@ async def vote(ctx, governance_type: str):
 
     for i, reaction in enumerate(reactions):
         if reaction.emoji in emoji_list:
-            results[module_names[i]] = (
-                reaction.count - 1
-            )  # Subtract 1 to ignore the bot's own reaction
-            total_votes += results[module_names[i]]
+            results[options[i]] = (
+                reaction.count
+            ) 
+            total_votes += results[options[i]]
 
     results_text = f"Total votes: {total_votes}\n\n"
-    winning_vote = None
     winning_vote_count = 0
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
@@ -491,34 +509,25 @@ async def vote(ctx, governance_type: str):
             winning_vote = option
             winning_vote_count = votes
 
+        if votes == winning_vote_count:
+            tie = True
+
     embed = discord.Embed(
-        title="Results",
+        title=f"{question} - Results",
         description=results_text,
         color=discord.Color.dark_gold(),
     )
     await ctx.send(embed=embed)
 
-    # Remove bot reactions after polling
-    for i in range(len(module_names)):
-        await poll_message.clear_reaction(
-            emoji_list[i]
-        )  # FIXME: only remove bot emojies
-
-    if winning_vote:
-        winning_vote_index = module_names.index(winning_vote)
+    if winning_vote and not tie:
         await ctx.send(
-            f"The winning module is: **{winning_vote}** with {winning_vote_count} votes."
+            f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
         )
-        new_module_name, new_module_uuid = add_new_module(
-            base_yaml, data, winning_vote_index
-        )
-        await ctx.send(
-            f" New module `{new_module_name}` created with unique ID `{new_module_uuid}`"
-        )
-        await post_governance(ctx)
     else:
-        await ctx.send("No winning module.")
+        await ctx.send("No winning vote.")
+
     return winning_vote
+
 
 
 # META GAME COMMANDS
