@@ -4,8 +4,6 @@ import random
 import base64
 import cairosvg
 import glob
-import hashlib
-import re
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
@@ -195,7 +193,7 @@ def draw_module(
 
     # Draw the module name
     draw.text(
-        (x + icon_width + MODULE_PADDING, y),
+        (x + icon_width + MODULE_PADDING, y + (module_level * 1)),
         module["name"],
         font=font,
         fill=(0, 0, 0),
@@ -230,10 +228,10 @@ def draw_module(
         next_x = max(next_x, sub_module_x - 20)
 
     # Draw a rectangle around modules
-    rect_start = (x - MODULE_PADDING, y - MODULE_PADDING)
+    rect_start = (x - MODULE_PADDING, y - MODULE_PADDING + (module_level * 3))
     rect_end = (
         next_x + MODULE_PADDING,
-        y + module_height + MODULE_PADDING,
+        y + module_height + MODULE_PADDING - (module_level * 1),
     )
     draw.rectangle([rect_start, rect_end], outline=(0, 0, 0), width=2)
     print(f"Depth Level:{module_level}, UniqueID:{uniqueID}")
@@ -248,6 +246,9 @@ def draw_module(
     max_x = max(max_x, next_x)
     print(max_x)
     print(f"##{module_height}##")
+
+    if module_level > 0:
+        max_x += 5
 
     return max_x, module_height
 
@@ -271,7 +272,7 @@ def create_governance_stack_png_snapshot(modules=GOVERNANCE_MODULES):
     module_height = 0
     for module in modules:
         x, max_height = draw_module(img, draw, module, x, y)
-        x += 20
+        x += 30
         max_y = y + max(max_height, module_height) + MODULE_PADDING * 2
 
     max_x = x
@@ -331,7 +332,7 @@ def add_svg_icon(img, icon_path, x, y, module_level, size=None):
     if size:
         size = (size[0] - 2 * module_level, size[1] - 2)
 
-    img.paste(icon, (int(x), int(y)), mask=icon)
+    img.paste(icon, (int(x), int(y) + (module_level * 1)), mask=icon)
     return icon
 
 
@@ -609,3 +610,6 @@ def cleanup_governance_snapshots():
     )
     for filename in snapshot_files:
         os.remove(filename)
+
+
+create_governance_stack_png_snapshot()
