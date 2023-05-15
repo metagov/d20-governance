@@ -7,6 +7,7 @@ from langchain.llms import OpenAI
 from langchain.chains import LLMChain
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.constants import *
+import shlex
 
 
 # Setup Utils
@@ -46,23 +47,20 @@ async def setup_server(guild):
     else:
         print("The necessary channels exist.")
 
+
 # Image Utils
 
 
 def generate_image(prompt):
     response = requests.post(
-        f"{API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
+        f"{STABILITY_API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": f"Bearer {STABILITY_TOKEN}"
+            "Authorization": f"Bearer {STABILITY_TOKEN}",
         },
         json={
-            "text_prompts": [
-                {
-                    "text": f"{prompt}"
-                }
-            ],
+            "text_prompts": [{"text": f"{prompt}"}],
             "cfg_scale": 7,
             "clip_guidance_preset": "FAST_BLUE",
             "height": 512,
@@ -78,10 +76,10 @@ def generate_image(prompt):
     data = response.json()
 
     image_data = base64.b64decode(data["artifacts"][0]["base64"])
-    with open('generated_image.png', 'wb') as f:
+    with open("generated_image.png", "wb") as f:
         f.write(image_data)
 
-    return Image.open('generated_image.png')
+    return Image.open("generated_image.png")
 
 
 def wrap_text(text, font, max_width):
@@ -90,8 +88,8 @@ def wrap_text(text, font, max_width):
     current_line = words[0]
 
     for word in words[1:]:
-        if font.getsize(current_line + ' ' + word)[0] <= max_width:
-            current_line += ' ' + word
+        if font.getsize(current_line + " " + word)[0] <= max_width:
+            current_line += " " + word
         else:
             lines.append(current_line)
             current_line = word
@@ -118,11 +116,13 @@ def overlay_text(image, text):
     for line in wrapped_text:
         text_width, _ = draw.textsize(line, font)
         position = ((image_width - text_width) // 2, y_offset)
-        draw.text(position, line, (0, 0, 0), font,
-                  stroke_width=2, stroke_fill=(255, 255, 255))
+        draw.text(
+            position, line, (0, 0, 0), font, stroke_width=2, stroke_fill=(255, 255, 255)
+        )
         y_offset += font_size
 
     return image
+
 
 # Culture Utils
 
@@ -188,9 +188,13 @@ async def eloquence_filter(text):
     return chain.run(text)
 
 
-async def send_msg_to_random_player():
+def parse_action_string(action_string):
+    return shlex.split(action_string)
+
+
+async def send_msg_to_random_player(temp_channel):
     print("Sending random DM...")
-    players = [member for member in TEMP_CHANNEL.members if not member.bot]
+    players = [member for member in temp_channel.members if not member.bot]
     random_player = random.choice(players)
     dm_channel = await random_player.create_dm()
     await dm_channel.send(
@@ -211,6 +215,7 @@ async def culture_options_msg(ctx):
     # TODO: Collect and count the votes for each value
     # TODO: Apply the chosen communication constraint based on the new value
     await decision(ctx, culture_how)
+
 
 # Decision Utils
 
@@ -343,3 +348,16 @@ async def decision(
                 return decision_definition
             else:
                 pass
+
+
+async def execute_action(bot, action_string, temp_channel):
+    command_name, *args = parse_action_string(action_string)
+    command = bot.get_command(command_name)
+
+    # Get the last message object from the channel to set context
+    message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+
+    # Create a context object for the message
+    ctx = await bot.get_context(message_obj)
+
+    return await command.callback(ctx, *args)

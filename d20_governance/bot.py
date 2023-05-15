@@ -210,40 +210,42 @@ async def start_quest(ctx):
     commands_message = await TEMP_CHANNEL.send(embed=embed)
     await commands_message.pin()  # Pin the available commands message
 
-    for stage in QUEST_STAGE:
-        print(f"Processing stage {stage}")
-        result = await process_stages()
+    for stage in QUEST_STAGES:
+        print(f"Processing stage {stage['stage']}")
+        result = await process_stage(stage)
         if not result:
             await ctx.send(f"Error processing stage {stage}")
             break
 
 
-async def process_stages():
+async def process_stage(stage):
     """
     Run stages from yaml config
     """
     # Generate stage message into image and send to temporary channel
-    image = generate_image(QUEST_STAGE_MESSAGE)
-    image = overlay_text(image, QUEST_STAGE_MESSAGE)
+    message = stage[QUEST_STAGE_MESSAGE]
+    image = generate_image(message)
+    image = overlay_text(image, message)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
 
     # Call the command corresponding to the event
-    event_func = bot.get_command(QUEST_STAGE_ACTION).callback
+    action_string = stage[QUEST_STAGE_ACTION]
+    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL)
+    apply_outcome = None
+    try:
+        apply_outcome = stage[QUEST_APPLY_OUTCOME]
+    except KeyError:
+        pass
 
-    # Get the last message object from the channel to set context
-    message_obj = await TEMP_CHANNEL.fetch_message(TEMP_CHANNEL.last_message_id)
-
-    # Create a context object for the message
-    ctx = await bot.get_context(message_obj)
-
-    # Call the command function with with the context object
-    await event_func(ctx=ctx)
+    if apply_outcome is True:
+        await execute_action(bot, action_outcome, TEMP_CHANNEL)
 
     # Wait for the timeout period
-    await asyncio.sleep(QUEST_STAGE_TIMEOUT)
+    timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
+    await asyncio.sleep(timeout_seconds)
 
     return True
 
@@ -273,6 +275,41 @@ async def end(ctx):
 
 
 # CULTURE COMMANDS
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def transparency(ctx):
+    embed = discord.Embed(
+        title="New Culture: Transparency",
+        description="The community has chosen to adopt a culture of transparency.",
+        color=discord.Color.green(),
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def secrecy(ctx):
+    embed = discord.Embed(
+        title="New Culture: Secrecy",
+        description="The community has chosen to adopt a culture of secrecy.",
+        color=discord.Color.red(),
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def autonomy(ctx):
+    embed = discord.Embed(
+        title="New Culture: Autonomy",
+        description="The community has chosen to adopt a culture of autonomy.",
+        color=discord.Color.blue(),
+    )
+    await ctx.send(embed=embed)
+
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def secret_message(ctx):
@@ -280,7 +317,7 @@ async def secret_message(ctx):
     Secrecy: Randomly Send Messages to DMs
     """
     print("Secret message command triggered.")
-    await send_msg_to_random_player()
+    await send_msg_to_random_player(TEMP_CHANNEL)
 
 
 @bot.command()
@@ -379,6 +416,73 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def vote(ctx, question: str, *options: str):
+    if len(options) <= 1:
+        await ctx.send("Error: A poll must have at least two options.")
+        return
+    if len(options) > 10:
+        await ctx.send("Error: A poll cannot have more than 10 options.")
+        return
+
+    emoji_list = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+    options_text = ""
+    for i, option in enumerate(options):
+        options_text += f"{emoji_list[i]} {option}\n"
+
+    embed = discord.Embed(
+        title=question, description=options_text, color=discord.Color.dark_gold()
+    )
+    poll_message = await ctx.send(embed=embed)
+
+    for i in range(len(options)):
+        await poll_message.add_reaction(emoji_list[i])
+
+    await asyncio.sleep(60)  # Poll duration: 60 seconds
+
+    poll_message = await ctx.channel.fetch_message(
+        poll_message.id
+    )  # Refresh message to get updated reactions
+    reactions = poll_message.reactions
+    results = {}
+    total_votes = 0
+
+    for i, reaction in enumerate(reactions):
+        if reaction.emoji in emoji_list:
+            results[options[i]] = (
+                reaction.count - 1
+            )  # Subtract 1 to ignore the bot's own reaction
+            total_votes += results[options[i]]
+
+    results_text = f"Total votes: {total_votes}\n\n"
+    winning_vote = None
+    winning_vote_count = 0
+    for option, votes in results.items():
+        percentage = (votes / total_votes) * 100 if total_votes else 0
+        results_text += f"{option}: {votes} votes ({percentage:.2f}%)\n"
+
+        if votes > winning_vote_count:
+            winning_vote = option
+            winning_vote_count = votes
+
+    embed = discord.Embed(
+        title=f"{question} - Results",
+        description=results_text,
+        color=discord.Color.dark_gold(),
+    )
+    await ctx.send(embed=embed)
+
+    if winning_vote:
+        await ctx.send(
+            f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
+        )
+    else:
+        await ctx.send("No winning vote.")
+    return winning_vote
+
+
 # META GAME COMMANDS
 @bot.command()
 async def info(
@@ -418,7 +522,7 @@ async def dissolve(ctx):
 # TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def gentest(ctx):
+async def test_generation(ctx):
     """
     Test stability image generation
     """
@@ -438,7 +542,7 @@ async def gentest(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def ctest(ctx):
+async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
     """
@@ -447,7 +551,7 @@ async def ctest(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def dtest(ctx):
+async def test_decision_module(ctx):
     """
     Test and demo the decision message functionality
     """
@@ -491,7 +595,7 @@ async def on_message(message):
 
 # BOT CHANNEL CHECKS
 @bot.check
-async def channel_name_check(ctx):
+async def validate_channels(ctx):
     """
     Check that the test_game and start_game commands are run in the `d20-agora` channel
     """

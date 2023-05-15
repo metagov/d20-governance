@@ -1,0 +1,40 @@
+game:
+  title: "Whimsical Governance Adventure"
+  intro: "**The Intro:**
+
+    You have just stumbled upon a whimsical online realm,
+    where the inhabitants communicate and govern themselves in peculiar ways.
+
+    Unusual decision-making structures and communication constraints are the norm here.
+    As a newcomer, you must adapt to these unconventional methods,
+    piecing together meaning, navigating conversations, and making collective decisions
+    in this delightful chaos."
+
+  meta_commands:
+  - /info
+  - /help
+
+  stages:
+      - stage: "establish-culture"
+        message: "**Next, select a new culture for your community by voting for one option. The winning culture will be adopted by your community.**"
+        action: "vote 'Which culture should we adopt?' 'transparency' 'secrecy' 'autonomy'"
+        apply_outcome: True
+        timeout_mins: 2
+
+      - stage: "obscure-patterns"
+        message: "**The Obscurity:**\n\n
+        As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
+        action: "obscurity"
+        timeout_mins: 2
+
+# Possible extension of config for different triggering different bot commands:
+#   stages:
+#     - name: "obscure-patterns"
+#       message: "**The Obscurity:**\n\n
+#       As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
+#       commands: 
+#         - progression: "pass"
+#           culture: "obscure"
+#           decision: "starting_decision_module"
+#           process: "pass"
+#       timeout_mins: 1
