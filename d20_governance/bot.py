@@ -1,12 +1,14 @@
 import discord
 import os
 import asyncio
+import uuid
 from discord.ext import commands
 from typing import Set
-from utils import *
-from constants import *
-from cultures import *
-from decisions import *
+from collections import OrderedDict
+from d20_governance.utils.utils import *
+from d20_governance.utils.constants import *
+from d20_governance.utils.cultures import *
+from d20_governance.utils.decisions import *
 
 description = """A bot for experimenting with governance"""
 
@@ -356,7 +358,7 @@ async def obscurity(ctx, mode: str = None):
         embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
 
     embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png"
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
     )
     await ctx.send(embed=embed)
     print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
@@ -372,7 +374,7 @@ async def eloquence(ctx):
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
         embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png"
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
         )
         embed.add_field(
             name="ACTIVATED:",
@@ -390,7 +392,7 @@ async def eloquence(ctx):
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
         embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png"
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
         )
         embed.add_field(
             name="DEACTIVATED",
@@ -535,7 +537,110 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
+# Return OrderedDicts a regular dicts while preserving their order when dumps to yaml
+def represent_ordered_dict(dumper, data):
+    return dumper.represent_dict(data.items())
+
+
+yaml.add_representer(OrderedDict, represent_ordered_dict)
+
+
 # TEST COMMANDS
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def clean(ctx):
+    clean_temp_files()
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def test_add_new_module(ctx):
+    """
+    Send a messag with the list of possible module names and make a new module based on selection
+    """
+    # TODO: Possibly refactor this function and other functions to use ruamel.yaml
+    ## ruamel allows for more features and options such
+    ## as ordered lists, setting indentation, and setting insertion points
+    ## these feasures may be useful for doing more precise writing of yaml files
+
+    if os.path.exists(GOVERNANCE_STACK_CONFIG_PATH):
+        with open(GOVERNANCE_STACK_CONFIG_PATH, "r") as f:
+            base_yaml = yaml.safe_load(f)
+    else:
+        base_yaml = OrderedDict([("modules", [])])
+
+    with open(GOVERNANCE_STACK_CULTURES_PATH, "r") as f:
+        data = yaml.safe_load(f)
+
+    module_names = [module["name"] for module in data["modules"]]
+    print(module_names)
+
+    # List module names
+    module_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(module_names)])
+    await ctx.send(
+        f"Please select a module from the list:\n {module_list}\nType the number of your selection.\nFor example: `1` or `2`."
+    )
+
+    # Wait for user's response
+    def check(response):
+        return response.author == ctx.author and response.channel == ctx.channel
+
+    response = await bot.wait_for("message", check=check)
+
+    # Parse the user's selection
+    try:
+        selection = int(response.content)
+        if selection < 1 or selection > len(module_names):
+            raise ValueError
+    except ValueError:
+        await ctx.send("Invalid selection.")
+        return
+
+    # Note: Let the user select whic config files they will use
+    ## They can select a quest and starting governance stack config
+    ## The files will be added to the main directory and removed when either the game of the bot ends
+    ## The governance config need to be passed to the make_governance_stack as well
+    ## The governance config should have the uniqueID stripped to be ready for import into CR
+    ## The final state of the governance file is posted as a md file to the discord along with the gif
+    ## Should there be four different config files with the structure, process, decision, and culture modules?
+    ## SPDC: Acronym for the gov stack
+    ## This would make creating new modules easier instead of being contingent on a base config
+    ## It would also allow someone to make their own gov stack to start the game
+    ## In this case, there would need to be a way for adding some of the meta fields
+    ## One element I don't know how to address at the moment is the nested aspect of CR in terms of EUs being able to
+    ## Know how to next these modules in Discord
+    ## Also unclear is we will be using a similar nesting structure
+    ## For the time being, focus on a four-piece 1-level stack
+
+    # Each decision or emoji react should be reading from a respective yaml file in order to select modules
+
+    selected_module = data["modules"][selection - 1]
+    new_module = OrderedDict(
+        [
+            ("moduleID", selected_module["moduleID"]),
+            ("uniqueID", str(uuid.uuid4())),  # Generate a new unique ID
+            ("name", selected_module["name"]),
+            ("icon", ["icon"]),
+            ("summary", selected_module["summary"]),
+            ("config", {}),
+            ("type", selected_module["type"]),
+            ("modules", []),
+        ]
+    )
+
+    base_yaml["modules"].append(new_module)
+
+    with open("d20_governance/governance_stack_config.yaml", "w") as f:
+        yaml.dump(base_yaml, f, default_flow_style=False)
+
+    # TODO: Swap out with respective SPDC type instead of append only
+
+    # Send a confirmation message
+    await ctx.send(
+        f" New module `{new_module['name']}` created with unique ID `{new_module['uniqueID']}`"
+    )
+
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_create_snapshot(ctx):
@@ -692,4 +797,4 @@ async def validate_channels(ctx):
 try:
     bot.run(token=DISCORD_TOKEN)
 finally:
-    cleanup_governance_snapshots()
+    clean_temp_files()

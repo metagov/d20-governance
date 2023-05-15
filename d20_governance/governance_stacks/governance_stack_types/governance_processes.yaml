@@ -1,0 +1,53 @@
+---
+type: &type process
+icon: &icon assets/imgs/CommunityRule/icons/rotate.svg
+modules:
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []
+  - moduleID: autonomy
+    name: Autonomy
+    icon: *icon
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: *type
+    modules: []

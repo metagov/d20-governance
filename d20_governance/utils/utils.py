@@ -5,7 +5,7 @@ import base64
 import cairosvg
 import glob
 from PIL import Image, ImageDraw, ImageFont
-from constants import *
+from d20_governance.utils.constants import *
 import shlex
 from io import BytesIO
 
@@ -290,7 +290,9 @@ def draw_modules(
     return max_x, module_height
 
 
-def make_governance_snapshot(modules=GOVERNANCE_MODULES):
+def make_governance_snapshot(
+    modules=None,
+):  # FIXME: Add backe GOVERNANCE_MODULES global variable after =
     """
     Generate a governance stack snapshot.
     This is a PNG file based on the governance_stack_config YAML.
@@ -390,10 +392,15 @@ async def send_msg_to_random_player(temp_channel):
     )
 
 
-def cleanup_governance_snapshots():
+def clean_temp_files():
     snapshot_files = glob.glob(
         f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png"
     )
-    # Cleanup: delete the snapshot files fromf {the GOVERNANCE_STACK_SNAPSHOTS_PATH} folder
+    # Cleanup: delete the governance snapshot files
     for filename in snapshot_files:
+        os.remove(filename)
+
+    governance_config = glob.glob(f"d20_governance/governance_stack_config.yaml")
+    # Cleanup: delete the governance config
+    for filename in governance_config:
         os.remove(filename)

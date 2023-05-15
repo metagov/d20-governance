@@ -33,14 +33,39 @@ GAME_TIMEOUT = (
 )
 
 # Const
+# Stabiliy
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
-QUEST_CONFIG_PATH = "d20_governance/quest-config.yaml"
-GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance-stack-config.yaml"
+
+# Config Paths
+QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
+GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
+GOVERNANCE_STACK_CHAOS_PATH = (
+    "d20_governance/governance_stacks/governance_stack_templates/chaos_stack.yaml"
+)
+GOVERNANCE_STACK_BDFL_PATH = (
+    "d20_governance/governance_stacks/governance_stack_templates/bdfl_stack.yaml"
+)
+GOVERNANCE_STACK_CULTURES_PATH = (
+    "d20_governance/governance_stacks/governance_stack_types/governance_cultures.yaml"
+)
+GOVERNANCE_STACK_DECISIONS_PATH = (
+    "d20_governance/governance_stacks/governance_stack_types/governance_decisions.yaml"
+)
+GOVERNANCE_STACK_PROCESSES_PATH = (
+    "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml"
+)
+GOVERNANCE_STACK_STRUCTURES_PATH = (
+    "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml"
+)
+GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
+
+# Fonts
 FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
 FONT_PATH_LATO = "assets/fonts/Lato-Regular.ttf"
+
+# Module Construction
 FILE_COUNT = 0  # Global variable to store the count of created files
-GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
@@ -51,8 +76,17 @@ TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
 # Set Governance Stack Yaml Variables
-GOVERNANCE_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
-GOVERNANCE_MODULES = GOVERNANCE_DATA["modules"]
+# GOVERNANCE_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
+# GOVERNANCE_MODULES = GOVERNANCE_DATA["modules"]
+
+
+def load_governance_stack_config():
+    if GOVERNANCE_STACK_DECISIONS_PATH is None:
+        raise Exception("Missing Stability API key.")
+    else:
+        GOVERNANCE_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
+        GOVERNANCE_MODULES = GOVERNANCE_DATA["modules"]
+
 
 # Set Quest Config Variables
 QUEST_DATA = read_config(QUEST_CONFIG_PATH)

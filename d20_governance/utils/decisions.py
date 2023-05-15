@@ -1,5 +1,5 @@
-from constants import *
-from utils import *
+from d20_governance.utils.constants import *
+from d20_governance.utils.utils import *
 import discord
 import random
 
