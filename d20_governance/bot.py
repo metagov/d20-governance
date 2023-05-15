@@ -20,7 +20,6 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
 
-
 class JoinLeaveView(discord.ui.View):
     def __init__(self, ctx: commands.Context, num_players: int):
         super().__init__(timeout=None)
@@ -573,7 +572,7 @@ async def test_show_governance(ctx):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_png_creation(ctx):
-    create_svg_snapshot()
+    make_governance_snapshot()
     with open("output.png", "rb") as f:
         png_file = discord.File(f, "output.svg")
         await ctx.send(file=png_file)

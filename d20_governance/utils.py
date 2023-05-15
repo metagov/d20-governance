@@ -367,6 +367,13 @@ def generate_governance_journey_gif():
     )
     for filename in snapshot_files:
         frames.append(Image.open(filename))
+        frames[0].save(
+            "governance_journey.gif",
+            save_all=True,
+            append_images=frames[1:],
+            duration=200,  # milliseconds
+            loop=0,
+        )
 
 
 def parse_action_string(action_string):
@@ -380,22 +387,13 @@ async def send_msg_to_random_player(temp_channel):
     dm_channel = await random_player.create_dm()
     await dm_channel.send(
         "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
-    frames[0].save(
-        "governance_journey.gif",
-        save_all=True,
-        append_images=frames[1:],
-        duration=200,  # milliseconds
-        loop=0,
     )
-
-    # Cleanup: delete the snapshot files fromf {the GOVERNANCE_STACK_SNAPSHOTS_PATH} folder
-    for filename in snapshot_files:
-        os.remove(filename)
 
 
 def cleanup_governance_snapshots():
     snapshot_files = glob.glob(
         f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png"
     )
+    # Cleanup: delete the snapshot files fromf {the GOVERNANCE_STACK_SNAPSHOTS_PATH} folder
     for filename in snapshot_files:
         os.remove(filename)
