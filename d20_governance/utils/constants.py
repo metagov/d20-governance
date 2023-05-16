@@ -1,7 +1,8 @@
 import os
-import yaml
+import yaml as py_yaml
 import emoji
 from dotenv import load_dotenv
+from ruamel.yaml import YAML
 
 
 def read_config(file_path):
@@ -9,9 +10,12 @@ def read_config(file_path):
     Function for reading a yaml file
     """
     with open(file_path, "r") as f:
-        config = yaml.safe_load(f)
+        config = py_yaml.safe_load(f)
     return config
 
+
+ru_yaml = YAML()
+ru_yaml.indent(mapping=2, sequence=4, offset=2)
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -52,7 +56,6 @@ GOVERNANCE_TYPES = {
     "governance_processes": "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml",
     "governance_structures": "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml",
 }
-
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 
 # Fonts
@@ -69,19 +72,6 @@ OBSCURITY = False
 ELOQUENCE = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
-
-# Set Governance Stack Yaml Variables
-# GOVERNANCE_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
-# GOVERNANCE_MODULES = GOVERNANCE_DATA["modules"]
-
-
-def load_governance_stack_config():
-    if GOVERNANCE_STACK_DECISIONS_PATH is None:
-        raise Exception("Missing Stability API key.")
-    else:
-        GOVERNANCE_DATA = read_config(GOVERNANCE_STACK_CONFIG_PATH)
-        GOVERNANCE_MODULES = GOVERNANCE_DATA["modules"]
-
 
 # Set Quest Config Variables
 QUEST_DATA = read_config(QUEST_CONFIG_PATH)

@@ -4,6 +4,7 @@ import random
 import base64
 import cairosvg
 import glob
+import uuid
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
 import shlex
@@ -17,7 +18,6 @@ async def setup_server(guild):
     """
     print("---")
     print(f"Checking setup for server: '{guild.name}'")
-    print("Checking if necessary categories exist...")
     server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
@@ -25,10 +25,9 @@ async def setup_server(guild):
             category = await guild.create_category(category_name)
             print(f"Created category: {category.name}")
         else:
-            print(f"Necessary categorie '{category.name}' already exists.")
+            pass
 
     # Define the d20-agora channel
-    print("Checking if necessary channels exist...")
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(
             read_messages=True, send_messages=True
@@ -45,7 +44,92 @@ async def setup_server(guild):
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
         )
     else:
-        print("The necessary channels exist.")
+        pass
+
+    # Check if all necessary channels and categories exist
+    print("Checking if necessary categories and channels exist...")
+    channels_exist = all(
+        discord.utils.get(guild.text_channels, name=name) for name in ["d20-agora"]
+    )
+    categories_exist = all(
+        discord.utils.get(guild.categories, name=name) for name in server_categories
+    )
+
+    if channels_exist and categories_exist:
+        print("Necessary channels and categories exist.")
+    else:
+        print("Some necessary channels or categories are missing.")
+
+
+# Module Management
+def get_module_type_list(governance_type, module_names=None):
+    """
+    Send a messag with the list of possible module names and make a new module based on selection
+    """
+    global ru_yaml
+
+    if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
+        with open(GOVERNANCE_STACK_CONFIG_PATH, "r") as f:
+            base_yaml = ru_yaml.load(f)
+    else:
+        base_yaml = {"modules": []}
+
+    governance_type_path = GOVERNANCE_TYPES.get(governance_type)
+
+    with open(governance_type_path, "r") as f:
+        data = ru_yaml.load(f)
+
+    module_names = [module["name"] for module in data["modules"]]
+    return module_names, base_yaml, data
+
+    # Note: Let the user select whic config files they will use
+    ## They can select a quest and starting governance stack config
+    ## The files will be added to the main directory and removed when either the game of the bot ends
+    ## The governance config need to be passed to the make_governance_stack as well
+    ## The governance config should have the uniqueID stripped to be ready for import into CR
+    ## The final state of the governance file is posted as a md file to the discord along with the gif
+    ## Should there be four different config files with the structure, process, decision, and culture modules?
+    ## SPDC: Acronym for the gov stack
+    ## This would make creating new modules easier instead of being contingent on a base config
+    ## It would also allow someone to make their own gov stack to start the game
+    ## In this case, there would need to be a way for adding some of the meta fields
+    ## One element I don't know how to address at the moment is the nested aspect of CR in terms of EUs being able to
+    ## Know how to next these modules in Discord
+    ## Also unclear is we will be using a similar nesting structure
+    ## For the time being, focus on a four-piece 1-level stack
+
+    # Each decision or emoji react should be reading from a respective yaml file in order to select modules
+
+
+def add_new_module(base_yaml, data, selected_module_index):
+    # TODO: check is selected module is a decision module
+    # If true, modify config values to repreent decision params
+    selected_module = data["modules"][selected_module_index]
+    new_module = {
+        "moduleID": selected_module["moduleID"],
+        "uniqueID": str(uuid.uuid4()),  # Generate a new unique ID
+        "name": selected_module["name"],
+        "icon": selected_module["icon"],
+        "summary": selected_module["summary"],
+        "config": {},
+        "type": selected_module["type"],
+        "modules": [],
+    }
+
+    # Define new module name and new module id
+    new_module_name = new_module["name"]
+    new_module_uuid = new_module["uniqueID"]
+
+    # Append new module to base yaml or governance stack config
+    base_yaml["modules"].append(new_module)
+
+    # Write to and governance stack config yaml
+    with open("d20_governance/governance_stack_config.yaml", "w") as f:
+        ru_yaml.dump(base_yaml, f)
+
+    make_governance_snapshot(data)
+
+    return new_module_name, new_module_uuid
 
 
 # Image Utils
@@ -290,13 +374,16 @@ def draw_modules(
     return max_x, module_height
 
 
-def make_governance_snapshot(
-    modules=None,
-):  # FIXME: Add backe GOVERNANCE_MODULES global variable after =
+def make_governance_snapshot(data):
     """
     Generate a governance stack snapshot.
     This is a PNG file based on the governance_stack_config YAML.
     """
+    if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
+        data = read_config(GOVERNANCE_STACK_CONFIG_PATH)
+    else:
+        print("No governance config created")
+
     global FILE_COUNT
 
     # Initialize the actual image canvas with responsive width
@@ -309,7 +396,7 @@ def make_governance_snapshot(
     x, y = 20, 20
     max_y = 0
     module_height = 0
-    for module in modules:
+    for module in data["modules"]:
         x, max_height = draw_modules(img, draw, module, x, y)
         x += 30
         max_y = y + max(max_height, module_height) + MODULE_PADDING * 2
@@ -340,10 +427,12 @@ def make_governance_snapshot(
 # FIXME: This Shuffle is not working
 def shuffle_modules():
     # Extract all sub-modules into a separate list
-    sub_modules = []
+    if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
+        data = read_config(GOVERNANCE_STACK_CONFIG_PATH)
     parent_modules = []
+    sub_modules = []
 
-    for module in GOVERNANCE_MODULES:
+    for module in data["modules"]:
         if "modules" in module:
             sub_modules.extend(module["modules"])
         else:
@@ -378,8 +467,26 @@ def generate_governance_journey_gif():
         )
 
 
+async def post_governance(ctx):
+    # Find all PNGs in the governance_stack folder
+    snapshot_files = glob.glob(f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/*.png")
+
+    # Check if there are any snapshots in the folder
+    if len(snapshot_files) == 0:
+        await ctx.send("No governance stack snapshots found.")
+    else:
+        # Find the most recently created snapshot in the folder
+        latest_snapshot = max(snapshot_files, key=os.path.getctime)
+
+        # Open the most recent snapshot and send it to Discord
+        with open(latest_snapshot, "rb") as f:
+            png_file = discord.File(f, f"{os.path.basename(latest_snapshot)}")
+            await ctx.send("Your current governance stack: ", file=png_file)
+            print(f"{os.path.basename(latest_snapshot)}")
+
+
 def parse_action_string(action_string):
-    return shlex.split(action_string)
+    return shlex.split(action_string.lower())
 
 
 async def send_msg_to_random_player(temp_channel):

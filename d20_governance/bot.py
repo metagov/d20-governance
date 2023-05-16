@@ -422,26 +422,28 @@ async def diversity(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def vote(ctx, question: str, *options: str):
-    if len(options) <= 1:
-        await ctx.send("Error: A poll must have at least two options.")
-        return
-    if len(options) > 10:
-        await ctx.send("Error: A poll cannot have more than 10 options.")
+async def vote(ctx, governance_type: str):
+    if governance_type is None:
+        await ctx.send("Invalid governance type: {governance_type}")
         return
 
     emoji_list = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
+    module_names = []
+    module_names, base_yaml, data = get_module_type_list(governance_type, module_names)
+
     options_text = ""
-    for i, option in enumerate(options):
+    for i, option in enumerate(module_names):
         options_text += f"{emoji_list[i]} {option}\n"
 
     embed = discord.Embed(
-        title=question, description=options_text, color=discord.Color.dark_gold()
+        title="Please select a module from the list:",
+        description=options_text,
+        color=discord.Color.dark_gold(),
     )
     poll_message = await ctx.send(embed=embed)
 
-    for i in range(len(options)):
+    for i in range(len(module_names)):
         await poll_message.add_reaction(emoji_list[i])
 
     await asyncio.sleep(60)  # Poll duration: 60 seconds
@@ -455,10 +457,10 @@ async def vote(ctx, question: str, *options: str):
 
     for i, reaction in enumerate(reactions):
         if reaction.emoji in emoji_list:
-            results[options[i]] = (
+            results[module_names[i]] = (
                 reaction.count - 1
             )  # Subtract 1 to ignore the bot's own reaction
-            total_votes += results[options[i]]
+            total_votes += results[module_names[i]]
 
     results_text = f"Total votes: {total_votes}\n\n"
     winning_vote = None
@@ -472,18 +474,32 @@ async def vote(ctx, question: str, *options: str):
             winning_vote_count = votes
 
     embed = discord.Embed(
-        title=f"{question} - Results",
+        title="Results",
         description=results_text,
         color=discord.Color.dark_gold(),
     )
     await ctx.send(embed=embed)
 
+    # Remove bot reactions after polling
+    for i in range(len(module_names)):
+        await poll_message.clear_reaction(
+            emoji_list[i]
+        )  # FIXME: only remove bot emojies
+
     if winning_vote:
+        winning_vote_index = module_names.index(winning_vote)
         await ctx.send(
-            f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
+            f"The winning module is: **{winning_vote}** with {winning_vote_count} votes."
         )
+        new_module_name, new_module_uuid = add_new_module(
+            base_yaml, data, winning_vote_index
+        )
+        await ctx.send(
+            f" New module `{new_module_name}` created with unique ID `{new_module_uuid}`"
+        )
+        await post_governance(ctx)
     else:
-        await ctx.send("No winning vote.")
+        await ctx.send("No winning module.")
     return winning_vote
 
 
@@ -501,6 +517,11 @@ async def info(
     embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
     embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
     await ctx.send(embed=embed)
+
+
+@bot.command()
+async def show_governance(ctx):
+    post_governance()
 
 
 @bot.command()
@@ -538,10 +559,6 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
-yaml = YAML()
-yaml.indent(mapping=2, sequence=4, offset=2)
-
-
 # TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
@@ -551,115 +568,17 @@ async def clean(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_add_new_module(ctx, governance_type):
-    """
-    Send a messag with the list of possible module names and make a new module based on selection
-    """
-    # TODO: Possibly refactor this function and other functions to use ruamel.yaml
-    ## ruamel allows for more features and options such
-    ## as ordered lists, setting indentation, and setting insertion points
-    ## these feasures may be useful for doing more precise writing of yaml files
-
-    if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
-        with open(GOVERNANCE_STACK_CONFIG_PATH, "r") as f:
-            base_yaml = yaml.load(f)
-    else:
-        base_yaml = {"modules": []}
-
-    governance_type_path = GOVERNANCE_TYPES.get(governance_type)
-    if governance_type_path is None:
-        await ctx.send(f"Invalid governance type: {governance_type}")
+async def clean_category_channels(ctx, category_name="d20-quests"):
+    guild = ctx.guild
+    category = discord.utils.get(guild.categories, name=category_name)
+    if category is None:
+        await ctx.send(f'Category "{category_name}" was not found.')
         return
 
-    with open(governance_type_path, "r") as f:
-        data = yaml.load(f)
+    for channel in category.channels:
+        await channel.delete()
 
-    if data is None:
-        await ctx.send("Error: Invalist YAML in file")
-        return
-
-    module_names = [module["name"] for module in data["modules"]]
-    print(module_names)
-
-    # List module names
-    module_list = "\n".join(
-        [f"{i}. {name}" for i, name in enumerate(module_names, start=1)]
-    )
-    await ctx.send(
-        f"Please select a module from the list:\n {module_list}\nType the number of your selection.\nFor example: `1` or `2`."
-    )
-
-    # Wait for user's response
-    def check(response):
-        return response.author == ctx.author and response.channel == ctx.channel
-
-    response = await bot.wait_for("message", check=check)
-
-    # Parse the user's selection
-    try:
-        selection = int(response.content)
-        if selection < 1 or selection > len(module_names):
-            raise ValueError
-    except ValueError:
-        await ctx.send("Invalid selection.")
-        return
-
-    # Note: Let the user select whic config files they will use
-    ## They can select a quest and starting governance stack config
-    ## The files will be added to the main directory and removed when either the game of the bot ends
-    ## The governance config need to be passed to the make_governance_stack as well
-    ## The governance config should have the uniqueID stripped to be ready for import into CR
-    ## The final state of the governance file is posted as a md file to the discord along with the gif
-    ## Should there be four different config files with the structure, process, decision, and culture modules?
-    ## SPDC: Acronym for the gov stack
-    ## This would make creating new modules easier instead of being contingent on a base config
-    ## It would also allow someone to make their own gov stack to start the game
-    ## In this case, there would need to be a way for adding some of the meta fields
-    ## One element I don't know how to address at the moment is the nested aspect of CR in terms of EUs being able to
-    ## Know how to next these modules in Discord
-    ## Also unclear is we will be using a similar nesting structure
-    ## For the time being, focus on a four-piece 1-level stack
-
-    # Each decision or emoji react should be reading from a respective yaml file in order to select modules
-
-    # TODO: check if governance_decision and read in voting arguments when making new_module
-    selected_module = data["modules"][selection - 1]
-    new_module = {
-        "moduleID": selected_module["moduleID"],
-        "uniqueID": str(uuid.uuid4()),  # Generate a new unique ID
-        "name": selected_module["name"],
-        "icon": selected_module["icon"],
-        "summary": selected_module["summary"],
-        "config": {},
-        "type": selected_module["type"],
-        "modules": [],
-    }
-
-    # # Reference the &icon alias and include its value in the output YAML
-    # if "icon" in selected_module:
-    #     new_module["icon"] = [selected_module["icon"]]
-
-    # # Reference the &icon alias and include its value in the output YAML
-    # if "type" in selected_module:
-    #     new_module["type"] = [selected_module["type"]]
-
-    base_yaml["modules"].append(new_module)
-
-    with open("d20_governance/governance_stack_config.yaml", "w") as f:
-        yaml.dump(base_yaml, f)
-
-    # TODO: Swap out with respective SPDC type instead of append only
-
-    # Send a confirmation message
-    await ctx.send(
-        f" New module `{new_module['name']}` created with unique ID `{new_module['uniqueID']}`"
-    )
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_create_snapshot(ctx):
-    make_governance_snapshot()
+    await ctx.send(f'All channels in category "{category_name}" have been deleted.')
 
 
 @bot.command()
@@ -667,26 +586,6 @@ async def test_create_snapshot(ctx):
 async def test_randomize_snapshot(ctx):
     shuffle_modules()
     make_governance_snapshot()
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_show_governance(ctx):
-    # Find all PNGs in the governance_stack folder
-    snapshot_files = glob.glob(f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/*.png")
-
-    # Check if there are any snapshots in the folder
-    if len(snapshot_files) == 0:
-        await ctx.send("No governance stack snapshots found.")
-    else:
-        # Find the most recently created snapshot in the folder
-        latest_snapshot = max(snapshot_files, key=os.path.getctime)
-
-        # Open the most recent snapshot and send it to Discord
-        with open(latest_snapshot, "rb") as f:
-            png_file = discord.File(f, f"{os.path.basename(latest_snapshot)}")
-            await ctx.send(file=png_file)
-            print(f"{os.path.basename(latest_snapshot)}")
 
 
 @bot.command()
