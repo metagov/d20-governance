@@ -194,7 +194,7 @@ async def start_quest(ctx, gen_img):
     """
     Start a quest and create a new channel
     """
-    if gen_img.lower() == "gen_img":
+    if gen_img == "gen_img":
         gen_img = True
     else:
         gen_img = False
