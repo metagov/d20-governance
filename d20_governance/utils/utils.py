@@ -62,9 +62,9 @@ async def setup_server(guild):
 
 
 # Module Management
-def get_module_type_list(governance_type, module_names=None):
+def get_module_type_list(governance_type):
     """
-    Send a messag with the list of possible module names and make a new module based on selection
+    Send a message with the list of possible module names and make a new module based on selection
     """
     global ru_yaml
 
@@ -124,7 +124,7 @@ def add_new_module(base_yaml, data, selected_module_index):
     base_yaml["modules"].append(new_module)
 
     # Write to and governance stack config yaml
-    with open("d20_governance/governance_stack_config.yaml", "w") as f:
+    with open(GOVERNANCE_STACK_CONFIG_PATH, "w") as f:
         ru_yaml.dump(base_yaml, f)
 
     make_governance_snapshot(data)
@@ -511,3 +511,4 @@ def clean_temp_files():
     # Cleanup: delete the governance config
     for filename in governance_config:
         os.remove(filename)
+

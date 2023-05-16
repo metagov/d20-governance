@@ -36,12 +36,12 @@ GAME_TIMEOUT = (
 )
 VOTE_DURATION_SECONDS = 10 
 
-# Const
-# Stabiliy
+
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 
-# Config Paths
+# CONFIG PATHS
+
 QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
 GOVERNANCE_STACK_CHAOS_PATH = (
@@ -51,10 +51,10 @@ GOVERNANCE_STACK_BDFL_PATH = (
     "d20_governance/governance_stacks/governance_stack_templates/bdfl_stack.yaml"
 )
 GOVERNANCE_TYPES = {
-    "governance_cultures": "d20_governance/governance_stacks/governance_stack_types/governance_cultures.yaml",
-    "governance_decisions": "d20_governance/governance_stacks/governance_stack_types/governance_decisions.yaml",
-    "governance_processes": "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml",
-    "governance_structures": "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml",
+    "culture": "d20_governance/governance_stacks/types/culture.yaml",
+    "decision": "d20_governance/governance_stacks/types/decision.yaml",
+    "process": "d20_governance/governance_stacks/types/process.yaml",
+    "structure": "d20_governance/governance_stacks/types/structure.yaml",
 }
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 

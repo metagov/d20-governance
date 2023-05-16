@@ -480,11 +480,6 @@ async def vote(ctx, question: str, *options: str):
 
     await asyncio.sleep(VOTE_DURATION_SECONDS) # wait for votes to be cast
 
-    # Remove the bot's reactions
-    bot_member = discord.utils.find(lambda m: m.id == bot.user.id, ctx.guild.members)
-    for i in range(len(options)):
-        await poll_message.remove_reaction(emoji_list[i], bot_member)
-
     poll_message = await ctx.channel.fetch_message(
         poll_message.id
     )  # Refresh message to get updated reactions
@@ -493,24 +488,38 @@ async def vote(ctx, question: str, *options: str):
     total_votes = 0
 
     for i, reaction in enumerate(reactions):
+        print(i)
         if reaction.emoji in emoji_list:
             results[options[i]] = (
-                reaction.count
+                reaction.count - 1 # remove 1 to account for bot
             ) 
             total_votes += results[options[i]]
 
     results_text = f"Total votes: {total_votes}\n\n"
     winning_vote_count = 0
+    tie = False
     for option, votes in results.items():
+        print(option)
+        print(votes)
         percentage = (votes / total_votes) * 100 if total_votes else 0
         results_text += f"{option}: {votes} votes ({percentage:.2f}%)\n"
 
+    winning_votes = []
+    for option, votes in results.items():
         if votes > winning_vote_count:
-            winning_vote = option
             winning_vote_count = votes
+            winning_votes = [option]
+        elif votes == winning_vote_count:
+            winning_votes.append(option)
 
-        if votes == winning_vote_count:
-            tie = True
+    tie = len(winning_votes) > 1
+
+    print(tie)
+    print(winning_vote_count)
+    # Remove the bot's reactions
+    bot_member = discord.utils.find(lambda m: m.id == bot.user.id, ctx.guild.members)
+    for i in range(len(options)):
+        await poll_message.remove_reaction(emoji_list[i], bot_member)
 
     embed = discord.Embed(
         title=f"{question} - Results",
@@ -519,15 +528,44 @@ async def vote(ctx, question: str, *options: str):
     )
     await ctx.send(embed=embed)
 
-    if winning_vote and not tie:
+    if not tie:
         await ctx.send(
-            f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
+            f"The winning vote is: **{winning_votes[0]}** with {winning_vote_count} votes."
         )
     else:
         await ctx.send("No winning vote.")
+        return None
 
-    return winning_vote
+    return winning_votes[0]
 
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def vote_governance(ctx, governance_type: str):
+    if governance_type is None:
+        await ctx.send("Invalid governance type: {governance_type}")
+        return
+
+    module_names, base_yaml, data = get_module_type_list(governance_type)
+    question = f"Which {governance_type} should we select?"
+    winning_module = await vote(ctx, question, *module_names)
+    # TODO: if no winning_module, hold retry logic or decide what to do
+    if winning_module:
+        winning_module_index = module_names.index(winning_module)
+        new_module_name, _ = add_new_module(
+            base_yaml, data, winning_module_index
+        )
+        await ctx.send(
+            f" New module `{new_module_name}` created"
+        )
+        await post_governance(ctx)
+    else: 
+        embed = discord.Embed(
+            title="Error - This command cannot be run in this channel.",
+            color=discord.Color.red(),
+        )
+        await ctx.send(embed=embed)
+
+    return winning_module
 
 
 # META GAME COMMANDS
@@ -572,7 +610,7 @@ async def dissolve(ctx):
     await end(ctx)
     print("Game ended.")
 
-    # Call generate_governance_stack_gif() to create a GIT from the saved snapshots
+    # Call generate_governance_stack_gif() to create a GIF from the saved snapshots
     generate_governance_journey_gif()
 
     await ctx.send("Here is a gif of your governance journey:")
@@ -739,3 +777,6 @@ try:
     bot.run(token=DISCORD_TOKEN)
 finally:
     clean_temp_files()
+
+
+    
