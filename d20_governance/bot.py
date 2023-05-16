@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from discord.ext import commands
 from typing import Set
+from ruamel.yaml import YAML
 from collections import OrderedDict
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
@@ -537,12 +538,8 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
-# Return OrderedDicts a regular dicts while preserving their order when dumps to yaml
-def represent_ordered_dict(dumper, data):
-    return dumper.represent_dict(data.items())
-
-
-yaml.add_representer(OrderedDict, represent_ordered_dict)
+yaml = YAML()
+yaml.indent(mapping=2, sequence=4, offset=2)
 
 
 # TEST COMMANDS
@@ -554,7 +551,7 @@ async def clean(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_add_new_module(ctx):
+async def test_add_new_module(ctx, governance_type):
     """
     Send a messag with the list of possible module names and make a new module based on selection
     """
@@ -563,20 +560,31 @@ async def test_add_new_module(ctx):
     ## as ordered lists, setting indentation, and setting insertion points
     ## these feasures may be useful for doing more precise writing of yaml files
 
-    if os.path.exists(GOVERNANCE_STACK_CONFIG_PATH):
+    if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
         with open(GOVERNANCE_STACK_CONFIG_PATH, "r") as f:
-            base_yaml = yaml.safe_load(f)
+            base_yaml = yaml.load(f)
     else:
-        base_yaml = OrderedDict([("modules", [])])
+        base_yaml = {"modules": []}
 
-    with open(GOVERNANCE_STACK_CULTURES_PATH, "r") as f:
-        data = yaml.safe_load(f)
+    governance_type_path = GOVERNANCE_TYPES.get(governance_type)
+    if governance_type_path is None:
+        await ctx.send(f"Invalid governance type: {governance_type}")
+        return
+
+    with open(governance_type_path, "r") as f:
+        data = yaml.load(f)
+
+    if data is None:
+        await ctx.send("Error: Invalist YAML in file")
+        return
 
     module_names = [module["name"] for module in data["modules"]]
     print(module_names)
 
     # List module names
-    module_list = "\n".join([f"{i+1}. {name}" for i, name in enumerate(module_names)])
+    module_list = "\n".join(
+        [f"{i}. {name}" for i, name in enumerate(module_names, start=1)]
+    )
     await ctx.send(
         f"Please select a module from the list:\n {module_list}\nType the number of your selection.\nFor example: `1` or `2`."
     )
@@ -614,24 +622,31 @@ async def test_add_new_module(ctx):
 
     # Each decision or emoji react should be reading from a respective yaml file in order to select modules
 
+    # TODO: check if governance_decision and read in voting arguments when making new_module
     selected_module = data["modules"][selection - 1]
-    new_module = OrderedDict(
-        [
-            ("moduleID", selected_module["moduleID"]),
-            ("uniqueID", str(uuid.uuid4())),  # Generate a new unique ID
-            ("name", selected_module["name"]),
-            ("icon", ["icon"]),
-            ("summary", selected_module["summary"]),
-            ("config", {}),
-            ("type", selected_module["type"]),
-            ("modules", []),
-        ]
-    )
+    new_module = {
+        "moduleID": selected_module["moduleID"],
+        "uniqueID": str(uuid.uuid4()),  # Generate a new unique ID
+        "name": selected_module["name"],
+        "icon": selected_module["icon"],
+        "summary": selected_module["summary"],
+        "config": {},
+        "type": selected_module["type"],
+        "modules": [],
+    }
+
+    # # Reference the &icon alias and include its value in the output YAML
+    # if "icon" in selected_module:
+    #     new_module["icon"] = [selected_module["icon"]]
+
+    # # Reference the &icon alias and include its value in the output YAML
+    # if "type" in selected_module:
+    #     new_module["type"] = [selected_module["type"]]
 
     base_yaml["modules"].append(new_module)
 
     with open("d20_governance/governance_stack_config.yaml", "w") as f:
-        yaml.dump(base_yaml, f, default_flow_style=False)
+        yaml.dump(base_yaml, f)
 
     # TODO: Swap out with respective SPDC type instead of append only
 

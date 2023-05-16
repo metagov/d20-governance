@@ -1,53 +1,69 @@
 ---
-type: &type culture
-icon: &icon assets/imgs/CommunityRule/icons/palette.svg
 modules:
   - moduleID: autonomy
     name: Autonomy
-    icon: *icon
+    icon: assets/imgs/CommunityRule/icons/palette.svg
     summary: A high value is placed on self-determination among individuals or groups.
     config: &ref_0 {}
-    type: *type
+    type: culture
     modules: []
-  - moduleID: autonomy
-    name: Autonomy
-    icon: *icon
-    summary: A high value is placed on self-determination among individuals or groups.
-    config: *ref_0
-    type: *type
+  - moduleID: diversity
+    name: Diversity
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: Ensure that participants are not homogeneous in certain relevant ways.
+    config:
+      Relevant vectors: age, ethnicity, gender, skills
+    type: culture
     modules: []
-  - moduleID: autonomy
-    name: Autonomy
-    icon: *icon
-    summary: A high value is placed on self-determination among individuals or groups.
+  - moduleID: eloquence
+    name: Eloquence
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: An opportunity to persuade others with rhetorical effect.
     config: *ref_0
-    type: *type
+    type: culture
     modules: []
-  - moduleID: autonomy
-    name: Autonomy
-    icon: *icon
-    summary: A high value is placed on self-determination among individuals or groups.
+  - moduleID: friendship
+    name: Friendship
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: >-
+      Relationships among participants facilitate or inhibit governance
+      processes.
     config: *ref_0
-    type: *type
+    type: culture
     modules: []
-  - moduleID: autonomy
-    name: Autonomy
-    icon: *icon
-    summary: A high value is placed on self-determination among individuals or groups.
-    config: *ref_0
-    type: *type
+  - moduleID: ritual
+    name: Ritual
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: A repeated cultural practice builds solidarity and community.
+    config:
+      Frequency: ''
+    type: culture
     modules: []
-  - moduleID: autonomy
-    name: Autonomy
-    icon: *icon
-    summary: A high value is placed on self-determination among individuals or groups.
+  - moduleID: secrecy
+    name: Secrecy
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: Aspects of governance processes are conducted out of public view.
     config: *ref_0
-    type: *type
+    type: culture
     modules: []
-  - moduleID: autonomy
-    name: Autonomy
-    icon: *icon
-    summary: A high value is placed on self-determination among individuals or groups.
+  - moduleID: solidarity
+    name: Solidarity
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: A commitment to mutual support infuses collection action.
     config: *ref_0
-    type: *type
+    type: culture
+    modules: []
+  - moduleID: stake
+    name: Stake
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: Participants contribute something of value to indicate commitment.
+    config: *ref_0
+    type: culture
+    modules: []
+  - moduleID: transparency
+    name: Transparency
+    icon: assets/imgs/CommunityRule/icons/palette.svg
+    summary: Important information is widely available.
+    config: *ref_0
+    type: culture
     modules: []

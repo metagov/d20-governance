@@ -46,18 +46,13 @@ GOVERNANCE_STACK_CHAOS_PATH = (
 GOVERNANCE_STACK_BDFL_PATH = (
     "d20_governance/governance_stacks/governance_stack_templates/bdfl_stack.yaml"
 )
-GOVERNANCE_STACK_CULTURES_PATH = (
-    "d20_governance/governance_stacks/governance_stack_types/governance_cultures.yaml"
-)
-GOVERNANCE_STACK_DECISIONS_PATH = (
-    "d20_governance/governance_stacks/governance_stack_types/governance_decisions.yaml"
-)
-GOVERNANCE_STACK_PROCESSES_PATH = (
-    "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml"
-)
-GOVERNANCE_STACK_STRUCTURES_PATH = (
-    "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml"
-)
+GOVERNANCE_TYPES = {
+    "governance_cultures": "d20_governance/governance_stacks/governance_stack_types/governance_cultures.yaml",
+    "governance_decisions": "d20_governance/governance_stacks/governance_stack_types/governance_decisions.yaml",
+    "governance_processes": "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml",
+    "governance_structures": "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml",
+}
+
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 
 # Fonts
