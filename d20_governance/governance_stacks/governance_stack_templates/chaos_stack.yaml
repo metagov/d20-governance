@@ -1,0 +1,95 @@
+---
+ruleID: testcomm
+timestamp: 2023.5.12 14:44:4 UTC
+icon: ''
+name: test_comm
+lineage: ''
+summary: struct_summary
+config: {}
+creator:
+  name: created_by
+  url: ''
+modules:
+  - uniqueID: 1
+    moduleID: autonomy
+    name: Autonomy
+    icon: https://communityrule.info/assets/tabler_icons/palette.svg
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: &ref_0 {}
+    type: culture
+    modules:
+      - uniqueID: 2
+        moduleID: diversity
+        name: Diversity
+        icon: https://communityrule.info/assets/tabler_icons/palette.svg
+        summary: Ensure that participants are not homogeneous in certain relevant ways.
+        config: &ref_1
+          Relevant vectors: age, ethnicity, gender, skills
+        type: culture
+        modules:
+          - uniqueID: 3
+            moduleID: eloquence
+            name: Eloquence
+            icon: https://communityrule.info/assets/tabler_icons/palette.svg
+            summary: An opportunity to persuade others with rhetorical effect.
+            config: *ref_0
+            type: culture
+            modules:
+              - uniqueID: 4
+                moduleID: friendship
+                name: Friendship
+                icon: https://communityrule.info/assets/tabler_icons/palette.svg
+                summary: >-
+                  Relationships among participants facilitate or inhibit
+                  governance processes.
+                config: *ref_0
+                type: culture
+                modules:
+                  - uniqueID: 5
+                    moduleID: mission
+                    name: Mission
+                    icon: https://communityrule.info/assets/tabler_icons/palette.svg
+                    summary: A shared purpose is clearly defined.
+                    config: *ref_0
+                    type: culture
+                    modules: []
+      - uniqueID: 6
+        moduleID: diversity
+        name: Diversity
+        icon: https://communityrule.info/assets/tabler_icons/palette.svg
+        summary: Ensure that participants are not homogeneous in certain relevant ways.
+        config: *ref_1
+        type: culture
+        modules:
+          - uniqueID: 7
+            moduleID: purpose
+            name: Purpose
+            icon: https://communityrule.info/assets/tabler_icons/palette.svg
+            summary: Shared goals for which the community exists.
+            config: *ref_0
+            type: culture
+            modules: []
+  - uniqueID: 8
+    moduleID: autonomy
+    name: Autonomy
+    icon: https://communityrule.info/assets/tabler_icons/palette.svg
+    summary: A high value is placed on self-determination among individuals or groups.
+    config: *ref_0
+    type: culture
+    modules:
+      - uniqueID: 9
+        moduleID: diversity
+        name: Diversity
+        icon: https://communityrule.info/assets/tabler_icons/palette.svg
+        summary: Ensure that participants are not homogeneous in certain relevant ways.
+        config: *ref_1
+        type: culture
+        modules: []
+  - uniqueID: 10
+    moduleID: mission
+    name: Mission
+    icon: https://communityrule.info/assets/tabler_icons/palette.svg
+    summary: A shared purpose is clearly defined.
+    config: *ref_0
+    type: culture
+    modules: []

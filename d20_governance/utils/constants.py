@@ -1,7 +1,8 @@
 import os
-import yaml
+import yaml as py_yaml
 import emoji
 from dotenv import load_dotenv
+from ruamel.yaml import YAML
 
 
 def read_config(file_path):
@@ -9,9 +10,12 @@ def read_config(file_path):
     Function for reading a yaml file
     """
     with open(file_path, "r") as f:
-        config = yaml.safe_load(f)
+        config = py_yaml.safe_load(f)
     return config
 
+
+ru_yaml = YAML()
+ru_yaml.indent(mapping=2, sequence=4, offset=2)
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -22,6 +26,10 @@ STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
 if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
 
+API_HOST = os.getenv("API_HOST")
+if API_HOST is None:
+    raise Exception("Missing API Host.")
+
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
 GAME_TIMEOUT = (
@@ -29,10 +37,35 @@ GAME_TIMEOUT = (
 )
 
 # Const
+# Stabiliy
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
-CONFIG_PATH = "d20_governance/config.yaml"
-FONT_PATH = "assets/fonts/bubble_love_demo.otf"
+
+# Config Paths
+QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
+GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
+GOVERNANCE_STACK_CHAOS_PATH = (
+    "d20_governance/governance_stacks/governance_stack_templates/chaos_stack.yaml"
+)
+GOVERNANCE_STACK_BDFL_PATH = (
+    "d20_governance/governance_stacks/governance_stack_templates/bdfl_stack.yaml"
+)
+GOVERNANCE_TYPES = {
+    "governance_cultures": "d20_governance/governance_stacks/governance_stack_types/governance_cultures.yaml",
+    "governance_decisions": "d20_governance/governance_stacks/governance_stack_types/governance_decisions.yaml",
+    "governance_processes": "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml",
+    "governance_structures": "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml",
+}
+GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
+
+# Fonts
+FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
+FONT_PATH_LATO = "assets/fonts/Lato-Regular.ttf"
+
+# Module Construction
+FILE_COUNT = 0  # Global variable to store the count of created files
+MAX_MODULE_LEVELS = 5
+MODULE_PADDING = 10
 
 # Init
 OBSCURITY = False
@@ -40,9 +73,9 @@ ELOQUENCE = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
-# Set Config Variables
-QUEST_CONFIG = read_config(CONFIG_PATH)
-QUEST_GAME = QUEST_CONFIG["game"]
+# Set Quest Config Variables
+QUEST_DATA = read_config(QUEST_CONFIG_PATH)
+QUEST_GAME = QUEST_DATA["game"]
 QUEST_TITLE = QUEST_GAME["title"]
 QUEST_INTRO = QUEST_GAME["intro"]
 QUEST_COMMANDS = QUEST_GAME["meta_commands"]

@@ -1,0 +1,70 @@
+---
+modules:
+  - moduleID: autocracy
+    name: Autocracy
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: One person holds sole decision-making authority over a certain domain.
+    config: &ref_0 {}
+    type: structure
+    modules: []
+  - moduleID: board
+    name: Board
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: A small group of people shares top-level authority over an organization.
+    config:
+      Number of members: ''
+    type: structure
+    modules: []
+  - moduleID: committee
+    name: Committee
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: >-
+      A sub-group of the community tasked with a particular role or domain of
+      authority.
+    config:
+      Duration: ''
+    type: structure
+    modules: []
+  - moduleID: executive
+    name: Executive
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: A specific entity implements policy for the community.
+    config: *ref_0
+    type: structure
+    modules: []
+  - moduleID: federation
+    name: Federation
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: >-
+      A central authority delegates power to, and is co-governed by, subsidiary
+      authorities.
+    config: *ref_0
+    type: structure
+    modules: []
+  - moduleID: membership
+    name: Membership
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: >-
+      Clear lines distinguish those who are members of the group from those who
+      are not.
+    config: *ref_0
+    type: structure
+    modules: []
+  - moduleID: sortition
+    name: Sortition
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: >-
+      Roles with special authority are chosen from among the community at
+      random.
+    config: *ref_0
+    type: structure
+    modules: []
+  - moduleID: power_vacuum
+    name: Power Vacuum
+    icon: assets/imgs/CommunityRule/icons/building.svg
+    summary: A point of authority at which no structure or role is specified.
+    config: *ref_0
+    type: structure
+    modules: []
+
+```

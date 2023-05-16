@@ -1,0 +1,84 @@
+---
+modules:
+  - moduleID: approval_voting
+    name: Approval voting
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: Voters can approve or deny approval for each option.
+    config:
+      Approvals: ''
+      Denials: ''
+    type: decision
+    modules: []
+  - moduleID: consensus
+    name: Consensus
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: All participants must consent to decisions that affect the entire group.
+    config:
+      Max. opposed: ''
+    type: decision
+    modules: []
+  - moduleID: consent
+    name: Lazy consensus
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: Proposals are presumed to pass in the absence of objections.
+    config:
+      Max. objections: ''
+    type: decision
+    modules: []
+  - moduleID: continuous_voting
+    name: Continuous voting
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: >-
+      Voting can occur anytime, not just on a fixed schedule, and decisions can
+      change if participants alter their votes.
+    config: &ref_0 {}
+    type: decision
+    modules: []
+  - moduleID: disapproval_voting
+    name: Disapproval voting
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: >-
+      Votes are cast for the options voters do not want, and the option with the
+      fewest votes wins.
+    config: *ref_0
+    type: decision
+    modules: []
+  - moduleID: majority_voting
+    name: Majority Voting
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: >-
+      The option that receives more than half the vote wins; it none wins, a
+      runoff occurs.
+    config:
+      Threshold: '>50%'
+      Quorum: ''
+      Duration: ''
+    type: decision
+    modules: []
+  - moduleID: range_voting
+    name: Range Voting
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: >-
+      Voters score each option within a range, and the option with the highest
+      average score wins.
+    config: *ref_0
+    type: decision
+    modules: []
+  - moduleID: ranked_choice
+    name: Ranked Choice
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: >-
+      Voters rank options, and the option with a majority of top-ranked votes
+      wins; if there is no majority, options with the least top-ranked votes are
+      removed until a majority appears.
+    config: *ref_0
+    type: decision
+    modules: []
+  - moduleID: referendum
+    name: Referendum
+    icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    summary: A decision is posed to the community's members at large.
+    config:
+      Threshold: '>50%'
+    type: decision
+    modules: []

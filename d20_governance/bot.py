@@ -1,11 +1,15 @@
 import discord
 import os
 import asyncio
+import uuid
 from discord.ext import commands
 from typing import Set
-from d20_governance.utils import *
-from d20_governance.constants import *
-
+from ruamel.yaml import YAML
+from collections import OrderedDict
+from d20_governance.utils.utils import *
+from d20_governance.utils.constants import *
+from d20_governance.utils.cultures import *
+from d20_governance.utils.decisions import *
 
 description = """A bot for experimenting with governance"""
 
@@ -20,10 +24,11 @@ bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
 
 class JoinLeaveView(discord.ui.View):
-    def __init__(self, ctx: commands.Context, num_players: int):
+    def __init__(self, ctx: commands.Context, num_players: int, gen_img: str):
         super().__init__(timeout=None)
         self.ctx = ctx
         self.num_players = num_players
+        self.gen_img = gen_img
         self.joined_players: Set[str] = set()
 
     @discord.ui.button(
@@ -55,7 +60,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx)
+                await start_quest(self.ctx, self.gen_img)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -112,12 +117,12 @@ async def on_guild_join(guild):
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx, num_players: int = None):
+async def propose_quest(ctx, num_players: int = None, use_img: str = None):
     """
     Command to propose a game of d20 governance with the specified number of players.
 
     Parameters:
-      num_players (int): The number of plyers required to start the game. Must be at least 2.
+      num_players (int): The number of players required to start the game. Must be at least 2.
 
     Example:
       /propose_quest 4
@@ -136,7 +141,7 @@ async def propose_quest(ctx, num_players: int = None):
         return
     else:
         print("Waiting...")
-        view = JoinLeaveView(ctx, num_players)
+        view = JoinLeaveView(ctx, num_players, use_img)
 
         embed = discord.Embed(
             title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave"
@@ -153,7 +158,7 @@ async def setup(ctx, joined_players):
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
-
+    print("1")
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
@@ -162,7 +167,7 @@ async def setup(ctx, joined_players):
         )
         for player in joined_players
     }
-
+    print("2")
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
@@ -172,7 +177,7 @@ async def setup(ctx, joined_players):
         **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
-
+    print("3")
     global TEMP_CHANNEL
 
     # create and name the channel with the quest_name from the yaml file
@@ -181,16 +186,26 @@ async def setup(ctx, joined_players):
         name=f"d20-{QUEST_TITLE}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-
+    print("4")
     return TEMP_CHANNEL
 
 
-async def start_quest(ctx):
+async def start_quest(ctx, gen_img):
     """
     Start a quest and create a new channel
     """
-    # Generate intro image and send to temporary channel
-    image = generate_image(QUEST_INTRO)
+    if gen_img == "gen_img":
+        gen_img = True
+    else:
+        gen_img = False
+
+    if gen_img:
+        # Generate intro image and send to temporary channel
+        image = generate_image(QUEST_INTRO)
+    else:
+        # Create a white background image canvas instead og generating an image
+        image = Image.new("RGB", (512, 512), (255, 255, 255))
+
     image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
@@ -212,19 +227,26 @@ async def start_quest(ctx):
 
     for stage in QUEST_STAGES:
         print(f"Processing stage {stage['stage']}")
-        result = await process_stage(stage)
+        result = await process_stage(stage, gen_img)
         if not result:
             await ctx.send(f"Error processing stage {stage}")
             break
 
 
-async def process_stage(stage):
+async def process_stage(stage, gen_img):
     """
     Run stages from yaml config
     """
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
-    image = generate_image(message)
+
+    if gen_img:
+        # Generate intro image and send to temporary channel
+        image = generate_image(message)
+    else:
+        # Create a white background image canvas instead og generating an image
+        image = Image.new("RGB", (512, 512), (255, 255, 255))
+
     image = overlay_text(image, message)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
@@ -355,7 +377,7 @@ async def obscurity(ctx, mode: str = None):
         embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
 
     embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/obscurity.png"
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
     )
     await ctx.send(embed=embed)
     print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
@@ -371,7 +393,7 @@ async def eloquence(ctx):
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
         embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png"
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
         )
         embed.add_field(
             name="ACTIVATED:",
@@ -389,7 +411,7 @@ async def eloquence(ctx):
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
         embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/Embed_Thumbnails/eloquence.png"
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
         )
         embed.add_field(
             name="DEACTIVATED",
@@ -418,26 +440,28 @@ async def diversity(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def vote(ctx, question: str, *options: str):
-    if len(options) <= 1:
-        await ctx.send("Error: A poll must have at least two options.")
-        return
-    if len(options) > 10:
-        await ctx.send("Error: A poll cannot have more than 10 options.")
+async def vote(ctx, governance_type: str):
+    if governance_type is None:
+        await ctx.send("Invalid governance type: {governance_type}")
         return
 
     emoji_list = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
+    module_names = []
+    module_names, base_yaml, data = get_module_type_list(governance_type, module_names)
+
     options_text = ""
-    for i, option in enumerate(options):
+    for i, option in enumerate(module_names):
         options_text += f"{emoji_list[i]} {option}\n"
 
     embed = discord.Embed(
-        title=question, description=options_text, color=discord.Color.dark_gold()
+        title="Please select a module from the list:",
+        description=options_text,
+        color=discord.Color.dark_gold(),
     )
     poll_message = await ctx.send(embed=embed)
 
-    for i in range(len(options)):
+    for i in range(len(module_names)):
         await poll_message.add_reaction(emoji_list[i])
 
     await asyncio.sleep(60)  # Poll duration: 60 seconds
@@ -451,10 +475,10 @@ async def vote(ctx, question: str, *options: str):
 
     for i, reaction in enumerate(reactions):
         if reaction.emoji in emoji_list:
-            results[options[i]] = (
+            results[module_names[i]] = (
                 reaction.count - 1
             )  # Subtract 1 to ignore the bot's own reaction
-            total_votes += results[options[i]]
+            total_votes += results[module_names[i]]
 
     results_text = f"Total votes: {total_votes}\n\n"
     winning_vote = None
@@ -468,18 +492,32 @@ async def vote(ctx, question: str, *options: str):
             winning_vote_count = votes
 
     embed = discord.Embed(
-        title=f"{question} - Results",
+        title="Results",
         description=results_text,
         color=discord.Color.dark_gold(),
     )
     await ctx.send(embed=embed)
 
+    # Remove bot reactions after polling
+    for i in range(len(module_names)):
+        await poll_message.clear_reaction(
+            emoji_list[i]
+        )  # FIXME: only remove bot emojies
+
     if winning_vote:
+        winning_vote_index = module_names.index(winning_vote)
         await ctx.send(
-            f"The winning vote is: **{winning_vote}** with {winning_vote_count} votes."
+            f"The winning module is: **{winning_vote}** with {winning_vote_count} votes."
         )
+        new_module_name, new_module_uuid = add_new_module(
+            base_yaml, data, winning_vote_index
+        )
+        await ctx.send(
+            f" New module `{new_module_name}` created with unique ID `{new_module_uuid}`"
+        )
+        await post_governance(ctx)
     else:
-        await ctx.send("No winning vote.")
+        await ctx.send("No winning module.")
     return winning_vote
 
 
@@ -500,6 +538,11 @@ async def info(
 
 
 @bot.command()
+async def show_governance(ctx):
+    post_governance()
+
+
+@bot.command()
 async def quit(ctx):
     """
     Individually quit the quest
@@ -514,12 +557,64 @@ async def dissolve(ctx):
     """
     Trigger end of game
     """
+    global FILE_COUNT
+
     print("Ending game...")
-    await end(ctx, TEMP_CHANNEL)
+    await end(ctx)
     print("Game ended.")
+
+    # Call generate_governance_stack_gif() to create a GIT from the saved snapshots
+    generate_governance_journey_gif()
+
+    await ctx.send("Here is a gif of your governance journey:")
+
+    # Open the generated GIF and send it to Discord
+    with open("governance_journey.gif", "rb") as f:
+        gif_file = discord.File(f, "governance_journey.gif")
+        await ctx.send(file=gif_file)
+        os.remove("governance_journey.gif")
+
+    FILE_COUNT = 0
 
 
 # TEST COMMANDS
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def clean(ctx):
+    clean_temp_files()
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def clean_category_channels(ctx, category_name="d20-quests"):
+    guild = ctx.guild
+    category = discord.utils.get(guild.categories, name=category_name)
+    if category is None:
+        await ctx.send(f'Category "{category_name}" was not found.')
+        return
+
+    for channel in category.channels:
+        await channel.delete()
+
+    await ctx.send(f'All channels in category "{category_name}" have been deleted.')
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def test_randomize_snapshot(ctx):
+    shuffle_modules()
+    make_governance_snapshot()
+
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def test_png_creation(ctx):
+    make_governance_snapshot()
+    with open("output.png", "rb") as f:
+        png_file = discord.File(f, "output.svg")
+        await ctx.send(file=png_file)
+
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_generation(ctx):
@@ -631,4 +726,7 @@ async def validate_channels(ctx):
         return True
 
 
-bot.run(token=DISCORD_TOKEN)
+try:
+    bot.run(token=DISCORD_TOKEN)
+finally:
+    clean_temp_files()
