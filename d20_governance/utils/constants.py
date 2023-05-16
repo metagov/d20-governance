@@ -26,9 +26,8 @@ STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
 if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
 
-API_HOST = os.getenv("API_HOST")
-if API_HOST is None:
-    raise Exception("Missing API Host.")
+API_HOST = "https://api.stability.ai"
+
 
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
