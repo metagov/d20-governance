@@ -24,10 +24,11 @@ bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
 
 class JoinLeaveView(discord.ui.View):
-    def __init__(self, ctx: commands.Context, num_players: int):
+    def __init__(self, ctx: commands.Context, num_players: int, gen_img: str):
         super().__init__(timeout=None)
         self.ctx = ctx
         self.num_players = num_players
+        self.gen_img = gen_img
         self.joined_players: Set[str] = set()
 
     @discord.ui.button(
@@ -59,7 +60,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx)
+                await start_quest(self.ctx, self.gen_img)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -116,12 +117,12 @@ async def on_guild_join(guild):
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx, num_players: int = None):
+async def propose_quest(ctx, num_players: int = None, use_img: str = None):
     """
     Command to propose a game of d20 governance with the specified number of players.
 
     Parameters:
-      num_players (int): The number of plyers required to start the game. Must be at least 2.
+      num_players (int): The number of players required to start the game. Must be at least 2.
 
     Example:
       /propose_quest 4
@@ -140,7 +141,7 @@ async def propose_quest(ctx, num_players: int = None):
         return
     else:
         print("Waiting...")
-        view = JoinLeaveView(ctx, num_players)
+        view = JoinLeaveView(ctx, num_players, use_img)
 
         embed = discord.Embed(
             title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave"
@@ -157,7 +158,7 @@ async def setup(ctx, joined_players):
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
-
+    print("1")
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
@@ -166,7 +167,7 @@ async def setup(ctx, joined_players):
         )
         for player in joined_players
     }
-
+    print("2")
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
@@ -176,7 +177,7 @@ async def setup(ctx, joined_players):
         **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
-
+    print("3")
     global TEMP_CHANNEL
 
     # create and name the channel with the quest_name from the yaml file
@@ -185,16 +186,26 @@ async def setup(ctx, joined_players):
         name=f"d20-{QUEST_TITLE}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-
+    print("4")
     return TEMP_CHANNEL
 
 
-async def start_quest(ctx):
+async def start_quest(ctx, gen_img):
     """
     Start a quest and create a new channel
     """
-    # Generate intro image and send to temporary channel
-    image = generate_image(QUEST_INTRO)
+    if gen_img.lower() == "gen_img":
+        gen_img = True
+    else:
+        gen_img = False
+
+    if gen_img:
+        # Generate intro image and send to temporary channel
+        image = generate_image(QUEST_INTRO)
+    else:
+        # Create a white background image canvas instead og generating an image
+        image = Image.new("RGB", (512, 512), (255, 255, 255))
+
     image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
@@ -216,19 +227,26 @@ async def start_quest(ctx):
 
     for stage in QUEST_STAGES:
         print(f"Processing stage {stage['stage']}")
-        result = await process_stage(stage)
+        result = await process_stage(stage, gen_img)
         if not result:
             await ctx.send(f"Error processing stage {stage}")
             break
 
 
-async def process_stage(stage):
+async def process_stage(stage, gen_img):
     """
     Run stages from yaml config
     """
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
-    image = generate_image(message)
+
+    if gen_img:
+        # Generate intro image and send to temporary channel
+        image = generate_image(message)
+    else:
+        # Create a white background image canvas instead og generating an image
+        image = Image.new("RGB", (512, 512), (255, 255, 255))
+
     image = overlay_text(image, message)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
