@@ -1,7 +1,7 @@
 import discord
 import os
 import asyncio
-import uuid
+import datetime
 from discord.ext import commands
 from typing import Set
 from ruamel.yaml import YAML
@@ -667,6 +667,9 @@ async def quit(ctx):
     # TODO: Implement the logic for quitting the game and ending it for the user
 
 
+# Write an interesting discord function that uses discord.Message.edit
+
+
 @bot.command()
 async def dissolve(ctx):
     """
@@ -692,7 +695,7 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
-# TEST COMMANDS
+# CLEANING COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def clean(ctx):
@@ -714,6 +717,36 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
     await ctx.send(f'All channels in category "{category_name}" have been deleted.')
 
 
+@bot.command()
+async def write_message(ctx, *, text):
+    message_canvas = await ctx.send("[]")
+    # Use the typing context manager to simulate typing
+    try:
+        chunks = chunk_text(text)
+        joined_text = []
+        for chunk in chunks:
+            async with ctx.typing():
+                joined_text.append(chunk)
+                distorted_text = distort_text(joined_text)
+                joined_text_str = " ".join(distorted_text) + " []"
+                await message_canvas.edit(content=joined_text_str)
+                sleep_time = random.uniform(0.7, 1.2)
+                for word in chunk.split():
+                    if "," in word:
+                        sleep_time += 0.7
+                    if "." in word:
+                        sleep_time += 1.2
+                    else:
+                        pass
+                print(sleep_time)
+                await asyncio.sleep(sleep_time)
+        final_message = " ".join(distorted_text) + " [Done!]"
+        await message_canvas.edit(content=final_message)
+    except Exception as e:
+        print(e)
+
+
+# TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_randomize_snapshot(ctx):
