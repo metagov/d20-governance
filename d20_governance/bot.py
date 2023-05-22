@@ -541,27 +541,26 @@ async def vote_governance(ctx, governance_type: str):
         await ctx.send("Invalid governance type: {governance_type}")
         return
 
-    module_names, base_yaml, data = get_module_type_list(governance_type)
+    modules = get_modules_for_type(governance_type)
+    module_names = [module['name'] for module in modules]
     question = f"Which {governance_type} should we select?"
-    winning_module = await vote(ctx, question, *module_names)
+    winning_module_name = await vote(ctx, question, *module_names)
     # TODO: if no winning_module, hold retry logic or decide what to do
-    if winning_module:
-        winning_module_index = module_names.index(winning_module)
-        new_module_name, _ = add_new_module(
-            base_yaml, data, winning_module_index
-        )
+    if winning_module_name:
+        winning_module = modules[module_names.index(winning_module_name)]
+        add_module_to_stack(winning_module)
         await ctx.send(
-            f" New module `{new_module_name}` created"
+            f" New module `{winning_module_name}` added to governance stack"
         )
         await post_governance(ctx)
     else: 
         embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.",
+            title="Error - No winning module.",
             color=discord.Color.red(),
         )
         await ctx.send(embed=embed)
 
-    return winning_module
+    return winning_module_name
 
 
 # META GAME COMMANDS
@@ -684,7 +683,7 @@ async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
     """
-    await culture_options_msg(ctx)
+    await vote_governance(ctx, "culture")
 
 
 @bot.command()
@@ -694,7 +693,7 @@ async def test_decision_module(ctx):
     Test and demo the decision message functionality
     """
     starting_decision_module = await set_starting_decision_module(ctx)
-    await decision_options_msg(ctx, starting_decision_module)
+    await vote_governance(ctx, "decision")
 
 
 # ON MESSAGE
@@ -726,7 +725,7 @@ async def on_message(message):
         processing_message = await message.channel.send(
             f"Making {message.author.mention}'s post eloquent"
         )
-        eloquent_text = await eloquence_filter(message.content)
+        eloquent_text = await filter_eloquence(message.content)
         await processing_message.delete()
         await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
 

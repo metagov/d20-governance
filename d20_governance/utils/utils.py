@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
 import shlex
 from io import BytesIO
+import os
 
 
 # Setup Utils
@@ -62,25 +63,16 @@ async def setup_server(guild):
 
 
 # Module Management
-def get_module_type_list(governance_type):
+def get_modules_for_type(governance_type):
     """
     Send a message with the list of possible module names and make a new module based on selection
     """
     global ru_yaml
-
-    if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
-        with open(GOVERNANCE_STACK_CONFIG_PATH, "r") as f:
-            base_yaml = ru_yaml.load(f)
-    else:
-        base_yaml = {"modules": []}
-
     governance_type_path = GOVERNANCE_TYPES.get(governance_type)
-
     with open(governance_type_path, "r") as f:
         data = ru_yaml.load(f)
 
-    module_names = [module["name"] for module in data["modules"]]
-    return module_names, base_yaml, data
+    return data["modules"]
 
     # Note: Let the user select whic config files they will use
     ## They can select a quest and starting governance stack config
@@ -101,35 +93,27 @@ def get_module_type_list(governance_type):
     # Each decision or emoji react should be reading from a respective yaml file in order to select modules
 
 
-def add_new_module(base_yaml, data, selected_module_index):
-    # TODO: check is selected module is a decision module
-    # If true, modify config values to repreent decision params
-    selected_module = data["modules"][selected_module_index]
-    new_module = {
-        "moduleID": selected_module["moduleID"],
-        "uniqueID": str(uuid.uuid4()),  # Generate a new unique ID
-        "name": selected_module["name"],
-        "icon": selected_module["icon"],
-        "summary": selected_module["summary"],
-        "config": {},
-        "type": selected_module["type"],
-        "modules": [],
-    }
+def add_module_to_stack(module):
+    module["uniqueID"] = str(uuid.uuid4())
 
-    # Define new module name and new module id
-    new_module_name = new_module["name"]
-    new_module_uuid = new_module["uniqueID"]
+    # Load the base yaml or governance stack config
+    if os.path.exists(GOVERNANCE_STACK_CONFIG_PATH):
+        with open(GOVERNANCE_STACK_CONFIG_PATH, "r") as f:
+            base_yaml = ru_yaml.load(f)
+    else:
+        base_yaml = {"modules": []}  # or some other suitable default value
 
     # Append new module to base yaml or governance stack config
-    base_yaml["modules"].append(new_module)
+    base_yaml["modules"].append(module)
 
     # Write to and governance stack config yaml
     with open(GOVERNANCE_STACK_CONFIG_PATH, "w") as f:
         ru_yaml.dump(base_yaml, f)
 
-    make_governance_snapshot(data)
+    make_governance_snapshot()
 
-    return new_module_name, new_module_uuid
+    return module
+
 
 
 # Image Utils
@@ -374,7 +358,7 @@ def draw_modules(
     return max_x, module_height
 
 
-def make_governance_snapshot(data):
+def make_governance_snapshot():
     """
     Generate a governance stack snapshot.
     This is a PNG file based on the governance_stack_config YAML.
@@ -414,6 +398,7 @@ def make_governance_snapshot(data):
     )
 
     # Save the output image to a PNG file
+    os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH, exist_ok=True)
     if FILE_COUNT is not None:
         img_cropped.save(
             f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_{FILE_COUNT}.png"
@@ -453,9 +438,14 @@ def shuffle_modules():
 
 def generate_governance_journey_gif():
     frames = []
+    
+    # Ensure the directories exist
+    os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH, exist_ok=True)
+
     snapshot_files = sorted(
         glob.glob(f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png")
     )
+    
     for filename in snapshot_files:
         frames.append(Image.open(filename))
         frames[0].save(
@@ -507,7 +497,7 @@ def clean_temp_files():
     for filename in snapshot_files:
         os.remove(filename)
 
-    governance_config = glob.glob(f"d20_governance/governance_stack_config.yaml")
+    governance_config = glob.glob(GOVERNANCE_STACK_CONFIG_PATH)
     # Cleanup: delete the governance config
     for filename in governance_config:
         os.remove(filename)

@@ -55,7 +55,7 @@ def camel_case(text):
     return "".join(camel_case_words)
 
 
-async def eloquence_filter(text):
+async def filter_eloquence(text):
     """
     A LLM filter for messages during the /eloquence command/function
     """
@@ -76,18 +76,3 @@ async def send_msg_to_random_player():
     await dm_channel.send(
         "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
     )
-
-
-async def culture_options_msg(ctx):
-    print("A list of culture modules are presented")
-    culture_how = "how culture is defined"
-    msg = await ctx.send(
-        "Decide a new cultural value to adopt for your organization:\n"
-        f"{list_culture_modules}"
-    )
-    # Add reactions to the sent message based on emojis in culture_modules list
-    for emoji in culture_emojis:
-        await msg.add_reaction(emoji)
-    # TODO: Collect and count the votes for each value
-    # TODO: Apply the chosen communication constraint based on the new value
-    await decision(ctx, culture_how)
