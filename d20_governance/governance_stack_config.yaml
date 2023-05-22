@@ -1,9 +1,0 @@
-modules:
-  - moduleID: eloquence
-    uniqueID: 236040e9-29b4-4b23-8ac5-3e23ed11c6f8
-    name: Eloquence
-    icon: assets/imgs/CommunityRule/icons/palette.svg
-    summary: An opportunity to persuade others with rhetorical effect.
-    config: {}
-    type: culture
-    modules: []
