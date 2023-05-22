@@ -10,7 +10,7 @@ async def execute_action(bot, action_string, temp_channel):
 
     # Get the last message object from the channel to set context
     message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
-
+    
     # Create a context object for the message
     ctx = await bot.get_context(message_obj)
 

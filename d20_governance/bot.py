@@ -443,12 +443,12 @@ async def on_reaction_add(reaction, user):
     if user.bot:
         return
 
-    if hasattr(bot, "vote_poll_message") and reaction.message.id == bot.vote_poll_message.id:
-        if user.id in bot.vote_voters:
+    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
+        if user.id in bot.voters:
             await reaction.remove(user)
             await user.send(f"Naughty naughty! You cannot vote twice!", delete_after=VOTE_DURATION_SECONDS)
         else:
-            bot.vote_voters.add(user.id)
+            bot.voters.add(user.id)
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
@@ -469,41 +469,39 @@ async def vote(ctx, question: str, *options: str):
     embed = discord.Embed(
         title=question, description=options_text, color=discord.Color.dark_gold()
     )
-    poll_message = await ctx.send(embed=embed)
+    vote_message = await ctx.send(embed=embed)
 
     for i in range(len(options)):
-        await poll_message.add_reaction(emoji_list[i])
+        await vote_message.add_reaction(emoji_list[i])
 
     # Initialize the set of voters and store the poll message
-    bot.vote_voters = set()
-    bot.vote_poll_message = poll_message
+    bot.voters = set()
+    bot.vote_message = vote_message
 
     await asyncio.sleep(VOTE_DURATION_SECONDS) # wait for votes to be cast
 
-    poll_message = await ctx.channel.fetch_message(
-        poll_message.id
+    vote_message = await ctx.channel.fetch_message(
+        vote_message.id
     )  # Refresh message to get updated reactions
-    reactions = poll_message.reactions
+    reactions = vote_message.reactions
     results = {}
     total_votes = 0
 
     for i, reaction in enumerate(reactions):
-        print(i)
         if reaction.emoji in emoji_list:
             results[options[i]] = (
                 reaction.count - 1 # remove 1 to account for bot
             ) 
             total_votes += results[options[i]]
 
+    # Calculate results
     results_text = f"Total votes: {total_votes}\n\n"
-    winning_vote_count = 0
-    tie = False
     for option, votes in results.items():
-        print(option)
-        print(votes)
         percentage = (votes / total_votes) * 100 if total_votes else 0
         results_text += f"{option}: {votes} votes ({percentage:.2f}%)\n"
 
+    winning_vote_count = 0
+    tie = False
     winning_votes = []
     for option, votes in results.items():
         if votes > winning_vote_count:
@@ -514,12 +512,10 @@ async def vote(ctx, question: str, *options: str):
 
     tie = len(winning_votes) > 1
 
-    print(tie)
-    print(winning_vote_count)
     # Remove the bot's reactions
     bot_member = discord.utils.find(lambda m: m.id == bot.user.id, ctx.guild.members)
     for i in range(len(options)):
-        await poll_message.remove_reaction(emoji_list[i], bot_member)
+        await vote_message.remove_reaction(emoji_list[i], bot_member)
 
     embed = discord.Embed(
         title=f"{question} - Results",
