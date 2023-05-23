@@ -1,32 +1,30 @@
 ---
 modules:
-  - moduleID: approval_voting
-    name: Approval voting
+  - name: approval_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: 👍
     summary: Voters can approve or deny approval for each option.
     config:
       Approvals: ''
       Denials: ''
     type: decision
     modules: []
-  - moduleID: consensus
-    name: Consensus
+  - name: consensus
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: 🪗 
     summary: All participants must consent to decisions that affect the entire group.
     config:
       Max. opposed: ''
     type: decision
     modules: []
-  - moduleID: consent
-    name: Lazy consensus
+  - name: consent
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: Proposals are presumed to pass in the absence of objections.
     config:
       Max. objections: ''
     type: decision
     modules: []
-  - moduleID: continuous_voting
-    name: Continuous voting
+  - name: continuous_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: >-
       Voting can occur anytime, not just on a fixed schedule, and decisions can
@@ -34,8 +32,7 @@ modules:
     config: &ref_0 {}
     type: decision
     modules: []
-  - moduleID: disapproval_voting
-    name: Disapproval voting
+  - name: disapproval_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: >-
       Votes are cast for the options voters do not want, and the option with the
@@ -43,9 +40,9 @@ modules:
     config: *ref_0
     type: decision
     modules: []
-  - moduleID: majority_voting
-    name: Majority Voting
+  - name: majority_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: ✅
     summary: >-
       The option that receives more than half the vote wins; it none wins, a
       runoff occurs.
@@ -55,8 +52,7 @@ modules:
       Duration: ''
     type: decision
     modules: []
-  - moduleID: range_voting
-    name: Range Voting
+  - name: range_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: >-
       Voters score each option within a range, and the option with the highest
@@ -64,9 +60,9 @@ modules:
     config: *ref_0
     type: decision
     modules: []
-  - moduleID: ranked_choice
-    name: Ranked Choice
+  - name: ranked_choice
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: 🥇 
     summary: >-
       Voters rank options, and the option with a majority of top-ranked votes
       wins; if there is no majority, options with the least top-ranked votes are
@@ -74,8 +70,7 @@ modules:
     config: *ref_0
     type: decision
     modules: []
-  - moduleID: referendum
-    name: Referendum
+  - name: referendum
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: A decision is posed to the community's members at large.
     config:

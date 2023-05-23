@@ -453,6 +453,12 @@ async def on_reaction_add(reaction, user):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
+    # Set starting decision module if necessary
+    current_modules = get_current_governance_stack()["modules"]
+    decision_module = next((module for module in current_modules if module['type'] == 'decision'), None)
+    if decision_module is None:
+        await set_starting_decision_module() 
+
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
         return
@@ -540,28 +546,26 @@ async def vote_governance(ctx, governance_type: str):
     if governance_type is None:
         await ctx.send("Invalid governance type: {governance_type}")
         return
-
-    module_names, base_yaml, data = get_module_type_list(governance_type)
+    modules = get_modules_for_type(governance_type)
+    module_names = [module['name'] for module in modules]
     question = f"Which {governance_type} should we select?"
-    winning_module = await vote(ctx, question, *module_names)
+    winning_module_name = await vote(ctx, question, *module_names)
     # TODO: if no winning_module, hold retry logic or decide what to do
-    if winning_module:
-        winning_module_index = module_names.index(winning_module)
-        new_module_name, _ = add_new_module(
-            base_yaml, data, winning_module_index
-        )
+    if winning_module_name:
+        winning_module = modules[module_names.index(winning_module_name)]
+        add_module_to_stack(winning_module)
         await ctx.send(
-            f" New module `{new_module_name}` created"
+            f" New module `{winning_module_name}` added to governance stack"
         )
         await post_governance(ctx)
     else: 
         embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.",
+            title="Error - No winning module.",
             color=discord.Color.red(),
         )
         await ctx.send(embed=embed)
 
-    return winning_module
+    return winning_module_name
 
 
 # META GAME COMMANDS
@@ -582,7 +586,7 @@ async def info(
 
 @bot.command()
 async def show_governance(ctx):
-    post_governance()
+    await post_governance(ctx)
 
 
 @bot.command()
@@ -684,17 +688,16 @@ async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
     """
-    await culture_options_msg(ctx)
+    await vote_governance(ctx, "culture")
 
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_decision_module(ctx):
+async def test_decision(ctx):
     """
     Test and demo the decision message functionality
     """
-    starting_decision_module = await set_starting_decision_module(ctx)
-    await decision_options_msg(ctx, starting_decision_module)
+    await vote_governance(ctx, "decision")
 
 
 # ON MESSAGE
@@ -726,7 +729,7 @@ async def on_message(message):
         processing_message = await message.channel.send(
             f"Making {message.author.mention}'s post eloquent"
         )
-        eloquent_text = await eloquence_filter(message.content)
+        eloquent_text = await filter_eloquence(message.content)
         await processing_message.delete()
         await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
 
