@@ -2,6 +2,7 @@
 modules:
   - name: approval_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: 👍
     summary: Voters can approve or deny approval for each option.
     config:
       Approvals: ''
@@ -10,6 +11,7 @@ modules:
     modules: []
   - name: consensus
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: 🪗 
     summary: All participants must consent to decisions that affect the entire group.
     config:
       Max. opposed: ''
@@ -40,6 +42,7 @@ modules:
     modules: []
   - name: majority_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: ✅
     summary: >-
       The option that receives more than half the vote wins; it none wins, a
       runoff occurs.
@@ -59,6 +62,7 @@ modules:
     modules: []
   - name: ranked_choice
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
+    emoji: 🥇 
     summary: >-
       Voters rank options, and the option with a majority of top-ranked votes
       wins; if there is no majority, options with the least top-ranked votes are
