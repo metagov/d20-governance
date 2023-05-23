@@ -453,6 +453,8 @@ async def on_reaction_add(reaction, user):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
+    await set_starting_decision_module() # TEMPORARY
+
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
         return
@@ -540,7 +542,6 @@ async def vote_governance(ctx, governance_type: str):
     if governance_type is None:
         await ctx.send("Invalid governance type: {governance_type}")
         return
-
     modules = get_modules_for_type(governance_type)
     module_names = [module['name'] for module in modules]
     question = f"Which {governance_type} should we select?"
@@ -581,7 +582,7 @@ async def info(
 
 @bot.command()
 async def show_governance(ctx):
-    post_governance()
+    await post_governance(ctx)
 
 
 @bot.command()
@@ -688,11 +689,10 @@ async def test_culture(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_decision_module(ctx):
+async def test_decision(ctx):
     """
     Test and demo the decision message functionality
     """
-    starting_decision_module = await set_starting_decision_module(ctx)
     await vote_governance(ctx, "decision")
 
 

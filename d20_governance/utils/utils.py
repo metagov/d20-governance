@@ -92,7 +92,9 @@ def get_modules_for_type(governance_type):
 
     # Each decision or emoji react should be reading from a respective yaml file in order to select modules
 
-
+# Note: since we are not currently supporting nesting of modules, 
+# this function will ensure that there is only one of each module type. 
+# Later, we can modify this to include module nesting.
 def add_module_to_stack(module):
     module["uniqueID"] = str(uuid.uuid4())
 
@@ -103,17 +105,19 @@ def add_module_to_stack(module):
     else:
         base_yaml = {"modules": []}  # or some other suitable default value
 
+    # Find and remove the existing module of the same type if it exists
+    base_yaml["modules"] = [m for m in base_yaml["modules"] if m["type"] != module["type"]]
+
     # Append new module to base yaml or governance stack config
     base_yaml["modules"].append(module)
 
-    # Write to and governance stack config yaml
+    # Write to governance stack config yaml
     with open(GOVERNANCE_STACK_CONFIG_PATH, "w") as f:
         ru_yaml.dump(base_yaml, f)
 
     make_governance_snapshot()
 
     return module
-
 
 
 # Image Utils

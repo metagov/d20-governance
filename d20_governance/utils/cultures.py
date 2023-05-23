@@ -3,7 +3,6 @@ from d20_governance.utils.constants import *
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
-from d20_governance.utils.decisions import decision
 
 
 # Culture Utils
