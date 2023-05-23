@@ -201,10 +201,10 @@ async def setup(ctx, joined_players):
 def get_llm_chain():
     template = """You are a chatbot generating the narrative and actions for a governance game.
     Your output must be of the following format:
-        - stage: <stage_name>
-          message: <exciting narrative message for the current stage of the game>
-          action: "vote_governance <culture or decision>"
-          timeout_mins: 1
+    - stage: <stage_name>
+    message: <exciting narrative message for the current stage of the game>
+    action: "vote_governance <culture or decision>"
+    timeout_mins: 1
 
     For the action field, you must select either "vote_governance culture" or "vote_governance decision". For the message field, make sure you are crafting an interesting and fun story that ties in with
     the overall game narrative so far. Also make sure that the message ties in with the action you 
