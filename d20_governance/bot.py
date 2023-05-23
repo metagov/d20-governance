@@ -453,7 +453,11 @@ async def on_reaction_add(reaction, user):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
-    await set_starting_decision_module() # TEMPORARY
+    # Set starting decision module if necessary
+    current_modules = get_current_governance_stack()["modules"]
+    decision_module = next((module for module in current_modules if module['type'] == 'decision'), None)
+    if decision_module is None:
+        await set_starting_decision_module() 
 
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
