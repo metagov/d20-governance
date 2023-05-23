@@ -122,7 +122,9 @@ async def on_guild_join(guild):
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None):
+async def propose_quest(
+    ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None
+):
     """
     Command to propose a game of d20 governance with the specified number of players.
 
@@ -198,6 +200,7 @@ async def setup(ctx, joined_players):
     print("4")
     return TEMP_CHANNEL
 
+
 def get_llm_chain():
     template = """You are a chatbot generating the narrative and actions for a governance game.
     Your output must be of the following format:
@@ -215,15 +218,14 @@ def get_llm_chain():
     Chatbot:"""
 
     prompt = PromptTemplate(
-        input_variables=["chat_history", "human_input"], 
-        template=template
+        input_variables=["chat_history", "human_input"], template=template
     )
     memory = ConversationBufferMemory(memory_key="chat_history")
     llm_chain = LLMChain(
-    llm=ChatOpenAI(temperature=0, model_name="gpt-4"), 
-    prompt=prompt, 
-    verbose=True, 
-    memory=memory,
+        llm=ChatOpenAI(temperature=0, model_name="gpt-4"),
+        prompt=prompt,
+        verbose=True,
+        memory=memory,
     )
     return llm_chain
 
@@ -244,7 +246,9 @@ async def start_quest(ctx, gen_img: bool):
     if QUEST_MODE == QUEST_MODE_LLM:
         await TEMP_CHANNEL.send("generating next narrative step with llm..")
         llm_chain = get_llm_chain()
-        yaml_string = llm_chain.predict(human_input="generate me an intro for my governance game")
+        yaml_string = llm_chain.predict(
+            human_input="generate me an intro for my governance game"
+        )
         print(yaml_string)
         yaml_data = ru_yaml.load(yaml_string)
         if isinstance(yaml_data, list) and len(yaml_data) > 0:
@@ -254,6 +258,7 @@ async def start_quest(ctx, gen_img: bool):
         else:
             raise ValueError("yaml output in wrong format")
 
+    await execute_action(QUEST_INTRO)
     image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
@@ -283,7 +288,9 @@ async def start_quest(ctx, gen_img: bool):
                 try:
                     attempt += 1
                     await TEMP_CHANNEL.send("generating next narrative step with llm..")
-                    yaml_string = llm_chain.predict(human_input="generate the next stage")
+                    yaml_string = llm_chain.predict(
+                        human_input="generate the next stage"
+                    )
                     print(yaml_string)
                     yaml_data = ru_yaml.load(yaml_string)
 
@@ -295,14 +302,16 @@ async def start_quest(ctx, gen_img: bool):
                     await TEMP_CHANNEL.send("encountered error, retrying..")
 
             if not stage:
-                raise ValueError("yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS))
+                raise ValueError(
+                    "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
+                )
 
         print(f"Processing stage {stage}")
         result = await process_stage(ctx, stage, gen_img)
         if not result:
             await ctx.send(f"Error processing stage {stage}")
             break
-        
+
 
 async def process_stage(ctx, stage, gen_img):
     """
@@ -314,6 +323,7 @@ async def process_stage(ctx, stage, gen_img):
     audio_file = tts(message, f"{stage}.mp3")
 
     await TEMP_CHANNEL.send(file=discord.File(audio_file))
+    await execute_action(message)
     if gen_img:
         # Generate intro image and send to temporary channel
         image = generate_image(message)
@@ -514,18 +524,24 @@ async def on_reaction_add(reaction, user):
     if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
         if user.id in bot.voters:
             await reaction.remove(user)
-            await user.send(f"Naughty naughty! You cannot vote twice!", delete_after=VOTE_DURATION_SECONDS)
+            await user.send(
+                f"Naughty naughty! You cannot vote twice!",
+                delete_after=VOTE_DURATION_SECONDS,
+            )
         else:
             bot.voters.add(user.id)
+
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
     # Set starting decision module if necessary
     current_modules = get_current_governance_stack()["modules"]
-    decision_module = next((module for module in current_modules if module['type'] == 'decision'), None)
+    decision_module = next(
+        (module for module in current_modules if module["type"] == "decision"), None
+    )
     if decision_module is None:
-        await set_starting_decision_module() 
+        await set_starting_decision_module()
 
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
@@ -552,7 +568,7 @@ async def vote(ctx, question: str, *options: str):
     bot.voters = set()
     bot.vote_message = vote_message
 
-    await asyncio.sleep(VOTE_DURATION_SECONDS) # wait for votes to be cast
+    await asyncio.sleep(VOTE_DURATION_SECONDS)  # wait for votes to be cast
 
     vote_message = await ctx.channel.fetch_message(
         vote_message.id
@@ -563,9 +579,7 @@ async def vote(ctx, question: str, *options: str):
 
     for i, reaction in enumerate(reactions):
         if reaction.emoji in emoji_list:
-            results[options[i]] = (
-                reaction.count - 1 # remove 1 to account for bot
-            ) 
+            results[options[i]] = reaction.count - 1  # remove 1 to account for bot
             total_votes += results[options[i]]
 
     # Calculate results
@@ -608,6 +622,7 @@ async def vote(ctx, question: str, *options: str):
 
     return winning_votes[0]
 
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote_governance(ctx, governance_type: str):
@@ -615,18 +630,16 @@ async def vote_governance(ctx, governance_type: str):
         await ctx.send("Invalid governance type: {governance_type}")
         return
     modules = get_modules_for_type(governance_type)
-    module_names = [module['name'] for module in modules]
+    module_names = [module["name"] for module in modules]
     question = f"Which {governance_type} should we select?"
     winning_module_name = await vote(ctx, question, *module_names)
     # TODO: if no winning_module, hold retry logic or decide what to do
     if winning_module_name:
         winning_module = modules[module_names.index(winning_module_name)]
         add_module_to_stack(winning_module)
-        await ctx.send(
-            f" New module `{winning_module_name}` added to governance stack"
-        )
+        await ctx.send(f" New module `{winning_module_name}` added to governance stack")
         await post_governance(ctx)
-    else: 
+    else:
         embed = discord.Embed(
             title="Error - No winning module.",
             color=discord.Color.red(),
@@ -877,6 +890,3 @@ try:
     bot.run(token=DISCORD_TOKEN)
 finally:
     clean_temp_files()
-
-
-    
