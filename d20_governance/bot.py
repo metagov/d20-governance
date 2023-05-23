@@ -274,26 +274,35 @@ async def start_quest(ctx, gen_img: bool):
     await commands_message.pin()  # Pin the available commands message
 
     for stage in QUEST_STAGES:
-        try:
-            if QUEST_MODE == QUEST_MODE_LLM:
-                await TEMP_CHANNEL.send("generating next narrative step with llm..")
-                yaml_string = llm_chain.predict(human_input="generate the next stage")
-                print(yaml_string)
-                yaml_data = ru_yaml.load(yaml_string)
-            if isinstance(yaml_data, list) and len(yaml_data) > 0:
-                stage = yaml_data[0]
-            elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
-                stage = yaml_data
-            else:
-                raise ValueError("yaml output in wrong format")
-            print(f"Processing stage {stage}")
-            result = await process_stage(ctx, stage, gen_img)
-            if not result:
-                await ctx.send(f"Error processing stage {stage}")
-                break
-        except:
-            await TEMP_CHANNEL.send(f"Received an error, retrying..")
-            continue
+        if QUEST_MODE == QUEST_MODE_LLM:
+            MAX_ATTEMPTS = 5
+            attempt = 0
+            stage = None
+
+            while attempt < MAX_ATTEMPTS and not stage:
+                try:
+                    attempt += 1
+                    await TEMP_CHANNEL.send("generating next narrative step with llm..")
+                    yaml_string = llm_chain.predict(human_input="generate the next stage")
+                    print(yaml_string)
+                    yaml_data = ru_yaml.load(yaml_string)
+
+                    if isinstance(yaml_data, list) and len(yaml_data) > 0:
+                        stage = yaml_data[0]
+                    elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
+                        stage = yaml_data
+                except:
+                    await TEMP_CHANNEL.send("encountered error, retrying..")
+
+            if not stage:
+                raise ValueError("yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS))
+
+        print(f"Processing stage {stage}")
+        result = await process_stage(ctx, stage, gen_img)
+        if not result:
+            await ctx.send(f"Error processing stage {stage}")
+            break
+        
 
 async def process_stage(ctx, stage, gen_img):
     """
@@ -324,7 +333,6 @@ async def process_stage(ctx, stage, gen_img):
 
     # Wait for the timeout period
     timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
-    timeout_seconds = 2
     await asyncio.sleep(timeout_seconds)
 
     return True
