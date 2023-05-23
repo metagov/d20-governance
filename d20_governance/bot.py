@@ -438,87 +438,134 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def vote(ctx, governance_type: str):
-    if governance_type is None:
-        await ctx.send("Invalid governance type: {governance_type}")
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user.bot:
         return
 
-    emoji_list = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
+        if user.id in bot.voters:
+            await reaction.remove(user)
+            await user.send(f"Naughty naughty! You cannot vote twice!", delete_after=VOTE_DURATION_SECONDS)
+        else:
+            bot.voters.add(user.id)
 
-    module_names = []
-    module_names, base_yaml, data = get_module_type_list(governance_type, module_names)
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def vote(ctx, question: str, *options: str):
+    # Set starting decision module if necessary
+    current_modules = get_current_governance_stack()["modules"]
+    decision_module = next((module for module in current_modules if module['type'] == 'decision'), None)
+    if decision_module is None:
+        await set_starting_decision_module() 
+
+    if len(options) <= 1:
+        await ctx.send("Error: A poll must have at least two options.")
+        return
+    if len(options) > 10:
+        await ctx.send("Error: A poll cannot have more than 10 options.")
+        return
+
+    emoji_list = [chr(0x1F1E6 + i) for i in range(26)]  # A-Z
 
     options_text = ""
-    for i, option in enumerate(module_names):
+    for i, option in enumerate(options):
         options_text += f"{emoji_list[i]} {option}\n"
 
     embed = discord.Embed(
-        title="Please select a module from the list:",
-        description=options_text,
-        color=discord.Color.dark_gold(),
+        title=question, description=options_text, color=discord.Color.dark_gold()
     )
-    poll_message = await ctx.send(embed=embed)
+    vote_message = await ctx.send(embed=embed)
 
-    for i in range(len(module_names)):
-        await poll_message.add_reaction(emoji_list[i])
+    for i in range(len(options)):
+        await vote_message.add_reaction(emoji_list[i])
 
-    await asyncio.sleep(60)  # Poll duration: 60 seconds
+    # Initialize the set of voters and store the poll message
+    bot.voters = set()
+    bot.vote_message = vote_message
 
-    poll_message = await ctx.channel.fetch_message(
-        poll_message.id
+    await asyncio.sleep(VOTE_DURATION_SECONDS) # wait for votes to be cast
+
+    vote_message = await ctx.channel.fetch_message(
+        vote_message.id
     )  # Refresh message to get updated reactions
-    reactions = poll_message.reactions
+    reactions = vote_message.reactions
     results = {}
     total_votes = 0
 
     for i, reaction in enumerate(reactions):
         if reaction.emoji in emoji_list:
-            results[module_names[i]] = (
-                reaction.count - 1
-            )  # Subtract 1 to ignore the bot's own reaction
-            total_votes += results[module_names[i]]
+            results[options[i]] = (
+                reaction.count - 1 # remove 1 to account for bot
+            ) 
+            total_votes += results[options[i]]
 
+    # Calculate results
     results_text = f"Total votes: {total_votes}\n\n"
-    winning_vote = None
-    winning_vote_count = 0
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
         results_text += f"{option}: {votes} votes ({percentage:.2f}%)\n"
 
+    winning_vote_count = 0
+    tie = False
+    winning_votes = []
+    for option, votes in results.items():
         if votes > winning_vote_count:
-            winning_vote = option
             winning_vote_count = votes
+            winning_votes = [option]
+        elif votes == winning_vote_count:
+            winning_votes.append(option)
+
+    tie = len(winning_votes) > 1
+
+    # Remove the bot's reactions
+    bot_member = discord.utils.find(lambda m: m.id == bot.user.id, ctx.guild.members)
+    for i in range(len(options)):
+        await vote_message.remove_reaction(emoji_list[i], bot_member)
 
     embed = discord.Embed(
-        title="Results",
+        title=f"{question} - Results",
         description=results_text,
         color=discord.Color.dark_gold(),
     )
     await ctx.send(embed=embed)
 
-    # Remove bot reactions after polling
-    for i in range(len(module_names)):
-        await poll_message.clear_reaction(
-            emoji_list[i]
-        )  # FIXME: only remove bot emojies
+    if not tie:
+        await ctx.send(
+            f"The winning vote is: **{winning_votes[0]}** with {winning_vote_count} votes."
+        )
+    else:
+        await ctx.send("No winning vote.")
+        return None
 
-    if winning_vote:
-        winning_vote_index = module_names.index(winning_vote)
+    return winning_votes[0]
+
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def vote_governance(ctx, governance_type: str):
+    if governance_type is None:
+        await ctx.send("Invalid governance type: {governance_type}")
+        return
+    modules = get_modules_for_type(governance_type)
+    module_names = [module['name'] for module in modules]
+    question = f"Which {governance_type} should we select?"
+    winning_module_name = await vote(ctx, question, *module_names)
+    # TODO: if no winning_module, hold retry logic or decide what to do
+    if winning_module_name:
+        winning_module = modules[module_names.index(winning_module_name)]
+        add_module_to_stack(winning_module)
         await ctx.send(
-            f"The winning module is: **{winning_vote}** with {winning_vote_count} votes."
-        )
-        new_module_name, new_module_uuid = add_new_module(
-            base_yaml, data, winning_vote_index
-        )
-        await ctx.send(
-            f" New module `{new_module_name}` created with unique ID `{new_module_uuid}`"
+            f" New module `{winning_module_name}` added to governance stack"
         )
         await post_governance(ctx)
-    else:
-        await ctx.send("No winning module.")
-    return winning_vote
+    else: 
+        embed = discord.Embed(
+            title="Error - No winning module.",
+            color=discord.Color.red(),
+        )
+        await ctx.send(embed=embed)
+
+    return winning_module_name
 
 
 # META GAME COMMANDS
@@ -539,7 +586,7 @@ async def info(
 
 @bot.command()
 async def show_governance(ctx):
-    post_governance()
+    await post_governance(ctx)
 
 
 @bot.command()
@@ -563,7 +610,7 @@ async def dissolve(ctx):
     await end(ctx)
     print("Game ended.")
 
-    # Call generate_governance_stack_gif() to create a GIT from the saved snapshots
+    # Call generate_governance_stack_gif() to create a GIF from the saved snapshots
     generate_governance_journey_gif()
 
     await ctx.send("Here is a gif of your governance journey:")
@@ -641,17 +688,16 @@ async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
     """
-    await culture_options_msg(ctx)
+    await vote_governance(ctx, "culture")
 
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_decision_module(ctx):
+async def test_decision(ctx):
     """
     Test and demo the decision message functionality
     """
-    starting_decision_module = await set_starting_decision_module(ctx)
-    await decision_options_msg(ctx, starting_decision_module)
+    await vote_governance(ctx, "decision")
 
 
 # ON MESSAGE
@@ -683,7 +729,7 @@ async def on_message(message):
         processing_message = await message.channel.send(
             f"Making {message.author.mention}'s post eloquent"
         )
-        eloquent_text = await eloquence_filter(message.content)
+        eloquent_text = await filter_eloquence(message.content)
         await processing_message.delete()
         await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
 
@@ -730,3 +776,6 @@ try:
     bot.run(token=DISCORD_TOKEN)
 finally:
     clean_temp_files()
+
+
+    

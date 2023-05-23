@@ -26,22 +26,22 @@ STABILITY_TOKEN = os.getenv("STABILITY_API_KEY")
 if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
 
-API_HOST = os.getenv("API_HOST")
-if API_HOST is None:
-    raise Exception("Missing API Host.")
+API_HOST = "https://api.stability.ai"
+
 
 # Timeouts
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
 GAME_TIMEOUT = (
     86400  # The game will auto-archive if there is no game play within 24 hours
 )
+VOTE_DURATION_SECONDS = 10 
 
-# Const
-# Stabiliy
+
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 
-# Config Paths
+# CONFIG PATHS
+
 QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
 GOVERNANCE_STACK_CHAOS_PATH = (
@@ -51,10 +51,10 @@ GOVERNANCE_STACK_BDFL_PATH = (
     "d20_governance/governance_stacks/governance_stack_templates/bdfl_stack.yaml"
 )
 GOVERNANCE_TYPES = {
-    "governance_cultures": "d20_governance/governance_stacks/governance_stack_types/governance_cultures.yaml",
-    "governance_decisions": "d20_governance/governance_stacks/governance_stack_types/governance_decisions.yaml",
-    "governance_processes": "d20_governance/governance_stacks/governance_stack_types/governance_processes.yaml",
-    "governance_structures": "d20_governance/governance_stacks/governance_stack_types/governance_structures.yaml",
+    "culture": "d20_governance/governance_stacks/types/culture.yaml",
+    "decision": "d20_governance/governance_stacks/types/decision.yaml",
+    "process": "d20_governance/governance_stacks/types/process.yaml",
+    "structure": "d20_governance/governance_stacks/types/structure.yaml",
 }
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 
@@ -87,47 +87,3 @@ QUEST_APPLY_OUTCOME = "apply_outcome"
 
 # Stores the number of messages sent by each user
 user_message_count = {}
-
-# Decision Modules
-DECISION_MODULES = [
-    "👎 Approval Voting",
-    "🪗 Consensus",
-    "🥇 Ranked Choice",
-    "☑️ Majority Voting",
-]
-
-# Dynamically extract emojis from the decision_modules list
-# Prepare list
-decision_emojis = []
-for module in DECISION_MODULES:
-    # Extract 'emoji' string produced by the emoji_list attribute for each culture module
-    emojis = [e["emoji"] for e in emoji.emoji_list(module)]
-    if len(emojis) > 0:
-        # Append extracted emojis to the culture_emoji list
-        decision_emojis.append(emojis[0])
-
-# Prepare list of culture modules
-list_decision_modules = "\n".join(DECISION_MODULES)
-
-# Culture Modules
-CULTURE_MODULES = [
-    "💐 Eloquence",
-    "🤫 Secrecy",
-    "🪨 Rituals",
-    "🪢 Friendship",
-    "🤝 Solidarity",
-    "🥷 Obscurity",
-]
-
-# Dynamically extract emojis from the culture_modules list
-# Prepare list
-culture_emojis = []
-for module in CULTURE_MODULES:
-    # Extract 'emoji' string produced by the emoji_list attribute for each culture module
-    emojis = [e["emoji"] for e in emoji.emoji_list(module)]
-    if len(emojis) > 0:
-        # Append extracted emojis to the culture_emoji list
-        culture_emojis.append(emojis[0])
-
-# Prepare list of culture modules
-list_culture_modules = "\n".join(CULTURE_MODULES)
