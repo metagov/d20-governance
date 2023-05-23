@@ -7,6 +7,8 @@ import random
 async def execute_action(bot, action_string, temp_channel):
     command_name, *args = parse_action_string(action_string.lower())
     command = bot.get_command(command_name)
+    if command is None:
+        return
 
     # Get the last message object from the channel to set context
     message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)

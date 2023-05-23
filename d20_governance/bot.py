@@ -10,6 +10,9 @@ from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
+from langchain.memory import ConversationBufferMemory
+from langchain import OpenAI, LLMChain, PromptTemplate
+from langchain.chat_models import ChatOpenAI
 
 description = """A bot for experimenting with governance"""
 
@@ -21,6 +24,8 @@ intents.messages = True
 intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
+
+QUEST_MODE = None
 
 
 class JoinLeaveView(discord.ui.View):
@@ -60,7 +65,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx, self.gen_img)
+                await start_quest(self.ctx, self.gen_img == "gen_img")
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -117,7 +122,7 @@ async def on_guild_join(guild):
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx, num_players: int = None, use_img: str = None):
+async def propose_quest(ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None):
     """
     Command to propose a game of d20 governance with the specified number of players.
 
@@ -128,6 +133,10 @@ async def propose_quest(ctx, num_players: int = None, use_img: str = None):
       /propose_quest 4
     """
     print("Starting...")
+    if quest_mode != QUEST_MODE_YAML and quest_mode != QUEST_MODE_LLM:
+        raise ValueError("Invalid quest mode")
+    global QUEST_MODE
+    QUEST_MODE = quest_mode
     if num_players is None:
         await ctx.send(
             "Specify the number of players needed to start the game. Type `/ help start_game` for more information."
@@ -141,7 +150,7 @@ async def propose_quest(ctx, num_players: int = None, use_img: str = None):
         return
     else:
         print("Waiting...")
-        view = JoinLeaveView(ctx, num_players, use_img)
+        view = JoinLeaveView(ctx, num_players, gen_img)
 
         embed = discord.Embed(
             title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave"
@@ -189,22 +198,61 @@ async def setup(ctx, joined_players):
     print("4")
     return TEMP_CHANNEL
 
+def get_llm_chain():
+    template = """You are a chatbot generating the narrative and actions for a governance game.
+    Your output must be of the following format:
+        - stage: <stage_name>
+          message: <exciting narrative message for the current stage of the game>
+          action: "vote_governance <culture or decision>"
+          timeout_mins: 1
 
-async def start_quest(ctx, gen_img):
+    For the action field, you must select either "vote_governance culture" or "vote_governance decision". For the message field, make sure you are crafting an interesting and fun story that ties in with
+    the overall game narrative so far. Also make sure that the message ties in with the action you 
+    have selected. Your output MUST be valid yaml.
+
+    {chat_history}
+    Human: {human_input}
+    Chatbot:"""
+
+    prompt = PromptTemplate(
+        input_variables=["chat_history", "human_input"], 
+        template=template
+    )
+    memory = ConversationBufferMemory(memory_key="chat_history")
+    llm_chain = LLMChain(
+    llm=ChatOpenAI(temperature=0, model_name="gpt-4"), 
+    prompt=prompt, 
+    verbose=True, 
+    memory=memory,
+    )
+    return llm_chain
+
+
+async def start_quest(ctx, gen_img: bool):
     """
     Start a quest and create a new channel
     """
-    if gen_img == "gen_img":
-        gen_img = True
-    else:
-        gen_img = False
-
+    global QUEST_INTRO
     if gen_img:
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
     else:
         # Create a white background image canvas instead og generating an image
         image = Image.new("RGB", (512, 512), (255, 255, 255))
+
+    llm_chain = None
+    if QUEST_MODE == QUEST_MODE_LLM:
+        await TEMP_CHANNEL.send("generating next narrative step with llm..")
+        llm_chain = get_llm_chain()
+        yaml_string = llm_chain.predict(human_input="generate me an intro for my governance game")
+        print(yaml_string)
+        yaml_data = ru_yaml.load(yaml_string)
+        if isinstance(yaml_data, list) and len(yaml_data) > 0:
+            QUEST_INTRO = yaml_data[0]["message"]
+        elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
+            QUEST_INTRO = ru_yaml.load(yaml_string)["message"]
+        else:
+            raise ValueError("yaml output in wrong format")
 
     image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
@@ -226,17 +274,32 @@ async def start_quest(ctx, gen_img):
     await commands_message.pin()  # Pin the available commands message
 
     for stage in QUEST_STAGES:
-        print(f"Processing stage {stage['stage']}")
-        result = await process_stage(stage, gen_img)
-        if not result:
-            await ctx.send(f"Error processing stage {stage}")
-            break
+        try:
+            if QUEST_MODE == QUEST_MODE_LLM:
+                await TEMP_CHANNEL.send("generating next narrative step with llm..")
+                yaml_string = llm_chain.predict(human_input="generate the next stage")
+                print(yaml_string)
+                yaml_data = ru_yaml.load(yaml_string)
+            if isinstance(yaml_data, list) and len(yaml_data) > 0:
+                stage = yaml_data[0]
+            elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
+                stage = yaml_data
+            else:
+                raise ValueError("yaml output in wrong format")
+            print(f"Processing stage {stage}")
+            result = await process_stage(ctx, stage, gen_img)
+            if not result:
+                await ctx.send(f"Error processing stage {stage}")
+                break
+        except:
+            await TEMP_CHANNEL.send(f"Received an error, retrying..")
+            continue
 
-
-async def process_stage(stage, gen_img):
+async def process_stage(ctx, stage, gen_img):
     """
     Run stages from yaml config
     """
+
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
 
@@ -256,17 +319,12 @@ async def process_stage(stage, gen_img):
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]
     action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL)
-    apply_outcome = None
-    try:
-        apply_outcome = stage[QUEST_APPLY_OUTCOME]
-    except KeyError:
-        pass
-
-    if apply_outcome is True:
+    if action_outcome is not None:
         await execute_action(bot, action_outcome, TEMP_CHANNEL)
 
     # Wait for the timeout period
     timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
+    timeout_seconds = 2
     await asyncio.sleep(timeout_seconds)
 
     return True

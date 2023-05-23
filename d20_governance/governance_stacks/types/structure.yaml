@@ -66,5 +66,3 @@ modules:
     config: *ref_0
     type: structure
     modules: []
-
-```
