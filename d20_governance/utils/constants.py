@@ -34,8 +34,7 @@ START_TIMEOUT = 600  # The window for starting a game will time out after 10 min
 GAME_TIMEOUT = (
     86400  # The game will auto-archive if there is no game play within 24 hours
 )
-VOTE_DURATION_SECONDS = 10 
-
+VOTE_DURATION_SECONDS = 60 
 
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
@@ -87,3 +86,7 @@ QUEST_APPLY_OUTCOME = "apply_outcome"
 
 # Stores the number of messages sent by each user
 user_message_count = {}
+
+
+QUEST_MODE_YAML = "yaml"
+QUEST_MODE_LLM = "llm"
