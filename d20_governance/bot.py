@@ -311,7 +311,9 @@ async def process_stage(ctx, stage, gen_img):
 
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
+    audio_file = tts(message, f"{stage}.mp3")
 
+    await TEMP_CHANNEL.send(file=discord.File(audio_file))
     if gen_img:
         # Generate intro image and send to temporary channel
         image = generate_image(message)

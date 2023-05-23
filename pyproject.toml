@@ -23,6 +23,10 @@ svgutils = "^0.3.4"
 reportlab = "^4.0.0"
 svglib = "^1.5.1"
 ruamel-yaml = "^0.17.26"
+dpytest = "^0.6.6"
+pytest = "^7.3.1"
+pyttsx3 = "^2.90"
+pydub = "^0.25.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

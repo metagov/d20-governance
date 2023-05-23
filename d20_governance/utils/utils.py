@@ -5,6 +5,9 @@ import base64
 import cairosvg
 import glob
 import uuid
+import pyttsx3
+import datetime
+from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
 import shlex
@@ -123,6 +126,91 @@ def add_module_to_stack(module):
     make_governance_snapshot()
 
     return module
+
+
+# Audio Utils
+def tts(text, filename):
+    engine = pyttsx3.init()
+    engine.setProperty("voice", "english")
+    engine.setProperty("rate", 95)
+    engine.save_to_file(text, filename)
+    engine.runAndWait()
+    print(f"{filename} created")
+    return filename
+
+
+# WIP: Working on a function that will randomly change different
+# voice parameters for each word, concatonate the audio,
+# and return an audio file
+# def speak_randomly(text):
+#     print("Initializing engine...")
+#     # Set up the engine
+#     engine = pyttsx3.init()
+
+#     print("Getting available voices...")
+#     # Get the available voices
+#     voices = engine.getProperty('voices')
+
+#     print(f"Splitting text: {text}")
+#     # Split the text into words
+#     words = text.split()
+
+#     # Create a list to hold the filenames of the audio files
+#     filenames = []
+
+#     print("Looping over words and speaking...")
+#     # Loop over the words and speak each word with a random voice, rate, and volume
+#     for word in words:
+#         print(f"Speaking word: {word}")
+#         # Randomly select a new voice
+#         new_voice = random.choice(voices)
+#         engine.setProperty('voice', new_voice.id)
+
+#         # Randomly select a new rate
+#         new_rate = random.randint(100, 200)
+#         engine.setProperty('rate', new_rate)
+
+#         # Randomly select a new volume
+#         new_volume = random.uniform(0.5, 1.5)
+#         engine.setProperty('volume', new_volume)
+
+#         # Speak the word and save the audio to a WAV file
+#         now = datetime.datetime.now()
+#         timestamp = now.strftime("%Y%m%d_%H%M%S_%f")
+#         filename = f"{word}_{timestamp}.wav"
+#         print(f"Saving audio file: {filename}")
+#         engine.save_to_file(word, filename)
+#         engine.runAndWait()
+
+#         # Add the filename to the list of filenames
+#         filenames.append(filename)
+
+#     print("Combining audio files...")
+#     # Combine the audio files using pydub
+#     audio_segments = []
+#     for filename in filenames:
+#         audio_segments.append(AudioSegment.from_wav(filename))
+#     combined_audio = audio_segments[0]
+#     for audio_segment in audio_segments[1:]:
+#         combined_audio += audio_segment
+
+#     # Export the combined audio to a file
+#     output_filename = "output.mp3"
+#     print(f"Exporting combined audio to file: {output_filename}")
+#     combined_audio.export(output_filename, format="mp3")
+
+#     print("Cleaning up audio files...")
+#     # Clean up the audio files
+#     for filename in filenames:
+#         os.remove(filename)
+
+#     print("Playing combined audio...")
+#     # Play the combined audio
+#     os.system(f"start {output_filename}")
+
+#     print("Resetting voice...")
+#     # Reset the voice
+#     engine.setProperty('voice', voices[0].id)
 
 
 # Image Utils
