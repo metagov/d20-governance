@@ -108,6 +108,8 @@ async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
+    bot.tree.remove_command("propose_quest")
+    check_dirs()
 
 
 @bot.event
@@ -169,7 +171,6 @@ async def setup(ctx, joined_players):
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
-    print("1")
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
@@ -178,7 +179,6 @@ async def setup(ctx, joined_players):
         )
         for player in joined_players
     }
-    print("2")
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
@@ -188,7 +188,6 @@ async def setup(ctx, joined_players):
         **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
-    print("3")
     global TEMP_CHANNEL
 
     # create and name the channel with the quest_name from the yaml file
@@ -197,7 +196,6 @@ async def setup(ctx, joined_players):
         name=f"d20-{QUEST_TITLE}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    print("4")
     return TEMP_CHANNEL
 
 
@@ -235,11 +233,19 @@ async def start_quest(ctx, gen_img: bool):
     Start a quest and create a new channel
     """
     global QUEST_INTRO
+    text = QUEST_INTRO
+    loop = asyncio.get_event_loop()
+    audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
+    print("Generating audio file...")
+    future = loop.run_in_executor(None, tts, text, audio_filename)
+    await future
+    print("Generated audio file...")
+
     if gen_img:
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
     else:
-        # Create a white background image canvas instead og generating an image
+        # Create a white background image canvas instead of generating an image
         image = Image.new("RGB", (512, 512), (255, 255, 255))
 
     llm_chain = None
@@ -258,7 +264,6 @@ async def start_quest(ctx, gen_img: bool):
         else:
             raise ValueError("yaml output in wrong format")
 
-    await execute_action(QUEST_INTRO)
     image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
@@ -266,7 +271,18 @@ async def start_quest(ctx, gen_img: bool):
         file=discord.File("generated_image.png")
     )
     os.remove("generated_image.png")  # Clean up the image file
-    await intro_image_message.pin()  # Pin the available commands message
+
+    # Send audio file
+    with open(audio_filename, "rb") as f:
+        audio = discord.File(f)
+        await TEMP_CHANNEL.send(file=audio)
+    os.remove(audio_filename)
+
+    # Stream message
+    await stream_message(TEMP_CHANNEL, QUEST_INTRO)
+
+    # Pin the intro message img
+    await intro_image_message.pin()
 
     # Send commands message to temporary channel
     available_commands = "\n".join([f"`{command}`" for command in QUEST_COMMANDS])
@@ -276,7 +292,9 @@ async def start_quest(ctx, gen_img: bool):
         color=discord.Color.blue(),
     )
     commands_message = await TEMP_CHANNEL.send(embed=embed)
-    await commands_message.pin()  # Pin the available commands message
+
+    # Pin the available commands message
+    await commands_message.pin()
 
     for stage in QUEST_STAGES:
         if QUEST_MODE == QUEST_MODE_LLM:
@@ -306,10 +324,10 @@ async def start_quest(ctx, gen_img: bool):
                     "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
                 )
 
-        print(f"Processing stage {stage}")
+        print(f"Processing stage {stage[QUEST_STAGE_NAME]}")
         result = await process_stage(ctx, stage, gen_img)
         if not result:
-            await ctx.send(f"Error processing stage {stage}")
+            await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
             break
 
 
@@ -320,10 +338,12 @@ async def process_stage(ctx, stage, gen_img):
 
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
-    audio_file = tts(message, f"{stage}.mp3")
+    stage_name = stage[QUEST_STAGE_NAME]
+    loop = asyncio.get_event_loop()
+    audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
+    future = loop.run_in_executor(None, tts, message, audio_filename)
+    await future
 
-    await TEMP_CHANNEL.send(file=discord.File(audio_file))
-    await execute_action(message)
     if gen_img:
         # Generate intro image and send to temporary channel
         image = generate_image(message)
@@ -336,6 +356,15 @@ async def process_stage(ctx, stage, gen_img):
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
+
+    # Post audio file
+    with open(audio_filename, "rb") as f:
+        audio = discord.File(f)
+        await TEMP_CHANNEL.send(file=audio)
+    os.remove(audio_filename)
+
+    # Stream message
+    await stream_message(TEMP_CHANNEL, message)
 
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]
@@ -680,9 +709,6 @@ async def quit(ctx):
     # TODO: Implement the logic for quitting the game and ending it for the user
 
 
-# Write an interesting discord function that uses discord.Message.edit
-
-
 @bot.command()
 async def dissolve(ctx):
     """
@@ -728,35 +754,6 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
         await channel.delete()
 
     await ctx.send(f'All channels in category "{category_name}" have been deleted.')
-
-
-@bot.command()
-async def write_message(ctx, *, text):
-    message_canvas = await ctx.send("[]")
-    # Use the typing context manager to simulate typing
-    try:
-        chunks = chunk_text(text)
-        joined_text = []
-        for chunk in chunks:
-            async with ctx.typing():
-                joined_text.append(chunk)
-                distorted_text = distort_text(joined_text)
-                joined_text_str = " ".join(distorted_text) + " []"
-                await message_canvas.edit(content=joined_text_str)
-                sleep_time = random.uniform(0.7, 1.2)
-                for word in chunk.split():
-                    if "," in word:
-                        sleep_time += 0.7
-                    if "." in word:
-                        sleep_time += 1.2
-                    else:
-                        pass
-                print(sleep_time)
-                await asyncio.sleep(sleep_time)
-        final_message = " ".join(distorted_text) + " [Done!]"
-        await message_canvas.edit(content=final_message)
-    except Exception as e:
-        print(e)
 
 
 # TEST COMMANDS
@@ -884,6 +881,16 @@ async def validate_channels(ctx):
         return False
     else:
         return True
+
+
+# REPO DIRECTORY CHECKS
+def check_dirs():
+    if not os.path.exists(AUDIO_MESSAGES_PATH):
+        os.makedirs(AUDIO_MESSAGES_PATH)
+        print(f"Created {AUDIO_MESSAGES_PATH} directory")
+    if not os.path.exists(GOVERNANCE_STACK_SNAPSHOTS_PATH):
+        os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH)
+        print(f"Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory")
 
 
 try:

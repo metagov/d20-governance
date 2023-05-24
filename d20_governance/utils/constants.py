@@ -34,13 +34,16 @@ START_TIMEOUT = 600  # The window for starting a game will time out after 10 min
 GAME_TIMEOUT = (
     86400  # The game will auto-archive if there is no game play within 24 hours
 )
-VOTE_DURATION_SECONDS = 60 
+VOTE_DURATION_SECONDS = 60
 
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 
-# CONFIG PATHS
+# GENERATED CONTENT DIRECTORY PATHS
+AUDIO_MESSAGES_PATH = "assets/audio/bot_generated"
+GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 
+# CONFIG PATHS
 QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
 GOVERNANCE_STACK_CHAOS_PATH = (
@@ -55,7 +58,6 @@ GOVERNANCE_TYPES = {
     "process": "d20_governance/governance_stacks/types/process.yaml",
     "structure": "d20_governance/governance_stacks/types/structure.yaml",
 }
-GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 
 # Fonts
 FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
@@ -83,6 +85,7 @@ QUEST_STAGE_MESSAGE = "message"
 QUEST_STAGE_ACTION = "action"
 QUEST_STAGE_TIMEOUT = "timeout_mins"
 QUEST_APPLY_OUTCOME = "apply_outcome"
+QUEST_STAGE_NAME = "stage"
 
 # Stores the number of messages sent by each user
 user_message_count = {}

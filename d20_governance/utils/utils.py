@@ -8,6 +8,7 @@ import uuid
 import pyttsx3
 import datetime
 import string
+import asyncio
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
@@ -134,6 +135,33 @@ def add_module_to_stack(module):
 
 
 # Text Utils
+async def stream_message(ctx, text):
+    message_canvas = await ctx.send("[]")
+    # Use the typing context manager to simulate typing
+    try:
+        chunks = chunk_text(text)
+        joined_text = []
+        for chunk in chunks:
+            async with ctx.typing():
+                joined_text.append(chunk)
+                distorted_text = distort_text(joined_text)
+                joined_text_str = " ".join(distorted_text) + " []"
+                await message_canvas.edit(content=joined_text_str)
+                sleep_time = random.uniform(0.7, 1.2)
+                for word in chunk.split():
+                    if "," in word:
+                        sleep_time += 0.7
+                    if "." in word:
+                        sleep_time += 1.2
+                    else:
+                        pass
+                await asyncio.sleep(sleep_time)
+        final_message = " ".join(distorted_text) + " [Done!]"
+        await message_canvas.edit(content=final_message)
+    except Exception as e:
+        print(e)
+
+
 def chunk_text(text):
     words = text.split()
     chunks = []
@@ -201,13 +229,19 @@ def distort_text_simple(text_list):
 
 
 # Audio Utils
+# FIXME: Audio file is getting cut off before finishing string
 def tts(text, filename):
     engine = pyttsx3.init()
     engine.setProperty("voice", "english")
-    engine.setProperty("rate", 95)
-    engine.save_to_file(text, filename)
-    engine.runAndWait()
-    print(f"{filename} created")
+    engine.setProperty("rate", 140)
+
+    try:
+        engine.save_to_file(text, filename)
+        engine.runAndWait()
+        print(f"{filename} created")
+    finally:
+        engine.stop()
+
     return filename
 
 
@@ -283,76 +317,6 @@ def tts(text, filename):
 #     print("Resetting voice...")
 #     # Reset the voice
 #     engine.setProperty('voice', voices[0].id)
-
-
-# Text Utils
-def chunk_text(text):
-    words = text.split()
-    chunks = []
-    i = 0
-    while i < len(words):
-        chunk_size = 2 if random.random() < 0.6 else 3
-        chunk = " ".join(words[i : i + chunk_size])
-        chunks.append(chunk)
-        i += chunk_size
-    return chunks
-
-
-import string
-
-
-def distort_text(word_list):
-    distorted_list = []
-    for i, word in enumerate(word_list):
-        distortion_level = i + 1
-        if len(word) <= 3:
-            distorted_list.append(word)
-            continue
-        first_char = word[0]
-        last_char = word[-1]
-        middle_chars = list(word[1:-1])
-        middle_chars_count = len(middle_chars)
-        middle_chars_index = middle_chars_count // 2
-        distorted_middle_chars = middle_chars.copy()
-        if distortion_level > 1:
-            if distortion_level > 2:
-                if random.random() < 0.5 * distortion_level:
-                    distorted_middle_chars[middle_chars_index] = "||"
-            if random.random() < 0.4 * distortion_level:
-                distorted_middle_chars[middle_chars_index] = "_"
-        distorted_word = first_char + "".join(distorted_middle_chars) + last_char
-        if len(distorted_word) > 3:
-            distorted_word = (
-                distorted_word[:3]
-                + "".join(random.sample(string.punctuation, 3))
-                + distorted_word[3:]
-            )
-        # Apply distortion based on probability and distortion level
-        if random.random() < 0.1 * distortion_level:
-            distorted_list.append("*" + word + "*")
-        elif random.random() < 0.35 * distortion_level:
-            distorted_list.append("_" + word + "_")
-        elif random.random() < 0.6 * distortion_level:
-            distorted_list.append("||" + word + "||")
-        else:
-            distorted_list.append(word)
-    return distorted_list
-
-
-def distort_text_simple(text_list):
-    distorted_list = []
-    for i, text in enumerate(text_list):
-        distortion_level = i + 1
-        # Apply distortion based on probability and distortion level
-        if random.random() < 0.1 * distortion_level:
-            distorted_list.append("*" + text + "*")
-        elif random.random() < 0.35 * distortion_level:
-            distorted_list.append("_" + text + "_")
-        elif random.random() < 0.6 * distortion_level:
-            distorted_list.append("||" + text + "||")
-        else:
-            distorted_list.append(text)
-    return distorted_list
 
 
 # Image Utils
@@ -739,4 +703,9 @@ def clean_temp_files():
     governance_config = glob.glob(GOVERNANCE_STACK_CONFIG_PATH)
     # Cleanup: delete the governance config
     for filename in governance_config:
+        os.remove(filename)
+
+    audio_files = glob.glob(AUDIO_MESSAGES_PATH)
+    # Cleanup: delete the generated audio files
+    for filename in audio_files:
         os.remove(filename)
