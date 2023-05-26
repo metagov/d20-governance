@@ -71,6 +71,7 @@ MODULE_PADDING = 10
 # Init
 OBSCURITY = False
 ELOQUENCE = False
+RITUAL = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 

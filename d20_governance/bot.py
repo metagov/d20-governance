@@ -2,6 +2,7 @@ import discord
 import os
 import asyncio
 import datetime
+import openai
 from discord.ext import commands
 from typing import Set
 from ruamel.yaml import YAML
@@ -811,6 +812,62 @@ async def test_decision(ctx):
     await vote_governance(ctx, "decision")
 
 
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def ritual(ctx):
+    """
+    Toggle ritual module.
+    """
+    global RITUAL
+    RITUAL = not RITUAL
+    if RITUAL:
+        embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
+        # embed.set_thumbnail(
+        #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
+        # )
+        embed.add_field(
+            name="ACTIVATED:",
+            value="A ritual of agreement permeates throughout the group.",
+            inline=False,
+        )
+        await ctx.send(embed=embed)
+    else:
+        embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
+        # embed.set_thumbnail(
+        #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
+        # )
+        embed.add_field(
+            name="DEACTIVATED",
+            value="Automatic agreement has ended. But will the effects linger in practice?",
+            inline=False,
+        )
+        await ctx.send(embed=embed)
+
+
+def ritual_function(previous_message, new_message):
+    #     prompt = f"Write a message that reflects the content in {new_message} and is cast in agreement with {previous_message}"
+    #     response = openai.Completion.create(
+    #         engine="davinci",
+    #         prompt=prompt,
+    #         max_tokens=100,
+    #         n=1,
+    #         stop=None,
+    #         temperature=0.9,
+    #     )
+
+    #     return response.choices[0].text.strip()
+
+    llm = OpenAI(temperature=0.9)
+    prompt = PromptTemplate(
+        input_variables=["previous_message", "new_message"],
+        template="Write a message that reflects the content in {new_message} and is cast in agreement with {previous_message}",
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    response = chain.run(previous_message=previous_message, new_message=new_message)
+
+    return response
+
+
 # ON MESSAGE
 @bot.event
 async def on_message(message):
@@ -828,7 +885,29 @@ async def on_message(message):
         user_message_count[user_id] = 0
     user_message_count[user_id] += 1
 
-    if OBSCURITY:
+    # Get the most recently posted message in the channel that isn't from a bot
+    async for msg in message.channel.history(limit=100):
+        if msg.id == message.id:
+            continue
+        if msg.author.bot:
+            continue
+        if msg.content.startswith("/"):
+            continue
+        previous_message = msg.content
+        break
+        # if not message.author.bot and msg.content != message.content:
+        #     break
+
+    if RITUAL:
+        await message.delete()
+        processing_message = await message.channel.send(
+            f"Bringing {message.author.mention}'s message:\n`{message.content}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{msg.content}`"
+        )
+        response = ritual_function(msg.content, message.content)
+        # await processing_message.delete()
+        await message.channel.send(f"{message.author.mention} posted: {response}")
+
+    elif OBSCURITY:
         await message.delete()
         obscurity_function = globals()[OBSCURITY_MODE]
         obscured_message = obscurity_function(message.content)
