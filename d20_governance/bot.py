@@ -845,18 +845,6 @@ async def ritual(ctx):
 
 
 def ritual_function(previous_message, new_message):
-    #     prompt = f"Write a message that reflects the content in {new_message} and is cast in agreement with {previous_message}"
-    #     response = openai.Completion.create(
-    #         engine="davinci",
-    #         prompt=prompt,
-    #         max_tokens=100,
-    #         n=1,
-    #         stop=None,
-    #         temperature=0.9,
-    #     )
-
-    #     return response.choices[0].text.strip()
-
     llm = OpenAI(temperature=0.9)
     prompt = PromptTemplate(
         input_variables=["previous_message", "new_message"],
@@ -864,7 +852,6 @@ def ritual_function(previous_message, new_message):
     )
     chain = LLMChain(llm=llm, prompt=prompt)
     response = chain.run(previous_message=previous_message, new_message=new_message)
-
     return response
 
 
@@ -895,8 +882,6 @@ async def on_message(message):
             continue
         previous_message = msg.content
         break
-        # if not message.author.bot and msg.content != message.content:
-        #     break
 
     if RITUAL:
         await message.delete()
