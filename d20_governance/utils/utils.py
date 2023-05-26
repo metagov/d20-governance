@@ -693,19 +693,38 @@ async def send_msg_to_random_player(temp_channel):
 
 
 def clean_temp_files():
+    """
+    Delete temporary files
+    """
     snapshot_files = glob.glob(
         f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png"
     )
     # Cleanup: delete the governance snapshot files
     for filename in snapshot_files:
         os.remove(filename)
+        logging.info(f"Deleted temporary governance snapshot files in {snapshot_files}")
 
     governance_config = glob.glob(GOVERNANCE_STACK_CONFIG_PATH)
     # Cleanup: delete the governance config
     for filename in governance_config:
         os.remove(filename)
+        logging.info(
+            f"Deleted temporary governance configuration in {governance_config}"
+        )
 
-    audio_files = glob.glob(AUDIO_MESSAGES_PATH)
+    audio_files = glob.glob(f"{AUDIO_MESSAGES_PATH}/*.mp3")
     # Cleanup: delete the generated audio files
     for filename in audio_files:
         os.remove(filename)
+        logging.info(f"Deleted temporary audio files in {audio_files}")
+
+    log_files = glob.glob(f"{LOGGING_PATH}/*.log")
+    days_to_keep = 7
+    today = datetime.date.today()
+    # Cleanup: Clean log files every 7 days
+    for filename in log_files:
+        if os.path.isfile(filename):
+            modified_time = datetime.date.fromtimestamp(os.path.getmtime(filename))
+            age_in_days = (today - modified_time).days
+            if age_in_days >= days_to_keep:
+                os.remove(filename)

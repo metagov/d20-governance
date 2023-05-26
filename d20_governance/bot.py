@@ -31,7 +31,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
 )
-print("Logging messaged to logs/bot.log")
+print("Logging to logs/bot.log")
 
 
 class JoinLeaveView(discord.ui.View):
@@ -863,55 +863,61 @@ def ritual_function(previous_message, new_message):
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:  # Ignore messages sent by the bot itself
-        return
+    try:
+        if message.author == bot.user:  # Ignore messages sent by the bot itself
+            return
 
-    # If message is a command, proceed directly to processing
-    if message.content.startswith("/"):
-        await bot.process_commands(message)
-        return
+        # If message is a command, proceed directly to processing
+        if message.content.startswith("/"):
+            await bot.process_commands(message)
+            return
 
-    # Increment message count for the user
-    user_id = message.author.id
-    if user_id not in user_message_count:
-        user_message_count[user_id] = 0
-    user_message_count[user_id] += 1
+        # Increment message count for the user
+        user_id = message.author.id
+        if user_id not in user_message_count:
+            user_message_count[user_id] = 0
+        user_message_count[user_id] += 1
 
-    # Get the most recently posted message in the channel that isn't from a bot
-    async for msg in message.channel.history(limit=100):
-        if msg.id == message.id:
-            continue
-        if msg.author.bot:
-            continue
-        if msg.content.startswith("/"):
-            continue
-        previous_message = msg.content
-        break
+        # Get the most recently posted message in the channel that isn't from a bot
+        async for msg in message.channel.history(limit=100):
+            if msg.id == message.id:
+                continue
+            if msg.author.bot:
+                continue
+            if msg.content.startswith("/"):
+                continue
+            previous_message = msg.content
+            break
 
-    if RITUAL:
-        await message.delete()
-        processing_message = await message.channel.send(
-            f"Bringing {message.author.mention}'s message:\n`{message.content}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{msg.content}`"
-        )
-        response = ritual_function(msg.content, message.content)
-        # await processing_message.delete()
-        await message.channel.send(f"{message.author.mention} posted: {response}")
+        if RITUAL:
+            await message.delete()
+            processing_message = await message.channel.send(
+                f"Bringing {message.author.mention}'s message:\n`{message.content}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{msg.content}`"
+            )
+            response = ritual_function(msg.content, message.content)
+            # await processing_message.delete()
+            await message.channel.send(f"{message.author.mention} posted: {response}")
 
-    elif OBSCURITY:
-        await message.delete()
-        obscurity_function = globals()[OBSCURITY_MODE]
-        obscured_message = obscurity_function(message.content)
-        await message.channel.send(
-            f"{message.author.mention} posted: {obscured_message}"
-        )
-    elif ELOQUENCE:
-        await message.delete()
-        processing_message = await message.channel.send(
-            f"Making {message.author.mention}'s post eloquent"
-        )
-        eloquent_text = await filter_eloquence(message.content)
-        await processing_message.delete()
-        await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
+        elif OBSCURITY:
+            await message.delete()
+            obscurity_function = globals()[OBSCURITY_MODE]
+            obscured_message = obscurity_function(message.content)
+            await message.channel.send(
+                f"{message.author.mention} posted: {obscured_message}"
+            )
+        elif ELOQUENCE:
+            await message.delete()
+            processing_message = await message.channel.send(
+                f"Making {message.author.mention}'s post eloquent"
+            )
+            eloquent_text = await filter_eloquence(message.content)
+            await processing_message.delete()
+            await message.channel.send(
+                f"{message.author.mention} posted: {eloquent_text}"
+            )
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        await message.channel.send("An error occurred")
 
 
 # BOT CHANNEL CHECKS
@@ -963,6 +969,10 @@ def check_dirs():
 
 
 try:
+    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+        f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
     bot.run(token=DISCORD_TOKEN)
 finally:
     clean_temp_files()
+    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+        f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")
