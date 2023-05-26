@@ -9,6 +9,7 @@ import pyttsx3
 import datetime
 import string
 import asyncio
+import logging
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
@@ -22,14 +23,13 @@ async def setup_server(guild):
     """
     Function to set up the server by checking and creating categories and channels as needed.
     """
-    print("---")
-    print(f"Checking setup for server: '{guild.name}'")
+    logging.info(f"---Checking setup for server: '{guild.name}'---")
     server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
         if not category:
             category = await guild.create_category(category_name)
-            print(f"Created category: {category.name}")
+            logging.info(f"Created category: {category.name}")
         else:
             pass
 
@@ -46,14 +46,14 @@ async def setup_server(guild):
         agora_channel = await guild.create_text_channel(
             name="d20-agora", overwrites=overwrites, category=agora_category
         )
-        print(
+        logging.info(
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
         )
     else:
         pass
 
     # Check if all necessary channels and categories exist
-    print("Checking if necessary categories and channels exist...")
+    logging.info("Checking if necessary categories and channels exist...")
     channels_exist = all(
         discord.utils.get(guild.text_channels, name=name) for name in ["d20-agora"]
     )
@@ -62,9 +62,9 @@ async def setup_server(guild):
     )
 
     if channels_exist and categories_exist:
-        print("Necessary channels and categories exist.")
+        logging.info("Necessary channels and categories exist.")
     else:
-        print("Some necessary channels or categories are missing.")
+        logging.info("Some necessary channels or categories are missing.")
 
 
 # Module Management

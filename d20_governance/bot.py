@@ -2,7 +2,7 @@ import discord
 import os
 import asyncio
 import datetime
-import openai
+import logging
 from discord.ext import commands
 from typing import Set
 from ruamel.yaml import YAML
@@ -26,7 +26,12 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
-QUEST_MODE = None
+logging.basicConfig(
+    filename="logs/bot.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+print("Logging messaged to logs/bot.log")
 
 
 class JoinLeaveView(discord.ui.View):
@@ -106,7 +111,7 @@ async def on_ready():
     """
     Event handler for when the bot has logged in and is ready to start interacting with Discord
     """
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
     bot.tree.remove_command("propose_quest")
