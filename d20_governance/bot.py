@@ -380,6 +380,7 @@ async def process_stage(ctx, stage, gen_img):
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
     stage_name = stage[QUEST_STAGE_NAME]
+    timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
     loop = asyncio.get_event_loop()
     audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
     future = loop.run_in_executor(None, tts, message, audio_filename)
@@ -414,10 +415,22 @@ async def process_stage(ctx, stage, gen_img):
         await execute_action(bot, action_outcome, TEMP_CHANNEL)
 
     # Wait for the timeout period
-    timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
     await asyncio.sleep(timeout_seconds)
 
     return True
+
+
+@bot.command()
+async def countdown(ctx, timeout_seconds):
+    remaining_seconds = timeout_seconds
+    while remaining_seconds > 0:
+        remaining_minutes = remaining_seconds // 60
+        message = (
+            f"{remaining_minutes} minutes remaining before the next stage of the game."
+        )
+        await ctx.send(message)
+        remaining_seconds -= 60
+        await asyncio.sleep(60)
 
 
 async def end(ctx):
@@ -847,6 +860,7 @@ async def dissolve(ctx):
 
     FILE_COUNT = 0
 
+
 # MISC COMMANDS
 @bot.command()
 async def speech(ctx, *, text: str):
@@ -855,7 +869,7 @@ async def speech(ctx, *, text: str):
 
     # get the player name
     player_name = ctx.author.display_name
-    
+
     # check if this player has a nickname
     if player_name not in players_to_nicknames:
         await ctx.send(f"Error: No nickname found for player!")
@@ -863,7 +877,7 @@ async def speech(ctx, *, text: str):
 
     # get the nickname of the user invoking the command
     nickname = players_to_nicknames[player_name]
-    
+
     # add the speech to the list associated with the nickname
     nicknames_to_speeches[nickname] = text
 
