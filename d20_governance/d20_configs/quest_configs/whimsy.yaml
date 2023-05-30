@@ -49,7 +49,7 @@ game:
 
       - stage: "establish-culture"
         message: "Next, select a new culture for your community by voting for one option. The winning culture will be adopted by your community."
-        action: "vote 'governance_culture'"
+        action: "vote_governance culture'"
         apply_outcome: True
         timeout_mins: 2
 
