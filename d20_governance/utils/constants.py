@@ -39,9 +39,10 @@ VOTE_DURATION_SECONDS = 60
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 
-# GENERATED CONTENT DIRECTORY PATHS
+# TEMP DIRECTORY PATHS
 AUDIO_MESSAGES_PATH = "assets/audio/bot_generated"
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
+LOGGING_PATH = "logs"
 
 # CONFIG PATHS
 QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
@@ -69,6 +70,7 @@ MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
 # Init
+QUEST_MODE = None
 OBSCURITY = False
 ELOQUENCE = False
 RITUAL = False

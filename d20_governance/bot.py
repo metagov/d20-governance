@@ -2,7 +2,7 @@ import discord
 import os
 import asyncio
 import datetime
-import openai
+import logging
 from discord.ext import commands
 from typing import Set
 from ruamel.yaml import YAML
@@ -26,7 +26,12 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
-QUEST_MODE = None
+logging.basicConfig(
+    filename="logs/bot.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+print("Logging to logs/bot.log")
 
 
 class JoinLeaveView(discord.ui.View):
@@ -101,12 +106,13 @@ class JoinLeaveView(discord.ui.View):
             )
 
 
+# EVENTS
 @bot.event
 async def on_ready():
     """
     Event handler for when the bot has logged in and is ready to start interacting with Discord
     """
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
     bot.tree.remove_command("propose_quest")
@@ -120,6 +126,22 @@ async def on_guild_join(guild):
     """
     print(f"D20 Bot has been invited to server `{guild.name}`")
     await setup_server(guild)
+
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user.bot:
+        return
+
+    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
+        if user.id in bot.voters:
+            await reaction.remove(user)
+            await user.send(
+                f"Naughty naughty! You cannot vote twice!",
+                delete_after=VOTE_DURATION_SECONDS,
+            )
+        else:
+            bot.voters.add(user.id)
 
 
 # QUEST START AND PROGRESSION
@@ -405,8 +427,6 @@ async def end(ctx):
 
 
 # CULTURE COMMANDS
-
-
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def transparency(ctx):
@@ -470,7 +490,26 @@ async def obscurity(ctx, mode: str = None):
             color=discord.Color.dark_gold(),
         )
         if OBSCURITY:
-            embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
+            if "OBSCURITY" not in active_culture_modes:
+                active_culture_modes.append("OBSCURITY")
+                embed.add_field(
+                    name="Mode:",
+                    value=f"{OBSCURITY_MODE}",
+                    inline=False,
+                )
+                embed.add_field(
+                    name="ACTIVE CULTURE MODES:",
+                    value=f"{', '.join(active_culture_modes)}",
+                    inline=False,
+                )
+        else:
+            if "OBSCURITY" in active_culture_modes:
+                active_culture_modes.remove("OBSCURITY")
+                embed.add_field(
+                    name="ACTIVE CULTURE MODES:",
+                    value=f"{', '.join(active_culture_modes)}",
+                    inline=False,
+                )
     elif mode not in available_modes:
         embed = discord.Embed(
             title=f"Error - The mode '{mode}' is not available.",
@@ -483,6 +522,13 @@ async def obscurity(ctx, mode: str = None):
             title="Culture: Obscurity On!", color=discord.Color.dark_gold()
         )
         embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
+        if "OBSCURITY" not in active_culture_modes:
+            active_culture_modes.append("OBSCURITY")
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(active_culture_modes)}",
+            inline=False,
+        )
 
     embed.set_thumbnail(
         url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
@@ -497,24 +543,32 @@ async def eloquence(ctx):
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
     if ELOQUENCE:
-        embed = discord.Embed(
-            title="Culture: Eloquence", color=discord.Color.dark_gold()
-        )
-        embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-        )
-        embed.add_field(
-            name="ACTIVATED:",
-            value="Messages will now be process through an LLM.",
-            inline=False,
-        )
-        embed.add_field(
-            name="LLM Prompt:",
-            value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
-            inline=False,
-        )
-        await ctx.send(embed=embed)
+        if "ELOQUENCE" not in active_culture_modes:
+            active_culture_modes.append("ELOQUENCE")
+            embed = discord.Embed(
+                title="Culture: Eloquence", color=discord.Color.dark_gold()
+            )
+            embed.set_thumbnail(
+                url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+            )
+            embed.add_field(
+                name="ACTIVATED:",
+                value="Messages will now be process through an LLM.",
+                inline=False,
+            )
+            embed.add_field(
+                name="ACTIVE CULTURE MODES:",
+                value=f"{', '.join(active_culture_modes)}",
+                inline=False,
+            )
+            embed.add_field(
+                name="LLM Prompt:",
+                value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
+                inline=False,
+            )
+            await ctx.send(embed=embed)
     else:
+        active_culture_modes.remove("ELOQUENCE")
         embed = discord.Embed(
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
@@ -524,6 +578,11 @@ async def eloquence(ctx):
         embed.add_field(
             name="DEACTIVATED",
             value="Messages will no longer be processed through an LLM",
+            inline=False,
+        )
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(active_culture_modes)}",
             inline=False,
         )
         await ctx.send(embed=embed)
@@ -546,22 +605,58 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
-@bot.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
-        return
-
-    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
-        if user.id in bot.voters:
-            await reaction.remove(user)
-            await user.send(
-                f"Naughty naughty! You cannot vote twice!",
-                delete_after=VOTE_DURATION_SECONDS,
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def ritual(ctx):
+    """
+    Toggle ritual module.
+    """
+    global RITUAL
+    RITUAL = not RITUAL
+    if RITUAL:
+        if "RITUAL" not in active_culture_modes:
+            active_culture_modes.append("RITUAL")
+            embed = discord.Embed(
+                title="Culture: ritual", color=discord.Color.dark_gold()
             )
-        else:
-            bot.voters.add(user.id)
+            # embed.set_thumbnail(
+            #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
+            # )
+            embed.add_field(
+                name="ACTIVATED:",
+                value="A ritual of agreement permeates throughout the group.",
+                inline=False,
+            )
+            embed.add_field(
+                name="ACTIVE CULTURE MODES:",
+                value=f"{', '.join(active_culture_modes)}",
+                inline=False,
+            )
+            await ctx.send(embed=embed)
+    else:
+        active_culture_modes.remove("RITUAL")
+        embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
+        # embed.set_thumbnail(
+        #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
+        # )
+        embed.add_field(
+            name="DEACTIVATED",
+            value="Automatic agreement has ended. But will the effects linger in practice?",
+            inline=False,
+        )
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(active_culture_modes)}",
+            inline=False,
+        )
+        await ctx.send(embed=embed)
 
 
+# CULTURE MODES
+active_culture_modes = []
+
+
+# DECISION COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
@@ -812,101 +907,73 @@ async def test_decision(ctx):
     await vote_governance(ctx, "decision")
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def ritual(ctx):
-    """
-    Toggle ritual module.
-    """
-    global RITUAL
-    RITUAL = not RITUAL
-    if RITUAL:
-        embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
-        # embed.set_thumbnail(
-        #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
-        # )
-        embed.add_field(
-            name="ACTIVATED:",
-            value="A ritual of agreement permeates throughout the group.",
-            inline=False,
-        )
-        await ctx.send(embed=embed)
-    else:
-        embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
-        # embed.set_thumbnail(
-        #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
-        # )
-        embed.add_field(
-            name="DEACTIVATED",
-            value="Automatic agreement has ended. But will the effects linger in practice?",
-            inline=False,
-        )
-        await ctx.send(embed=embed)
-
-
-def ritual_function(previous_message, new_message):
-    llm = OpenAI(temperature=0.9)
-    prompt = PromptTemplate(
-        input_variables=["previous_message", "new_message"],
-        template="Write a message that reflects the content in {new_message} and is cast in agreement with {previous_message}",
-    )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    response = chain.run(previous_message=previous_message, new_message=new_message)
-    return response
-
-
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:  # Ignore messages sent by the bot itself
-        return
+    try:
+        if message.author == bot.user:  # Ignore messages sent by the bot itself
+            return
 
-    # If message is a command, proceed directly to processing
-    if message.content.startswith("/"):
-        await bot.process_commands(message)
-        return
+        # If message is a command, proceed directly to processing
+        if message.content.startswith("/"):
+            await bot.process_commands(message)
+            return
 
-    # Increment message count for the user
-    user_id = message.author.id
-    if user_id not in user_message_count:
-        user_message_count[user_id] = 0
-    user_message_count[user_id] += 1
+        # Increment message count for the user
+        user_id = message.author.id
+        if user_id not in user_message_count:
+            user_message_count[user_id] = 0
+        user_message_count[user_id] += 1
 
-    # Get the most recently posted message in the channel that isn't from a bot
-    async for msg in message.channel.history(limit=100):
-        if msg.id == message.id:
-            continue
-        if msg.author.bot:
-            continue
-        if msg.content.startswith("/"):
-            continue
-        previous_message = msg.content
-        break
+        # Check if any modes are active and apply filters in list order
+        filtered_message = message.content
+        if active_culture_modes:
+            await message.delete()
+            bot_message = await message.channel.send(
+                f"{message.author.mention} posted: {filtered_message}"
+            )
+        for mode in active_culture_modes:
+            if mode == "RITUAL":
+                # Get the most recently posted message in the channel that isn't from a bot
+                async for msg in message.channel.history(limit=100):
+                    if msg.id == message.id:
+                        continue
+                    if msg.author.bot:
+                        continue
+                    if msg.content.startswith("/"):
+                        continue
+                    previous_message = msg.content
+                    break
 
-    if RITUAL:
-        await message.delete()
-        processing_message = await message.channel.send(
-            f"Bringing {message.author.mention}'s message:\n`{message.content}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{msg.content}`"
-        )
-        response = ritual_function(msg.content, message.content)
-        # await processing_message.delete()
-        await message.channel.send(f"{message.author.mention} posted: {response}")
+                processing_message = await message.channel.send(
+                    f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
+                )
+                filtered_message = initialize_ritual_agreement(
+                    previous_message, filtered_message
+                )
+                await processing_message.delete()
+                await bot_message.edit(
+                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                )
+            if mode == "OBSCURITY":
+                obscurity_function = globals()[OBSCURITY_MODE]
+                filtered_message = obscurity_function(filtered_message)
+                await bot_message.edit(
+                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                )
+            if mode == "ELOQUENCE":
+                processing_message = await message.channel.send(
+                    f"Making {message.author.mention}'s post eloquent"
+                )
+                filtered_message = await filter_eloquence(filtered_message)
+                await processing_message.delete()
+                await bot_message.edit(
+                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                )
 
-    elif OBSCURITY:
-        await message.delete()
-        obscurity_function = globals()[OBSCURITY_MODE]
-        obscured_message = obscurity_function(message.content)
-        await message.channel.send(
-            f"{message.author.mention} posted: {obscured_message}"
-        )
-    elif ELOQUENCE:
-        await message.delete()
-        processing_message = await message.channel.send(
-            f"Making {message.author.mention}'s post eloquent"
-        )
-        eloquent_text = await filter_eloquence(message.content)
-        await processing_message.delete()
-        await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        await message.channel.send("An error occurred")
 
 
 # BOT CHANNEL CHECKS
@@ -958,6 +1025,10 @@ def check_dirs():
 
 
 try:
+    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+        f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
     bot.run(token=DISCORD_TOKEN)
 finally:
     clean_temp_files()
+    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+        f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")

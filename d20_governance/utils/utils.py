@@ -9,6 +9,7 @@ import pyttsx3
 import datetime
 import string
 import asyncio
+import logging
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
@@ -22,14 +23,13 @@ async def setup_server(guild):
     """
     Function to set up the server by checking and creating categories and channels as needed.
     """
-    print("---")
-    print(f"Checking setup for server: '{guild.name}'")
+    logging.info(f"---Checking setup for server: '{guild.name}'---")
     server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
         if not category:
             category = await guild.create_category(category_name)
-            print(f"Created category: {category.name}")
+            logging.info(f"Created category: {category.name}")
         else:
             pass
 
@@ -46,14 +46,14 @@ async def setup_server(guild):
         agora_channel = await guild.create_text_channel(
             name="d20-agora", overwrites=overwrites, category=agora_category
         )
-        print(
+        logging.info(
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
         )
     else:
         pass
 
     # Check if all necessary channels and categories exist
-    print("Checking if necessary categories and channels exist...")
+    logging.info("Checking if necessary categories and channels exist...")
     channels_exist = all(
         discord.utils.get(guild.text_channels, name=name) for name in ["d20-agora"]
     )
@@ -62,9 +62,9 @@ async def setup_server(guild):
     )
 
     if channels_exist and categories_exist:
-        print("Necessary channels and categories exist.")
+        logging.info("Necessary channels and categories exist.")
     else:
-        print("Some necessary channels or categories are missing.")
+        logging.info("Some necessary channels or categories are missing.")
 
 
 # Module Management
@@ -693,19 +693,38 @@ async def send_msg_to_random_player(temp_channel):
 
 
 def clean_temp_files():
+    """
+    Delete temporary files
+    """
     snapshot_files = glob.glob(
         f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png"
     )
     # Cleanup: delete the governance snapshot files
     for filename in snapshot_files:
         os.remove(filename)
+        logging.info(f"Deleted temporary governance snapshot files in {snapshot_files}")
 
     governance_config = glob.glob(GOVERNANCE_STACK_CONFIG_PATH)
     # Cleanup: delete the governance config
     for filename in governance_config:
         os.remove(filename)
+        logging.info(
+            f"Deleted temporary governance configuration in {governance_config}"
+        )
 
-    audio_files = glob.glob(AUDIO_MESSAGES_PATH)
+    audio_files = glob.glob(f"{AUDIO_MESSAGES_PATH}/*.mp3")
     # Cleanup: delete the generated audio files
     for filename in audio_files:
         os.remove(filename)
+        logging.info(f"Deleted temporary audio files in {audio_files}")
+
+    log_files = glob.glob(f"{LOGGING_PATH}/*.log")
+    days_to_keep = 7
+    today = datetime.date.today()
+    # Cleanup: Clean log files every 7 days
+    for filename in log_files:
+        if os.path.isfile(filename):
+            modified_time = datetime.date.fromtimestamp(os.path.getmtime(filename))
+            age_in_days = (today - modified_time).days
+            if age_in_days >= days_to_keep:
+                os.remove(filename)
