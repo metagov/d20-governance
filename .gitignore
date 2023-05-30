@@ -5,3 +5,5 @@
 dev_logs/
 d20_governance/playground
 **/__pycache__/**
+logs/*.log
+logs/

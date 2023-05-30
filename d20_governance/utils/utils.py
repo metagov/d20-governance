@@ -5,6 +5,12 @@ import base64
 import cairosvg
 import glob
 import uuid
+import pyttsx3
+import datetime
+import string
+import asyncio
+import logging
+from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 from d20_governance.utils.constants import *
 import shlex
@@ -17,14 +23,13 @@ async def setup_server(guild):
     """
     Function to set up the server by checking and creating categories and channels as needed.
     """
-    print("---")
-    print(f"Checking setup for server: '{guild.name}'")
+    logging.info(f"---Checking setup for server: '{guild.name}'---")
     server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
         if not category:
             category = await guild.create_category(category_name)
-            print(f"Created category: {category.name}")
+            logging.info(f"Created category: {category.name}")
         else:
             pass
 
@@ -41,14 +46,14 @@ async def setup_server(guild):
         agora_channel = await guild.create_text_channel(
             name="d20-agora", overwrites=overwrites, category=agora_category
         )
-        print(
+        logging.info(
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
         )
     else:
         pass
 
     # Check if all necessary channels and categories exist
-    print("Checking if necessary categories and channels exist...")
+    logging.info("Checking if necessary categories and channels exist...")
     channels_exist = all(
         discord.utils.get(guild.text_channels, name=name) for name in ["d20-agora"]
     )
@@ -57,9 +62,9 @@ async def setup_server(guild):
     )
 
     if channels_exist and categories_exist:
-        print("Necessary channels and categories exist.")
+        logging.info("Necessary channels and categories exist.")
     else:
-        print("Some necessary channels or categories are missing.")
+        logging.info("Some necessary channels or categories are missing.")
 
 
 # Module Management
@@ -92,6 +97,7 @@ def get_modules_for_type(governance_type):
 
     # Each decision or emoji react should be reading from a respective yaml file in order to select modules
 
+
 def get_current_governance_stack():
     # Load the base yaml or governance stack config
     if os.path.exists(GOVERNANCE_STACK_CONFIG_PATH):
@@ -101,8 +107,9 @@ def get_current_governance_stack():
         base_yaml = {"modules": []}  # or some other suitable default value
     return base_yaml
 
-# Note: since we are not currently supporting nesting of modules, 
-# this function will ensure that there is only one of each module type. 
+
+# Note: since we are not currently supporting nesting of modules,
+# this function will ensure that there is only one of each module type.
 # Later, we can modify this to include module nesting.
 def add_module_to_stack(module):
     module["uniqueID"] = str(uuid.uuid4())
@@ -111,7 +118,9 @@ def add_module_to_stack(module):
     base_yaml = get_current_governance_stack()
 
     # Find and remove the existing module of the same type if it exists
-    base_yaml["modules"] = [m for m in base_yaml["modules"] if 'type' in m and m["type"] != module["type"]]
+    base_yaml["modules"] = [
+        m for m in base_yaml["modules"] if "type" in m and m["type"] != module["type"]
+    ]
 
     # Append new module to base yaml or governance stack config
     base_yaml["modules"].append(module)
@@ -123,6 +132,117 @@ def add_module_to_stack(module):
     make_governance_snapshot()
 
     return module
+
+
+# Text Utils
+async def stream_message(ctx, text):
+    message_canvas = await ctx.send("[]")
+    # Use the typing context manager to simulate typing
+    try:
+        chunks = chunk_text(text)
+        joined_text = []
+        for chunk in chunks:
+            async with ctx.typing():
+                joined_text.append(chunk)
+                distorted_text = distort_text(joined_text)
+                joined_text_str = " ".join(distorted_text) + " []"
+                await message_canvas.edit(content=joined_text_str)
+                sleep_time = random.uniform(0.7, 1.2)
+                for word in chunk.split():
+                    if "," in word:
+                        sleep_time += 0.7
+                    if "." in word:
+                        sleep_time += 1.2
+                    else:
+                        pass
+                await asyncio.sleep(sleep_time)
+        final_message = " ".join(distorted_text) + " [Done!]"
+        await message_canvas.edit(content=final_message)
+    except Exception as e:
+        print(e)
+
+
+def chunk_text(text):
+    words = text.split()
+    chunks = []
+    i = 0
+    while i < len(words):
+        chunk_size = 2 if random.random() < 0.6 else 3
+        chunk = " ".join(words[i : i + chunk_size])
+        chunks.append(chunk)
+        i += chunk_size
+    return chunks
+
+
+def distort_text(word_list):
+    distorted_list = []
+    for i, word in enumerate(word_list):
+        distortion_level = i + 1
+        if len(word) <= 3:
+            distorted_list.append(word)
+            continue
+        first_char = word[0]
+        last_char = word[-1]
+        middle_chars = list(word[1:-1])
+        middle_chars_count = len(middle_chars)
+        middle_chars_index = middle_chars_count // 2
+        distorted_middle_chars = middle_chars.copy()
+        if distortion_level > 1:
+            if distortion_level > 2:
+                if random.random() < 0.5 * distortion_level:
+                    distorted_middle_chars[middle_chars_index] = "||"
+            if random.random() < 0.4 * distortion_level:
+                distorted_middle_chars[middle_chars_index] = "_"
+        distorted_word = first_char + "".join(distorted_middle_chars) + last_char
+        if len(distorted_word) > 3:
+            distorted_word = (
+                distorted_word[:3]
+                + "".join(random.sample(string.punctuation, 3))
+                + distorted_word[3:]
+            )
+        # Apply distortion based on probability and distortion level
+        if random.random() < 0.1 * distortion_level:
+            distorted_list.append("*" + word + "*")
+        elif random.random() < 0.35 * distortion_level:
+            distorted_list.append("_" + word + "_")
+        elif random.random() < 0.6 * distortion_level:
+            distorted_list.append("||" + word + "||")
+        else:
+            distorted_list.append(word)
+    return distorted_list
+
+
+def distort_text_simple(text_list):
+    distorted_list = []
+    for i, text in enumerate(text_list):
+        distortion_level = i + 1
+        # Apply distortion based on probability and distortion level
+        if random.random() < 0.1 * distortion_level:
+            distorted_list.append("*" + text + "*")
+        elif random.random() < 0.35 * distortion_level:
+            distorted_list.append("_" + text + "_")
+        elif random.random() < 0.6 * distortion_level:
+            distorted_list.append("||" + text + "||")
+        else:
+            distorted_list.append(text)
+    return distorted_list
+
+
+# Audio Utils
+# FIXME: Audio file is getting cut off before finishing string
+def tts(text, filename):
+    engine = pyttsx3.init()
+    engine.setProperty("voice", "english")
+    engine.setProperty("rate", 140)
+
+    try:
+        engine.save_to_file(text, filename)
+        engine.runAndWait()
+        print(f"{filename} created")
+    finally:
+        engine.stop()
+
+    return filename
 
 
 # Image Utils
@@ -447,14 +567,14 @@ def shuffle_modules():
 
 def generate_governance_journey_gif():
     frames = []
-    
+
     # Ensure the directories exist
     os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH, exist_ok=True)
 
     snapshot_files = sorted(
         glob.glob(f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png")
     )
-    
+
     for filename in snapshot_files:
         frames.append(Image.open(filename))
         frames[0].save(
@@ -499,15 +619,38 @@ async def send_msg_to_random_player(temp_channel):
 
 
 def clean_temp_files():
+    """
+    Delete temporary files
+    """
     snapshot_files = glob.glob(
         f"{GOVERNANCE_STACK_SNAPSHOTS_PATH}/governance_stack_snapshot_*.png"
     )
     # Cleanup: delete the governance snapshot files
     for filename in snapshot_files:
         os.remove(filename)
+        logging.info(f"Deleted temporary governance snapshot files in {snapshot_files}")
 
     governance_config = glob.glob(GOVERNANCE_STACK_CONFIG_PATH)
     # Cleanup: delete the governance config
     for filename in governance_config:
         os.remove(filename)
+        logging.info(
+            f"Deleted temporary governance configuration in {governance_config}"
+        )
 
+    audio_files = glob.glob(f"{AUDIO_MESSAGES_PATH}/*.mp3")
+    # Cleanup: delete the generated audio files
+    for filename in audio_files:
+        os.remove(filename)
+        logging.info(f"Deleted temporary audio files in {audio_files}")
+
+    log_files = glob.glob(f"{LOGGING_PATH}/*.log")
+    days_to_keep = 7
+    today = datetime.date.today()
+    # Cleanup: Clean log files every 7 days
+    for filename in log_files:
+        if os.path.isfile(filename):
+            modified_time = datetime.date.fromtimestamp(os.path.getmtime(filename))
+            age_in_days = (today - modified_time).days
+            if age_in_days >= days_to_keep:
+                os.remove(filename)

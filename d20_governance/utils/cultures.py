@@ -75,3 +75,14 @@ async def send_msg_to_random_player():
     await dm_channel.send(
         "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
     )
+
+
+def initialize_ritual_agreement(previous_message, new_message):
+    llm = OpenAI(temperature=0.9)
+    prompt = PromptTemplate(
+        input_variables=["previous_message", "new_message"],
+        template="Write a message that reflects the content in {new_message} and is cast in agreement with {previous_message}. Preserve and transfer any spelling errors or text transformations in these messages in the response.",
+    )  # FIXME: This template does not preserve obscurity text processing. Maybe obscurity should be reaplied after ritual if active in the active_culture_mode list
+    chain = LLMChain(llm=llm, prompt=prompt)
+    response = chain.run(previous_message=previous_message, new_message=new_message)
+    return response

@@ -1,7 +1,8 @@
 import discord
 import os
 import asyncio
-import uuid
+import datetime
+import logging
 from discord.ext import commands
 from typing import Set
 from ruamel.yaml import YAML
@@ -25,7 +26,12 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 
-QUEST_MODE = None
+logging.basicConfig(
+    filename="logs/bot.log",
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+print("Logging to logs/bot.log")
 
 
 class JoinLeaveView(discord.ui.View):
@@ -100,14 +106,17 @@ class JoinLeaveView(discord.ui.View):
             )
 
 
+# EVENTS
 @bot.event
 async def on_ready():
     """
     Event handler for when the bot has logged in and is ready to start interacting with Discord
     """
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
+    bot.tree.remove_command("propose_quest")
+    check_dirs()
 
 
 @bot.event
@@ -119,10 +128,28 @@ async def on_guild_join(guild):
     await setup_server(guild)
 
 
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user.bot:
+        return
+
+    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
+        if user.id in bot.voters:
+            await reaction.remove(user)
+            await user.send(
+                f"Naughty naughty! You cannot vote twice!",
+                delete_after=VOTE_DURATION_SECONDS,
+            )
+        else:
+            bot.voters.add(user.id)
+
+
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None):
+async def propose_quest(
+    ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None
+):
     """
     Command to propose a game of d20 governance with the specified number of players.
 
@@ -167,7 +194,6 @@ async def setup(ctx, joined_players):
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
-    print("1")
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
@@ -176,7 +202,6 @@ async def setup(ctx, joined_players):
         )
         for player in joined_players
     }
-    print("2")
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
@@ -186,7 +211,6 @@ async def setup(ctx, joined_players):
         **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
-    print("3")
     global TEMP_CHANNEL
 
     # create and name the channel with the quest_name from the yaml file
@@ -195,8 +219,8 @@ async def setup(ctx, joined_players):
         name=f"d20-{QUEST_TITLE}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    print("4")
     return TEMP_CHANNEL
+
 
 def get_llm_chain():
     template = """You are a chatbot generating the narrative and actions for a governance game.
@@ -215,15 +239,14 @@ def get_llm_chain():
     Chatbot:"""
 
     prompt = PromptTemplate(
-        input_variables=["chat_history", "human_input"], 
-        template=template
+        input_variables=["chat_history", "human_input"], template=template
     )
     memory = ConversationBufferMemory(memory_key="chat_history")
     llm_chain = LLMChain(
-    llm=ChatOpenAI(temperature=0, model_name="gpt-4"), 
-    prompt=prompt, 
-    verbose=True, 
-    memory=memory,
+        llm=ChatOpenAI(temperature=0, model_name="gpt-4"),
+        prompt=prompt,
+        verbose=True,
+        memory=memory,
     )
     return llm_chain
 
@@ -233,18 +256,28 @@ async def start_quest(ctx, gen_img: bool):
     Start a quest and create a new channel
     """
     global QUEST_INTRO
+    text = QUEST_INTRO
+    loop = asyncio.get_event_loop()
+    audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
+    print("Generating audio file...")
+    future = loop.run_in_executor(None, tts, text, audio_filename)
+    await future
+    print("Generated audio file...")
+
     if gen_img:
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
     else:
-        # Create a white background image canvas instead og generating an image
+        # Create a white background image canvas instead of generating an image
         image = Image.new("RGB", (512, 512), (255, 255, 255))
 
     llm_chain = None
     if QUEST_MODE == QUEST_MODE_LLM:
         await TEMP_CHANNEL.send("generating next narrative step with llm..")
         llm_chain = get_llm_chain()
-        yaml_string = llm_chain.predict(human_input="generate me an intro for my governance game")
+        yaml_string = llm_chain.predict(
+            human_input="generate me an intro for my governance game"
+        )
         print(yaml_string)
         yaml_data = ru_yaml.load(yaml_string)
         if isinstance(yaml_data, list) and len(yaml_data) > 0:
@@ -261,7 +294,18 @@ async def start_quest(ctx, gen_img: bool):
         file=discord.File("generated_image.png")
     )
     os.remove("generated_image.png")  # Clean up the image file
-    await intro_image_message.pin()  # Pin the available commands message
+
+    # Send audio file
+    with open(audio_filename, "rb") as f:
+        audio = discord.File(f)
+        await TEMP_CHANNEL.send(file=audio)
+    os.remove(audio_filename)
+
+    # Stream message
+    await stream_message(TEMP_CHANNEL, QUEST_INTRO)
+
+    # Pin the intro message img
+    await intro_image_message.pin()
 
     # Send commands message to temporary channel
     available_commands = "\n".join([f"`{command}`" for command in QUEST_COMMANDS])
@@ -271,7 +315,9 @@ async def start_quest(ctx, gen_img: bool):
         color=discord.Color.blue(),
     )
     commands_message = await TEMP_CHANNEL.send(embed=embed)
-    await commands_message.pin()  # Pin the available commands message
+
+    # Pin the available commands message
+    await commands_message.pin()
 
     for stage in QUEST_STAGES:
         if QUEST_MODE == QUEST_MODE_LLM:
@@ -283,7 +329,9 @@ async def start_quest(ctx, gen_img: bool):
                 try:
                     attempt += 1
                     await TEMP_CHANNEL.send("generating next narrative step with llm..")
-                    yaml_string = llm_chain.predict(human_input="generate the next stage")
+                    yaml_string = llm_chain.predict(
+                        human_input="generate the next stage"
+                    )
                     print(yaml_string)
                     yaml_data = ru_yaml.load(yaml_string)
 
@@ -295,14 +343,16 @@ async def start_quest(ctx, gen_img: bool):
                     await TEMP_CHANNEL.send("encountered error, retrying..")
 
             if not stage:
-                raise ValueError("yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS))
+                raise ValueError(
+                    "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
+                )
 
-        print(f"Processing stage {stage}")
+        print(f"Processing stage {stage[QUEST_STAGE_NAME]}")
         result = await process_stage(ctx, stage, gen_img)
         if not result:
-            await ctx.send(f"Error processing stage {stage}")
+            await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
             break
-        
+
 
 async def process_stage(ctx, stage, gen_img):
     """
@@ -311,6 +361,11 @@ async def process_stage(ctx, stage, gen_img):
 
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
+    stage_name = stage[QUEST_STAGE_NAME]
+    loop = asyncio.get_event_loop()
+    audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
+    future = loop.run_in_executor(None, tts, message, audio_filename)
+    await future
 
     if gen_img:
         # Generate intro image and send to temporary channel
@@ -324,6 +379,15 @@ async def process_stage(ctx, stage, gen_img):
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
+
+    # Post audio file
+    with open(audio_filename, "rb") as f:
+        audio = discord.File(f)
+        await TEMP_CHANNEL.send(file=audio)
+    os.remove(audio_filename)
+
+    # Stream message
+    await stream_message(TEMP_CHANNEL, message)
 
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]
@@ -363,8 +427,6 @@ async def end(ctx):
 
 
 # CULTURE COMMANDS
-
-
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def transparency(ctx):
@@ -428,7 +490,26 @@ async def obscurity(ctx, mode: str = None):
             color=discord.Color.dark_gold(),
         )
         if OBSCURITY:
-            embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
+            if "OBSCURITY" not in active_culture_modes:
+                active_culture_modes.append("OBSCURITY")
+                embed.add_field(
+                    name="Mode:",
+                    value=f"{OBSCURITY_MODE}",
+                    inline=False,
+                )
+                embed.add_field(
+                    name="ACTIVE CULTURE MODES:",
+                    value=f"{', '.join(active_culture_modes)}",
+                    inline=False,
+                )
+        else:
+            if "OBSCURITY" in active_culture_modes:
+                active_culture_modes.remove("OBSCURITY")
+                embed.add_field(
+                    name="ACTIVE CULTURE MODES:",
+                    value=f"{', '.join(active_culture_modes)}",
+                    inline=False,
+                )
     elif mode not in available_modes:
         embed = discord.Embed(
             title=f"Error - The mode '{mode}' is not available.",
@@ -441,6 +522,13 @@ async def obscurity(ctx, mode: str = None):
             title="Culture: Obscurity On!", color=discord.Color.dark_gold()
         )
         embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
+        if "OBSCURITY" not in active_culture_modes:
+            active_culture_modes.append("OBSCURITY")
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(active_culture_modes)}",
+            inline=False,
+        )
 
     embed.set_thumbnail(
         url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
@@ -455,24 +543,32 @@ async def eloquence(ctx):
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
     if ELOQUENCE:
-        embed = discord.Embed(
-            title="Culture: Eloquence", color=discord.Color.dark_gold()
-        )
-        embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-        )
-        embed.add_field(
-            name="ACTIVATED:",
-            value="Messages will now be process through an LLM.",
-            inline=False,
-        )
-        embed.add_field(
-            name="LLM Prompt:",
-            value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
-            inline=False,
-        )
-        await ctx.send(embed=embed)
+        if "ELOQUENCE" not in active_culture_modes:
+            active_culture_modes.append("ELOQUENCE")
+            embed = discord.Embed(
+                title="Culture: Eloquence", color=discord.Color.dark_gold()
+            )
+            embed.set_thumbnail(
+                url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+            )
+            embed.add_field(
+                name="ACTIVATED:",
+                value="Messages will now be process through an LLM.",
+                inline=False,
+            )
+            embed.add_field(
+                name="ACTIVE CULTURE MODES:",
+                value=f"{', '.join(active_culture_modes)}",
+                inline=False,
+            )
+            embed.add_field(
+                name="LLM Prompt:",
+                value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
+                inline=False,
+            )
+            await ctx.send(embed=embed)
     else:
+        active_culture_modes.remove("ELOQUENCE")
         embed = discord.Embed(
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
@@ -482,6 +578,11 @@ async def eloquence(ctx):
         embed.add_field(
             name="DEACTIVATED",
             value="Messages will no longer be processed through an LLM",
+            inline=False,
+        )
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(active_culture_modes)}",
             inline=False,
         )
         await ctx.send(embed=embed)
@@ -504,26 +605,68 @@ async def diversity(ctx):
     await ctx.send(message)
 
 
-@bot.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
-        return
+@bot.command()
+@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+async def ritual(ctx):
+    """
+    Toggle ritual module.
+    """
+    global RITUAL
+    RITUAL = not RITUAL
+    if RITUAL:
+        if "RITUAL" not in active_culture_modes:
+            active_culture_modes.append("RITUAL")
+            embed = discord.Embed(
+                title="Culture: ritual", color=discord.Color.dark_gold()
+            )
+            # embed.set_thumbnail(
+            #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
+            # )
+            embed.add_field(
+                name="ACTIVATED:",
+                value="A ritual of agreement permeates throughout the group.",
+                inline=False,
+            )
+            embed.add_field(
+                name="ACTIVE CULTURE MODES:",
+                value=f"{', '.join(active_culture_modes)}",
+                inline=False,
+            )
+            await ctx.send(embed=embed)
+    else:
+        active_culture_modes.remove("RITUAL")
+        embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
+        # embed.set_thumbnail(
+        #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
+        # )
+        embed.add_field(
+            name="DEACTIVATED",
+            value="Automatic agreement has ended. But will the effects linger in practice?",
+            inline=False,
+        )
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(active_culture_modes)}",
+            inline=False,
+        )
+        await ctx.send(embed=embed)
 
-    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
-        if user.id in bot.voters:
-            await reaction.remove(user)
-            await user.send(f"Naughty naughty! You cannot vote twice!", delete_after=VOTE_DURATION_SECONDS)
-        else:
-            bot.voters.add(user.id)
 
+# CULTURE MODES
+active_culture_modes = []
+
+
+# DECISION COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
     # Set starting decision module if necessary
     current_modules = get_current_governance_stack()["modules"]
-    decision_module = next((module for module in current_modules if module['type'] == 'decision'), None)
+    decision_module = next(
+        (module for module in current_modules if module["type"] == "decision"), None
+    )
     if decision_module is None:
-        await set_starting_decision_module() 
+        await set_starting_decision_module()
 
     if len(options) <= 1:
         await ctx.send("Error: A poll must have at least two options.")
@@ -550,7 +693,7 @@ async def vote(ctx, question: str, *options: str):
     bot.voters = set()
     bot.vote_message = vote_message
 
-    await asyncio.sleep(VOTE_DURATION_SECONDS) # wait for votes to be cast
+    await asyncio.sleep(VOTE_DURATION_SECONDS)  # wait for votes to be cast
 
     vote_message = await ctx.channel.fetch_message(
         vote_message.id
@@ -561,9 +704,7 @@ async def vote(ctx, question: str, *options: str):
 
     for i, reaction in enumerate(reactions):
         if reaction.emoji in emoji_list:
-            results[options[i]] = (
-                reaction.count - 1 # remove 1 to account for bot
-            ) 
+            results[options[i]] = reaction.count - 1  # remove 1 to account for bot
             total_votes += results[options[i]]
 
     # Calculate results
@@ -606,6 +747,7 @@ async def vote(ctx, question: str, *options: str):
 
     return winning_votes[0]
 
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote_governance(ctx, governance_type: str):
@@ -613,18 +755,16 @@ async def vote_governance(ctx, governance_type: str):
         await ctx.send("Invalid governance type: {governance_type}")
         return
     modules = get_modules_for_type(governance_type)
-    module_names = [module['name'] for module in modules]
+    module_names = [module["name"] for module in modules]
     question = f"Which {governance_type} should we select?"
     winning_module_name = await vote(ctx, question, *module_names)
     # TODO: if no winning_module, hold retry logic or decide what to do
     if winning_module_name:
         winning_module = modules[module_names.index(winning_module_name)]
         add_module_to_stack(winning_module)
-        await ctx.send(
-            f" New module `{winning_module_name}` added to governance stack"
-        )
+        await ctx.send(f" New module `{winning_module_name}` added to governance stack")
         await post_governance(ctx)
-    else: 
+    else:
         embed = discord.Embed(
             title="Error - No winning module.",
             color=discord.Color.red(),
@@ -690,7 +830,7 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
-# TEST COMMANDS
+# CLEANING COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def clean(ctx):
@@ -712,6 +852,7 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
     await ctx.send(f'All channels in category "{category_name}" have been deleted.')
 
 
+# TEST COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_randomize_snapshot(ctx):
@@ -769,35 +910,70 @@ async def test_decision(ctx):
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:  # Ignore messages sent by the bot itself
-        return
+    try:
+        if message.author == bot.user:  # Ignore messages sent by the bot itself
+            return
 
-    # If message is a command, proceed directly to processing
-    if message.content.startswith("/"):
-        await bot.process_commands(message)
-        return
+        # If message is a command, proceed directly to processing
+        if message.content.startswith("/"):
+            await bot.process_commands(message)
+            return
 
-    # Increment message count for the user
-    user_id = message.author.id
-    if user_id not in user_message_count:
-        user_message_count[user_id] = 0
-    user_message_count[user_id] += 1
+        # Increment message count for the user
+        user_id = message.author.id
+        if user_id not in user_message_count:
+            user_message_count[user_id] = 0
+        user_message_count[user_id] += 1
 
-    if OBSCURITY:
-        await message.delete()
-        obscurity_function = globals()[OBSCURITY_MODE]
-        obscured_message = obscurity_function(message.content)
-        await message.channel.send(
-            f"{message.author.mention} posted: {obscured_message}"
-        )
-    elif ELOQUENCE:
-        await message.delete()
-        processing_message = await message.channel.send(
-            f"Making {message.author.mention}'s post eloquent"
-        )
-        eloquent_text = await filter_eloquence(message.content)
-        await processing_message.delete()
-        await message.channel.send(f"{message.author.mention} posted: {eloquent_text}")
+        # Check if any modes are active and apply filters in list order
+        filtered_message = message.content
+        if active_culture_modes:
+            await message.delete()
+            bot_message = await message.channel.send(
+                f"{message.author.mention} posted: {filtered_message}"
+            )
+        for mode in active_culture_modes:
+            if mode == "RITUAL":
+                # Get the most recently posted message in the channel that isn't from a bot
+                async for msg in message.channel.history(limit=100):
+                    if msg.id == message.id:
+                        continue
+                    if msg.author.bot:
+                        continue
+                    if msg.content.startswith("/"):
+                        continue
+                    previous_message = msg.content
+                    break
+
+                processing_message = await message.channel.send(
+                    f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
+                )
+                filtered_message = initialize_ritual_agreement(
+                    previous_message, filtered_message
+                )
+                await processing_message.delete()
+                await bot_message.edit(
+                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                )
+            if mode == "OBSCURITY":
+                obscurity_function = globals()[OBSCURITY_MODE]
+                filtered_message = obscurity_function(filtered_message)
+                await bot_message.edit(
+                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                )
+            if mode == "ELOQUENCE":
+                processing_message = await message.channel.send(
+                    f"Making {message.author.mention}'s post eloquent"
+                )
+                filtered_message = await filter_eloquence(filtered_message)
+                await processing_message.delete()
+                await bot_message.edit(
+                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                )
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        await message.channel.send("An error occurred")
 
 
 # BOT CHANNEL CHECKS
@@ -838,10 +1014,21 @@ async def validate_channels(ctx):
         return True
 
 
+# REPO DIRECTORY CHECKS
+def check_dirs():
+    if not os.path.exists(AUDIO_MESSAGES_PATH):
+        os.makedirs(AUDIO_MESSAGES_PATH)
+        print(f"Created {AUDIO_MESSAGES_PATH} directory")
+    if not os.path.exists(GOVERNANCE_STACK_SNAPSHOTS_PATH):
+        os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH)
+        print(f"Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory")
+
+
 try:
+    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+        f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
     bot.run(token=DISCORD_TOKEN)
 finally:
     clean_temp_files()
-
-
-    
+    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+        f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")
