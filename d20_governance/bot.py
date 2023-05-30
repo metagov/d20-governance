@@ -1022,6 +1022,13 @@ def check_dirs():
     if not os.path.exists(GOVERNANCE_STACK_SNAPSHOTS_PATH):
         os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH)
         print(f"Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory")
+    if not os.path.exists(LOGGING_PATH):
+        os.makedirs(LOGGING_PATH)
+        print(f"Created {LOGGING_PATH} directory")
+    if not os.path.exists(LOG_FILE_NAME):
+        with open(LOG_FILE_NAME, "w") as f:
+            f.write("This is a new log file.")
+            print(f"Creates {LOG_FILE_NAME} file")
 
 
 try:

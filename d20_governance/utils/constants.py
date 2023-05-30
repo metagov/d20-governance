@@ -43,6 +43,7 @@ ENGINE_ID = "stable-diffusion-v1-5"
 AUDIO_MESSAGES_PATH = "assets/audio/bot_generated"
 GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshots"
 LOGGING_PATH = "logs"
+LOG_FILE_NAME = f"{LOGGING_PATH}/bot.log"
 
 # CONFIG PATHS
 # QUEST CONFIGS
