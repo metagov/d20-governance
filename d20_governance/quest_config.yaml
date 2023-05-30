@@ -40,12 +40,12 @@ game:
 
       - stage: "Deliberation"
         message: "Behold a clamor of claims, a jostling of Joshery. Hear these voices and discuss amongst yourselves who's claim to Joshdom most moves you towards servitude, for whom the role of Josh shall be bestowed"
-        action: ["post_speechs", "countdown"]
+        action: ["post_speeches", "countdown"]
         timeout_mins: 3
 
       - stage: "Voting"
         message: "The Joshes have spoken, and their jostling of rejoinders has come to a pause. Now it is time to decide who amongst us is the real Josh. Vote now or forever sceede your voice to the throng of Viying Joshs"
-        action: ["silence", "vote"]
+        action: ["silence", "vote_speeches Who is the real Josh?"]
           # take in names from speechs
         timeout: 1
 

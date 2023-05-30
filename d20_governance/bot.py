@@ -686,9 +686,9 @@ async def vote(ctx, question: str, *options: str):
     if decision_module is None:
         await set_starting_decision_module()
 
-    if len(options) <= 1:
-        await ctx.send("Error: A poll must have at least two options.")
-        return
+    # if len(options) <= 1: # UNCOMMENT AFTER TESTIN
+    #     await ctx.send("Error: A poll must have at least two options.")
+    #     return
     if len(options) > 10:
         await ctx.send("Error: A poll cannot have more than 10 options.")
         return
@@ -849,7 +849,10 @@ async def dissolve(ctx):
 
 # MISC COMMANDS
 @bot.command()
-async def speech(ctx, text: str):
+async def speech(ctx, *, text: str):
+        # delete the user's message
+    await ctx.message.delete()
+
     # get the player name
     player_name = ctx.author.display_name
     
@@ -863,8 +866,32 @@ async def speech(ctx, text: str):
     
     # add the speech to the list associated with the nickname
     nicknames_to_speeches[nickname] = text
-        
+
     await ctx.send(f"Added {nickname}'s speech to the list!")
+
+
+@bot.command()
+async def post_speeches(ctx):
+    speeches = []
+    speeches.append("The following are the nominees' speeches: \n")
+
+    # Go through all nicknames and their speeches
+    for nickname, speech in nicknames_to_speeches.items():
+        # Append a string formatted with the nickname and their speech
+        speeches.append(f'**{nickname}**: {speech}')
+
+    # Join all speeches together with a newline in between each one
+    formatted_speeches = '\n\n'.join(speeches)
+
+    # Send the formatted speeches to the context
+    await ctx.send(formatted_speeches)
+
+
+@bot.command()
+async def vote_speeches(ctx, *, question: str):
+    # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
+    nicknames = list(nicknames_to_speeches.keys())
+    await vote(ctx, question, *nicknames)
 
 
 # CLEANING COMMANDS

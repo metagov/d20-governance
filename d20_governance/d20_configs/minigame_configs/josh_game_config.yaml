@@ -40,7 +40,7 @@ game:
 
       - stage: "Deliberation"
         message: "Behold a clamor of claims, a jostling of Joshery. Hear these voices and discuss amongst yourselves who's claim to Joshdom most moves you towards servitude, for whom the role of Josh shall be bestowed"
-        action: ["post_speechs", "countdown"]
+        action: ["post_speeches", "countdown"]
         timeout_mins: 3
 
       - stage: "Voting"
