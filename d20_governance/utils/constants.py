@@ -102,6 +102,10 @@ QUEST_STAGE_NAME = "stage"
 # Stores the number of messages sent by each user
 user_message_count = {}
 
+# Maps player name to nickname
+players_to_nicknames = {}
+nicknames = ["Jigsaw Joshy", "Josh-a-mania", "Jovial Joshington", "Jalapeño Josh", "Jitterbug Joshie", "Jamboree Josh", "Jumping Jack Josh", "Just Joking Josh"]
+nicknames_to_speeches = {}
 
 QUEST_MODE_YAML = "yaml"
 QUEST_MODE_LLM = "llm"

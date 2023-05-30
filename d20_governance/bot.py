@@ -54,7 +54,25 @@ class JoinLeaveView(discord.ui.View):
             await interaction.response.send_message(
                 f"{player_name} has joined the quest!"
             )
+
+            # Assign player nickname
+            # Make sure there are still nicknames available
+            if len(nicknames) == 0:
+                raise Exception("No more nicknames available.")
+
+            # Randomly select a nickname
+            nickname = random.choice(nicknames)
+
+            # Assign the nickname to the player
+            players_to_nicknames[player_name] = nickname
+
+            # Remove the nickname from the list so it can't be used again
+            nicknames.remove(nickname)
+
+            print(f"Assigned nickname '{nickname}' to player '{player_name}'.")
+
             needed_players = self.num_players - len(self.joined_players)
+
             embed = discord.Embed(
                 title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
                 description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
@@ -828,6 +846,25 @@ async def dissolve(ctx):
         os.remove("governance_journey.gif")
 
     FILE_COUNT = 0
+
+# MISC COMMANDS
+@bot.command()
+async def speech(ctx, text: str):
+    # get the player name
+    player_name = ctx.author.display_name
+    
+    # check if this player has a nickname
+    if player_name not in players_to_nicknames:
+        await ctx.send(f"Error: No nickname found for player!")
+        return
+
+    # get the nickname of the user invoking the command
+    nickname = players_to_nicknames[player_name]
+    
+    # add the speech to the list associated with the nickname
+    nicknames_to_speeches[nickname] = text
+        
+    await ctx.send(f"Added {nickname}'s speech to the list!")
 
 
 # CLEANING COMMANDS
