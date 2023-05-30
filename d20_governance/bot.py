@@ -502,14 +502,14 @@ async def obscurity(ctx, mode: str = None):
                     value=f"{', '.join(active_culture_modes)}",
                     inline=False,
                 )
-            else:
-                if "OBSCURITY" in active_culture_modes:
-                    active_culture_modes.remove("OBSCURITY")
-                    embed.add_field(
-                        name="ACTIVE CULTURE MODES:",
-                        value=f"{', '.join(active_culture_modes)}",
-                        inline=False,
-                    )
+        else:
+            if "OBSCURITY" in active_culture_modes:
+                active_culture_modes.remove("OBSCURITY")
+                embed.add_field(
+                    name="ACTIVE CULTURE MODES:",
+                    value=f"{', '.join(active_culture_modes)}",
+                    inline=False,
+                )
     elif mode not in available_modes:
         embed = discord.Embed(
             title=f"Error - The mode '{mode}' is not available.",
