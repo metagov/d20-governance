@@ -45,7 +45,15 @@ GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshot
 LOGGING_PATH = "logs"
 
 # CONFIG PATHS
+# QUEST CONFIGS
 QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
+
+# MINIGAME CONFIGS
+JOSH_GAME_CONFIG_PATH = (
+    "d20_governance/d20_configs/minigame_configs/josh_game_config.yaml"
+)
+
+# GOVERNANCE CONFIGS
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
 GOVERNANCE_STACK_CHAOS_PATH = (
     "d20_governance/governance_stacks/governance_stack_templates/chaos_stack.yaml"
