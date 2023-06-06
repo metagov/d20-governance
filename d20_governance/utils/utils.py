@@ -136,7 +136,7 @@ def add_module_to_stack(module):
 
 # Text Utils
 async def stream_message(ctx, text):
-    message_canvas = await ctx.send("[]")
+    message_canvas = await ctx.send("[...]")
     # Use the typing context manager to simulate typing
     try:
         chunks = chunk_text(text)
@@ -156,7 +156,7 @@ async def stream_message(ctx, text):
                     else:
                         pass
                 await asyncio.sleep(sleep_time)
-        final_message = " ".join(joined_text_str) + " [Done!]"
+        final_message = "".join(joined_text_str) + " [*]"
         await message_canvas.edit(content=final_message)
     except Exception as e:
         print(e)
