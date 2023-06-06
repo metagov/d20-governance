@@ -424,6 +424,7 @@ async def countdown(ctx, countdown_seconds):
     sleep_interval = remaining_seconds / 3
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
+        remaining_minutes = round(remaining_minutes, 2)
         message = (
             f"{remaining_minutes} minutes remaining before the next stage of the game."
         )
@@ -911,7 +912,7 @@ async def post_speeches(ctx):
 
 
 @bot.command()
-async def vote_speeches(ctx, *, question: str):
+async def vote_speeches(ctx, question: str):
     # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
     nicknames = list(nicknames_to_speeches.keys())
     await vote(ctx, question, *nicknames)
