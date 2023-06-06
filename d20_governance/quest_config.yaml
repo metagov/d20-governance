@@ -1,103 +1,86 @@
 game:
   title: "The Josh Game Minigame"
-  intro: "Heartiest Welcome, Friends and Foes, Ladies and Gents, Joshes of all kinds! 
-  
-  You have entered *The Josh Fight*, otherwise known as *The Josh Battle Royale*, otherwise known as *Josh vs. Josh vs. Josh*. 
-  
-  We are gathered here today to witness a grand spectacle. In the vast expanses of the internet, a challenge echoes out, a clarion call to all brave souls with ears ready to hear and souls ready to search… 
-  
-  From the sunny hamlets of the lowlands to the wind-swept peaks of the highest mountains, from the bustling cities of the coast to the deepest, quietest forests of the heartland, we beckon everyone to answer the call, to join this extraordinary quest. A challenge for glory, for honor, and the coveted title of the 'Ultimate Josh'!
-  
-  Yes, it's time to prove your mettle, your wit, your creativity, and claim your rightful place as the 'Ultimate Josh' of the digital realm."
+  intro: "Intro josh"
 
   meta_commands:
   - /speech
 
   stages:
       - stage: "Claims to Josh"
-        message: "Everyone is josh. Some of you are JoshyJosh, others Jovial Joshington, but who is the real Josh, the ultimate Josh, the last Josh? 
-        
-        We must hear from all who have gathered their claim to joshdom. 
-
-        All Joshes will have 3 minutes to prepare a speech laying their claim to the role of the true Josh. Write you speeches and submit them using `/speech [message]`.
-        
-        To see your current Josh name you can type `/whichJosh`."
-        action: "countdown 120"
+        message: "submit speech josh"
+        action: "countdown 30"
           # /speech is available during this time
           # /speech can be resubmitted, but as an overwrite
           # /speech pops out previous message inlist and inserts new message 
           # would be nice to move to the next section if all speeches are submitted before this time
           # have a countdown send a reminder message every minute
-        timeout_mins: 0.0
+        timeout_mins: 0
 
       - stage: "Submission Period"
-        message: "For any josh still penning this claim to fame, now is the time of submission. A still silence blankets the group while any remaining submissions are submitted."
-        action: #silence
+        message: "Silence submission period."
+        action: silence
           # the "silence" function prevents any messages other than /speech from being sent in the channel
           # /speech is available during this time
-        timeout_mins: 1.5 
-          # can this be a float? 30 seconds? 
+        timeout_mins: .5 
 
       - stage: "Deliberation"
-        message: "Behold a clamor of claims, a jostling of Joshery. Hear these voices and discuss amongst yourselves who's claim to Joshdom most moves you towards servitude, for whom the role of Josh shall be bestowed"
-        action: "post_speechs"
-        timeout_mins: 0
+        message: "Deliberate" 
+        action: "post_speeches"
+        timeout_mins: .5
       
       - stage: "Countdown"
-        message: "."
-        action: "countdown 240"
-        timeout_mins: 3
+        message: "countdown"
+        action: "countdown 30"
+        timeout_mins: 0
 
       - stage: "Voting"
-        message: "The Joshes have spoken, and their jostling of rejoinders has come to a pause. Now it is time to decide who amongst us is the real Josh. Vote now or forever sceede your voice to the throng of Viying Joshs"
-        action: "vote" #silence
+        message: "Vote on Joshes"
+        action: "vote_speeches 'Who is the real Josh?'" #silence
           # take in names from speechs
         timeout_mins: 1
 
       - stage: "Result"
-        message: "Behold the results. The Joshs have spoken and we can now decern more clearly who is truely the real Josh."
+        message: "Behold the results.."
         action: "post_results"
-        timeout_mins: 0
+        timeout_mins: .5
 
       - stage: "Failed Result Obscurity"
-        message_mins: "While clearer our resolve is, the real Josh is still ellusive. Another round of speeches, deliberation, and voting must now commence. Though in the confusion and tarnished reputations a culture of obfuscation and interference has set it. The real josh will need to find a way to speak through this confusion in a manner both eloquent and witty if the real Josh is to be uncovered in our gathering.
-        
-        Our remaining candidates for Joshdom will now prepare their speeches. They nevertheless still speak out into the void to find their way through the shifting landscape of obscurity."
+        message: "Failed result obscurity" 
         action: "obscurity"
           # /speech is available during this time
           # /speech is only available to reamining candidates 
-        timeout_mins: 0
+        timeout_mins: .5
 
       - stage: "Countdown"
-        message: "."
-        action: "countdown 240"
-        timeout_mins: 3
+        message: "countdown"
+        action: "countdown 10"
+        timeout_mins: .5
 
       - stage: "Obscure Submission Period"
-        message: "For any josh still penning their claim to fame, now is the time of submission. A still silence blankets the group while any remaining submissions are submitted."
+        message: "obscure submission" 
         action: "silence"
           # the "silence" function prevents any messages other than /speech from being sent in the channel
           # /speech is available during this time
-        timeout_mins: 1 
+        timeout_mins: .5 
           # can this be a float? 30 seconds?
 
       - stage: "Obscure Deliberation"
-        message: "Another round of deliberation, beware mishtif and  impersenators attempting to throw the scent of our truely viable Josh. Despite these precarious conditions, your group should work towards building consensus. This is necessary for the final decision that will come to pass."
-        action: "countdown 240"
-        timeout_mins: 3
+        message: "Another round of deliberation"
+        action: "countdown 10"
+        timeout_mins: .5
 
       - stage: "Obscure Vote"
-        message: "The time has come to once and for all decide who the real Josh truely is.Align or not, the fate of Josh rests in your collective hands. If consensus is not achieved then no Josh will be selected and will return to a world unchanged. Collective decide that the real josh is among us and a new Josh will gracefully reign over this community, spreading flair wherever they announce their presence."
+        message: "vote obscure."
         action: "vote" #silence
           # consensus
-        timeout_mins: 0
+        timeout_mins: .5
 
       - stage: "Final Result"
         message: "Our final result is in. Had the real Josh emerged, or do we return. See the results below to find out."
         action: "post_results"
-        timeout_mins: 1
+        timeout_mins: .5
       
       - stage: "End"
         message: "And just like that, we return to the agora, a new Josh identified amongst the many. "
-        action: "acrhive"
-        timeout_mins: 0
+        action: "dissolve"
+        timeout_mins: .5

@@ -421,15 +421,26 @@ async def process_stage(ctx, stage, gen_img):
 @bot.command()
 async def countdown(ctx, countdown_seconds):
     remaining_seconds = int(countdown_seconds)
+    sleep_interval = remaining_seconds / 3
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
         message = (
             f"{remaining_minutes} minutes remaining before the next stage of the game."
         )
         await ctx.send(message)
-        remaining_seconds -= 60
-        await asyncio.sleep(60)
+        remaining_seconds -= sleep_interval
+        await asyncio.sleep(sleep_interval)
 
+@bot.command()
+async def silence(ctx):
+    await ctx.send("silence")
+    pass
+
+
+@bot.command()
+async def post_results(ctx):
+    await ctx.send("post_results")
+    pass
 
 async def end(ctx):
     """
