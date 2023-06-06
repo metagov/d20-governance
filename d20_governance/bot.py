@@ -276,11 +276,11 @@ async def start_quest(ctx, gen_img: bool):
     global QUEST_INTRO
     text = QUEST_INTRO
     loop = asyncio.get_event_loop()
-    audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
+    # audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
     print("Generating audio file...")
-    future = loop.run_in_executor(None, tts, text, audio_filename)
-    await future
-    print("Generated audio file...")
+    # future = loop.run_in_executor(None, tts, text, audio_filename)
+    # await future
+    # print("Generated audio file...")
 
     if gen_img:
         # Generate intro image and send to temporary channel
@@ -305,7 +305,6 @@ async def start_quest(ctx, gen_img: bool):
         else:
             raise ValueError("yaml output in wrong format")
 
-    image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
     intro_image_message = await TEMP_CHANNEL.send(
@@ -314,10 +313,10 @@ async def start_quest(ctx, gen_img: bool):
     os.remove("generated_image.png")  # Clean up the image file
 
     # Send audio file
-    with open(audio_filename, "rb") as f:
-        audio = discord.File(f)
-        await TEMP_CHANNEL.send(file=audio)
-    os.remove(audio_filename)
+    # with open(audio_filename, "rb") as f:
+    #     audio = discord.File(f)
+    #     await TEMP_CHANNEL.send(file=audio)
+    # os.remove(audio_filename)
 
     # Stream message
     await stream_message(TEMP_CHANNEL, QUEST_INTRO)
@@ -382,9 +381,9 @@ async def process_stage(ctx, stage, gen_img):
     stage_name = stage[QUEST_STAGE_NAME]
     timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
     loop = asyncio.get_event_loop()
-    audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
-    future = loop.run_in_executor(None, tts, message, audio_filename)
-    await future
+    # audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
+    # future = loop.run_in_executor(None, tts, message, audio_filename)
+    # await future
 
     if gen_img:
         # Generate intro image and send to temporary channel
@@ -393,17 +392,16 @@ async def process_stage(ctx, stage, gen_img):
         # Create a white background image canvas instead og generating an image
         image = Image.new("RGB", (512, 512), (255, 255, 255))
 
-    image = overlay_text(image, message)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
 
     # Post audio file
-    with open(audio_filename, "rb") as f:
-        audio = discord.File(f)
-        await TEMP_CHANNEL.send(file=audio)
-    os.remove(audio_filename)
+    # with open(audio_filename, "rb") as f:
+    #     audio = discord.File(f)
+    #     await TEMP_CHANNEL.send(file=audio)
+    # os.remove(audio_filename)
 
     # Stream message
     await stream_message(TEMP_CHANNEL, message)
@@ -421,10 +419,10 @@ async def process_stage(ctx, stage, gen_img):
 
 
 @bot.command()
-async def countdown(ctx, timeout_seconds):
-    remaining_seconds = timeout_seconds
+async def countdown(ctx, countdown_seconds):
+    remaining_seconds = int(countdown_seconds)
     while remaining_seconds > 0:
-        remaining_minutes = remaining_seconds // 60
+        remaining_minutes = remaining_seconds / 60
         message = (
             f"{remaining_minutes} minutes remaining before the next stage of the game."
         )
@@ -864,7 +862,7 @@ async def dissolve(ctx):
 # MISC COMMANDS
 @bot.command()
 async def speech(ctx, *, text: str):
-        # delete the user's message
+    # delete the user's message
     await ctx.message.delete()
 
     # get the player name
@@ -892,10 +890,10 @@ async def post_speeches(ctx):
     # Go through all nicknames and their speeches
     for nickname, speech in nicknames_to_speeches.items():
         # Append a string formatted with the nickname and their speech
-        speeches.append(f'**{nickname}**: {speech}')
+        speeches.append(f"**{nickname}**: {speech}")
 
     # Join all speeches together with a newline in between each one
-    formatted_speeches = '\n\n'.join(speeches)
+    formatted_speeches = "\n\n".join(speeches)
 
     # Send the formatted speeches to the context
     await ctx.send(formatted_speeches)
@@ -955,7 +953,6 @@ async def test_generation(ctx):
     """
     text = "Obscurity"
     image = generate_image(text)
-    image = overlay_text(image, text)
 
     # Save the image to a file
     image.save("generated_image.png")

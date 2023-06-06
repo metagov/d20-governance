@@ -144,8 +144,8 @@ async def stream_message(ctx, text):
         for chunk in chunks:
             async with ctx.typing():
                 joined_text.append(chunk)
-                distorted_text = distort_text(joined_text)
-                joined_text_str = " ".join(distorted_text) + " []"
+                # distorted_text = distort_text(joined_text)
+                joined_text_str = " ".join(joined_text) + " []"
                 await message_canvas.edit(content=joined_text_str)
                 sleep_time = random.uniform(0.7, 1.2)
                 for word in chunk.split():
@@ -156,7 +156,7 @@ async def stream_message(ctx, text):
                     else:
                         pass
                 await asyncio.sleep(sleep_time)
-        final_message = " ".join(distorted_text) + " [Done!]"
+        final_message = " ".join(joined_text_str) + " [Done!]"
         await message_canvas.edit(content=final_message)
     except Exception as e:
         print(e)
@@ -167,65 +167,65 @@ def chunk_text(text):
     chunks = []
     i = 0
     while i < len(words):
-        chunk_size = 2 if random.random() < 0.6 else 3
+        chunk_size = 14 if random.random() < 0.6 else 16
         chunk = " ".join(words[i : i + chunk_size])
         chunks.append(chunk)
         i += chunk_size
     return chunks
 
 
-def distort_text(word_list):
-    distorted_list = []
-    for i, word in enumerate(word_list):
-        distortion_level = i + 1
-        if len(word) <= 3:
-            distorted_list.append(word)
-            continue
-        first_char = word[0]
-        last_char = word[-1]
-        middle_chars = list(word[1:-1])
-        middle_chars_count = len(middle_chars)
-        middle_chars_index = middle_chars_count // 2
-        distorted_middle_chars = middle_chars.copy()
-        if distortion_level > 1:
-            if distortion_level > 2:
-                if random.random() < 0.5 * distortion_level:
-                    distorted_middle_chars[middle_chars_index] = "||"
-            if random.random() < 0.4 * distortion_level:
-                distorted_middle_chars[middle_chars_index] = "_"
-        distorted_word = first_char + "".join(distorted_middle_chars) + last_char
-        if len(distorted_word) > 3:
-            distorted_word = (
-                distorted_word[:3]
-                + "".join(random.sample(string.punctuation, 3))
-                + distorted_word[3:]
-            )
-        # Apply distortion based on probability and distortion level
-        if random.random() < 0.1 * distortion_level:
-            distorted_list.append("*" + word + "*")
-        elif random.random() < 0.35 * distortion_level:
-            distorted_list.append("_" + word + "_")
-        elif random.random() < 0.6 * distortion_level:
-            distorted_list.append("||" + word + "||")
-        else:
-            distorted_list.append(word)
-    return distorted_list
+# def distort_text(word_list):
+#     distorted_list = []
+#     for i, word in enumerate(word_list):
+#         distortion_level = i + 1
+#         if len(word) <= 3:
+#             distorted_list.append(word)
+#             continue
+#         first_char = word[0]
+#         last_char = word[-1]
+#         middle_chars = list(word[1:-1])
+#         middle_chars_count = len(middle_chars)
+#         middle_chars_index = middle_chars_count // 2
+#         distorted_middle_chars = middle_chars.copy()
+#         if distortion_level > 1:
+#             if distortion_level > 2:
+#                 if random.random() < 0.5 * distortion_level:
+#                     distorted_middle_chars[middle_chars_index] = "||"
+#             if random.random() < 0.4 * distortion_level:
+#                 distorted_middle_chars[middle_chars_index] = "_"
+#         distorted_word = first_char + "".join(distorted_middle_chars) + last_char
+#         if len(distorted_word) > 3:
+#             distorted_word = (
+#                 distorted_word[:3]
+#                 + "".join(random.sample(string.punctuation, 3))
+#                 + distorted_word[3:]
+#             )
+#         # Apply distortion based on probability and distortion level
+#         if random.random() < 0.1 * distortion_level:
+#             distorted_list.append("*" + word + "*")
+#         elif random.random() < 0.35 * distortion_level:
+#             distorted_list.append("_" + word + "_")
+#         elif random.random() < 0.6 * distortion_level:
+#             distorted_list.append("||" + word + "||")
+#         else:
+#             distorted_list.append(word)
+#     return distorted_list
 
 
-def distort_text_simple(text_list):
-    distorted_list = []
-    for i, text in enumerate(text_list):
-        distortion_level = i + 1
-        # Apply distortion based on probability and distortion level
-        if random.random() < 0.1 * distortion_level:
-            distorted_list.append("*" + text + "*")
-        elif random.random() < 0.35 * distortion_level:
-            distorted_list.append("_" + text + "_")
-        elif random.random() < 0.6 * distortion_level:
-            distorted_list.append("||" + text + "||")
-        else:
-            distorted_list.append(text)
-    return distorted_list
+# def distort_text_simple(text_list):
+#     distorted_list = []
+#     for i, text in enumerate(text_list):
+#         distortion_level = i + 1
+#         # Apply distortion based on probability and distortion level
+#         if random.random() < 0.1 * distortion_level:
+#             distorted_list.append("*" + text + "*")
+#         elif random.random() < 0.35 * distortion_level:
+#             distorted_list.append("_" + text + "_")
+#         elif random.random() < 0.6 * distortion_level:
+#             distorted_list.append("||" + text + "||")
+#         else:
+#             distorted_list.append(text)
+#     return distorted_list
 
 
 # Audio Utils
@@ -280,46 +280,46 @@ def generate_image(prompt):
     return Image.open("generated_image.png")
 
 
-def wrap_text(text, font, max_width):
-    lines = []
-    words = text.split()
-    current_line = words[0]
+# def wrap_text(text, font, max_width):
+#     lines = []
+#     words = text.split()
+#     current_line = words[0]
 
-    for word in words[1:]:
-        if font.getsize(current_line + " " + word)[0] <= max_width:
-            current_line += " " + word
-        else:
-            lines.append(current_line)
-            current_line = word
+#     for word in words[1:]:
+#         if font.getsize(current_line + " " + word)[0] <= max_width:
+#             current_line += " " + word
+#         else:
+#             lines.append(current_line)
+#             current_line = word
 
-    lines.append(current_line)
-    return lines
+#     lines.append(current_line)
+#     return lines
 
 
-def overlay_text(image, text):
-    """
-    Overlay text on images
-    """
-    draw = ImageDraw.Draw(image)
-    font_size = 25
-    font = ImageFont.truetype(FONT_PATH_BUBBLE, font_size)
+# def overlay_text(image, text):
+#     """
+#     Overlay text on images
+#     """
+#     draw = ImageDraw.Draw(image)
+#     font_size = 25
+#     font = ImageFont.truetype(FONT_PATH_BUBBLE, font_size)
 
-    max_width = image.size[0] - 20
-    wrapped_text = wrap_text(text, font, max_width)
+#     max_width = image.size[0] - 20
+#     wrapped_text = wrap_text(text, font, max_width)
 
-    text_height = font_size + len(wrapped_text)
-    image_width, image_height = image.size
-    y_offset = (image_height - text_height) // 5
+#     text_height = font_size + len(wrapped_text)
+#     image_width, image_height = image.size
+#     y_offset = (image_height - text_height) // 5
 
-    for line in wrapped_text:
-        text_width, _ = draw.textsize(line, font)
-        position = ((image_width - text_width) // 2, y_offset)
-        draw.text(
-            position, line, (0, 0, 0), font, stroke_width=2, stroke_fill=(255, 255, 255)
-        )
-        y_offset += font_size
+#     for line in wrapped_text:
+#         text_width, _ = draw.textsize(line, font)
+#         position = ((image_width - text_width) // 2, y_offset)
+#         draw.text(
+#             position, line, (0, 0, 0), font, stroke_width=2, stroke_fill=(255, 255, 255)
+#         )
+#         y_offset += font_size
 
-    return image
+#     return image
 
 
 # Generate Governance Stack Images
