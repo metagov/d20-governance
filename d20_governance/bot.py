@@ -1,3 +1,4 @@
+import argparse
 from code import interact
 import discord
 import os
@@ -176,12 +177,22 @@ class QuestBuilderView(discord.ui.View):
 
 
 class JoinLeaveView(discord.ui.View):
-    def __init__(self, ctx: commands.Context, quest_mode, num_players, img_flag):
+    def __init__(
+        self,
+        ctx: commands.Context,
+        quest_mode,
+        num_players,
+        img_flag,
+        audio_flag,
+        timeout_flag,
+    ):
         super().__init__(timeout=None)
         self.ctx = ctx
         self.quest_mode = quest_mode
         self.num_players = num_players
         self.img_flag = img_flag
+        self.audio_flag = audio_flag
+        self.timeout_flag = timeout_flag
         self.joined_players: Set[str] = set()
 
     @discord.ui.button(
@@ -231,7 +242,9 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx, self.img_flag)
+                await start_quest(
+                    self.ctx, self.img_flag, self.audio_flag, self.timeout_flag
+                )
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -307,15 +320,26 @@ async def on_reaction_add(reaction, user):
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx):
+async def propose_quest(ctx, *args):
     """
     Propose a game of d20 governance.
     """
+    # Parse argument flags
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-a", "--audio", action="store_true", help="Generate TTS audio")
+    parser.add_argument(
+        "-t", "--timeout", type=int, help="Set quest timeout in seconds"
+    )
+    args = parser.parse_args(args)
+    audio_flag = args.audio
+    timeout_flag = args.timeout
+
+    # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
     view = QuestBuilderView()
     selected_values = await view.wait_for_input(ctx)
     if selected_values is None:
-        await ctx.author.send("The quest proposal timed out.", ephemeral=True)
+        await ctx.send("The quest proposal timed out.", ephemeral=True)
         return
     quest_mode, num_players, img_flag = selected_values
     if not 1 <= num_players <= 20:
@@ -324,7 +348,9 @@ async def propose_quest(ctx):
     global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
     QUEST_MODE = quest_mode
     QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = load_quest_mode(quest_mode)
-    join_leave_view = JoinLeaveView(ctx, quest_mode, num_players, img_flag)
+    join_leave_view = JoinLeaveView(
+        ctx, quest_mode, num_players, img_flag, audio_flag, timeout_flag
+    )
     embed = discord.Embed(
         title=f"{ctx.author.display_name} Has Proposed {quest_mode}: Join or Leave"
     )
@@ -397,18 +423,21 @@ def get_llm_chain():
     return llm_chain
 
 
-async def start_quest(ctx, img_flag):
+async def start_quest(ctx, img_flag, audio_flag, timeout_flag):
     """
     Start a quest and create a new channel
     """
     global QUEST_INTRO
     text = QUEST_INTRO
-    # print("Generating audio file...")
-    # loop = asyncio.get_event_loop()
-    # audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
-    # future = loop.run_in_executor(None, tts, text, audio_filename)
-    # await future
-    # print("Generated audio file...")
+    if audio_flag:
+        print("Generating audio file...")
+        loop = asyncio.get_event_loop()
+        audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
+        future = loop.run_in_executor(None, tts, text, audio_filename)
+        await future
+        print("Generated audio file...")
+    else:
+        pass
 
     if img_flag == "True":
         # Generate intro image and send to temporary channel
@@ -478,13 +507,13 @@ async def start_quest(ctx, img_flag):
                 )
 
         print(f"Processing stage {stage[QUEST_STAGE_NAME]}")
-        result = await process_stage(ctx, stage, img_flag)
+        result = await process_stage(ctx, stage, img_flag, audio_flag, timeout_flag)
         if not result:
             await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
             break
 
 
-async def process_stage(ctx, stage, img_flag):
+async def process_stage(ctx, stage, img_flag, audio_flag, timeout_flag):
     """
     Run stages from yaml config
     """
@@ -493,10 +522,14 @@ async def process_stage(ctx, stage, img_flag):
     message = stage[QUEST_STAGE_MESSAGE]
     stage_name = stage[QUEST_STAGE_NAME]
     timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
-    loop = asyncio.get_event_loop()
-    # audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
-    # future = loop.run_in_executor(None, tts, message, audio_filename)
-    # await future
+
+    if audio_flag:
+        loop = asyncio.get_event_loop()
+        audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
+        future = loop.run_in_executor(None, tts, message, audio_filename)
+        await future
+    else:
+        pass
 
     if img_flag == "True":
         # Generate intro image and send to temporary channel
@@ -510,11 +543,14 @@ async def process_stage(ctx, stage, img_flag):
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
 
-    # Post audio file
-    # with open(audio_filename, "rb") as f:
-    #     audio = discord.File(f)
-    #     await TEMP_CHANNEL.send(file=audio)
-    # os.remove(audio_filename)
+    if audio_flag:
+        # Post audio file
+        with open(audio_filename, "rb") as f:
+            audio = discord.File(f)
+            await TEMP_CHANNEL.send(file=audio)
+        os.remove(audio_filename)
+    else:
+        pass
 
     # Stream message
     await stream_message(TEMP_CHANNEL, message)
