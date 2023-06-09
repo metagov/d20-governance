@@ -432,6 +432,7 @@ async def countdown(ctx, countdown_seconds):
         remaining_seconds -= sleep_interval
         await asyncio.sleep(sleep_interval)
 
+
 @bot.command()
 async def silence(ctx):
     await ctx.send("silence")
@@ -442,6 +443,7 @@ async def silence(ctx):
 async def post_results(ctx):
     await ctx.send("post_results")
     pass
+
 
 async def end(ctx):
     """
