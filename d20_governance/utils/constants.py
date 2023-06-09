@@ -51,7 +51,7 @@ QUEST_WHIMSY = "d20_governance/d20_configs/quest_configs/whimsy.yaml"
 QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
 QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
 QUEST_MODE_LLM = "llm"
-QUEST_CUSTOM = "d20_governance/d20_configs/quest_configs/custom.yaml"
+QUEST_DEFAULT = "d20_governance/d20_configs/quest_configs/custom.yaml"
 
 # MINIGAME CONFIGS
 MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
@@ -81,11 +81,11 @@ MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
 # Init
-QUEST_DATA = None
-QUEST_GAME = None
-QUEST_TITLE = None
-QUEST_INTRO = None
-QUEST_STAGES = None
+QUEST_DATA = read_config(QUEST_DEFAULT)
+QUEST_GAME = QUEST_DATA.get("game")
+QUEST_TITLE = QUEST_GAME.get("title")
+QUEST_INTRO = QUEST_GAME.get("intro")
+QUEST_STAGES = QUEST_GAME.get("stages")
 QUEST_STAGE_MESSAGE = "message"
 QUEST_STAGE_ACTION = "action"
 QUEST_STAGE_TIMEOUT = "timeout_mins"

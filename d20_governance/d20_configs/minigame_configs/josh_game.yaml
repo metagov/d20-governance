@@ -5,7 +5,7 @@ game:
 
   stages:
       - stage: "Writes Speechs"
-        message: "All Joshes have 3 minutes to submit their speech. Use `speech [message]`."
+        message: "All Joshes have 3 minutes to submit their speech. Use `/speech [message]`."
         action: "countdown 120"
           # /speech is available during this time
           # /speech can be resubmitted, but as an overwrite
@@ -35,7 +35,7 @@ game:
       
       - stage: "Countdown"
         message: "You have 3 minutes to deliberate."
-        action: "countdown 240"
+        action: "countdown 180"
         timeout_mins: 0.0
 
       - stage: "Voting"
@@ -95,6 +95,6 @@ game:
         timeout_mins: 0.5
       
       - stage: "End"
-        message: "And just like that, we return to the agora, a new Josh identified amongst the many."
+        message: "And just like that, we return to the agora, a new Josh perhaps identified amongst the many."
         action: "dissolve"
         timeout_mins: 0

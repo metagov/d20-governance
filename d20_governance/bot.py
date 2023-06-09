@@ -37,6 +37,144 @@ logging.basicConfig(
 print("Logging to logs/bot.log")
 
 
+class QuestBuilder(discord.ui.Select):
+    def __init__(self, placeholder, options):
+        super().__init__(
+            placeholder=placeholder,
+            options=options,
+            max_values=1,
+            min_values=1,
+        )
+        self.selected_value = None
+
+    async def callback(self, interaction: discord.Interaction):
+        self.selected_value = self.values[0]
+        await interaction.response.defer()
+        if all(
+            dropdown.selected_value is not None
+            for dropdown in [self.view.select1, self.view.select2, self.view.select3]
+        ):
+            self.view.enable_button()  # FIXME: Doesn't trigger function
+
+
+class QuestBuilderView(discord.ui.View):
+    def __init__(self, *, timeout=120):
+        super().__init__(timeout=timeout)
+        self.select1 = QuestBuilder(
+            placeholder="Select Quest",
+            options=[
+                discord.SelectOption(
+                    label="QUEST: WHIMSY",
+                    emoji="🤪",
+                    description="A whimsical governance game",
+                    value=QUEST_WHIMSY,
+                ),
+                discord.SelectOption(
+                    label="QUEST: MASCOT",
+                    emoji="🐻‍❄️",
+                    description="Propose a new community mascot",
+                    value=QUEST_MASCOT,
+                ),
+                discord.SelectOption(
+                    label="QUEST: COLONY",
+                    emoji="🛸",
+                    description="Governance under space colony",
+                    value=QUEST_COLONY,
+                ),
+                discord.SelectOption(
+                    label="QUEST: ???",
+                    emoji="🤔",
+                    description="A random game of d20 governance",
+                    value=QUEST_MODE_LLM,
+                ),
+                discord.SelectOption(
+                    label="MINIGAME: JOSH GAME",
+                    emoji="🙅",
+                    description="Decide the real Josh",
+                    value=MINIGAME_JOSH,
+                ),
+            ],
+        )
+        self.select2 = QuestBuilder(
+            placeholder="Select number of players",
+            options=[
+                discord.SelectOption(label=str(n), value=str(n)) for n in range(1, 20)
+            ],
+        )
+        self.select3 = QuestBuilder(
+            placeholder="Generate images?",
+            options=[
+                discord.SelectOption(
+                    label="Yes",
+                    emoji="🖼️",
+                    description="Turn image generation on",
+                    value="True",
+                ),
+                discord.SelectOption(
+                    label="No",
+                    emoji="🔳",
+                    description="Turn image generation off",
+                    value="False",
+                ),
+            ],
+        )
+        self.add_item(self.select1)
+        self.add_item(self.select2)
+        self.add_item(self.select3)
+
+        self.button = discord.ui.Button(
+            label="Propose Quest",
+            style=discord.ButtonStyle.green,
+            disabled=False,  # FIXME: should be set to True and enabled through enable_button
+            emoji="✅",
+        )
+        self.add_item(self.button)
+
+        self.button.callback = self.on_button_click
+
+    def get_results(self):
+        return (
+            self.select1.selected_value,
+            self.select2.selected_value,
+            self.select3.selected_value,
+        )
+
+    def enable_button(self):
+        self.button.disabled = False
+
+    async def on_button_click(self, interaction: discord.Interaction):
+        self.stop()
+        await interaction.response.defer()
+
+    async def wait_for_input(self, ctx):
+        self.ctx = ctx
+        await ctx.send("build your quest proposal:", view=self)
+
+        try:
+            await self.wait()
+        except asyncio.TimeoutError:
+            self.stop()
+        else:
+            return (
+                self.select1.selected_value,
+                int(self.select2.selected_value),
+                self.select3.selected_value,
+            )
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.channel != self.ctx.channel:
+            await interaction.response.send_message(
+                "this interaction is not in the expected channel.", ephemeral=True
+            )
+            return False
+        elif interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                "Only the original author can interact with this view.", ephemeral=True
+            )
+            return False
+        return True
+
+
 class JoinLeaveView(discord.ui.View):
     def __init__(self, ctx: commands.Context, quest_mode, num_players, img_flag):
         super().__init__(timeout=None)
@@ -166,145 +304,6 @@ async def on_reaction_add(reaction, user):
             bot.voters.add(user.id)
 
 
-class QuestBuilder(discord.ui.Select):
-    def __init__(self, placeholder, options):
-        super().__init__(
-            placeholder=placeholder,
-            options=options,
-            max_values=1,
-            min_values=1,
-        )
-        self.selected_value = None
-
-    async def callback(self, interaction: discord.Interaction):
-        self.selected_value = self.values[0]
-        await interaction.response.defer()
-        if all(
-            dropdown.selected_value is not None
-            for dropdown in [self, self.view.select2, self.view.select3]
-        ):
-            self.view.enable_button()
-            print("All selects not None")
-
-
-class QuestBuilderView(discord.ui.View):
-    def __init__(self, *, timeout=120):
-        super().__init__(timeout=timeout)
-        self.select1 = QuestBuilder(
-            placeholder="Select Quest",
-            options=[
-                discord.SelectOption(
-                    label="QUEST: WHIMSY",
-                    emoji="🤪",
-                    description="A whimsical governance game",
-                    value=QUEST_WHIMSY,
-                ),
-                discord.SelectOption(
-                    label="QUEST: MASCOT",
-                    emoji="🐻‍❄️",
-                    description="Propose a new community mascot",
-                    value=QUEST_MASCOT,
-                ),
-                discord.SelectOption(
-                    label="QUEST: COLONY",
-                    emoji="🛸",
-                    description="Governance under space colony",
-                    value=QUEST_COLONY,
-                ),
-                discord.SelectOption(
-                    label="QUEST: ???",
-                    emoji="🤔",
-                    description="A random game of d20 governance",
-                    value=QUEST_MODE_LLM,
-                ),
-                discord.SelectOption(
-                    label="MINIGAME: JOSH GAME",
-                    emoji="🙅",
-                    description="Decide the real Josh",
-                    value=MINIGAME_JOSH,
-                ),
-            ],
-        )
-        self.select2 = QuestBuilder(
-            placeholder="Select number of players",
-            options=[
-                discord.SelectOption(label=str(n), value=str(n)) for n in range(1, 20)
-            ],
-        )
-        self.select3 = QuestBuilder(
-            placeholder="Generate images?",
-            options=[
-                discord.SelectOption(
-                    label="Yes",
-                    emoji="🖼️",
-                    description="Turn image generation on",
-                    value="True",
-                ),
-                discord.SelectOption(
-                    label="No",
-                    emoji="🔳",
-                    description="Turn image generation off",
-                    value="False",
-                ),
-            ],
-        )
-        self.add_item(self.select1)
-        self.add_item(self.select2)
-        self.add_item(self.select3)
-
-        self.button = discord.ui.Button(
-            label="Propose Quest",
-            style=discord.ButtonStyle.green,
-            disabled=False,  # disable the button initially
-            emoji="✅",
-        )
-        self.add_item(self.button)
-
-        self.button.callback = self.on_button_click
-
-    def get_results(self):
-        return (
-            self.select1.selected_value,
-            self.select2.selected_value,
-            self.select3.selected_value,
-        )
-
-    def enable_button(self):
-        self.button.disabled = False
-
-    async def on_button_click(self, interaction: discord.Interaction):
-        self.stop()
-        await interaction.response.defer()
-
-    async def wait_for_input(self, ctx):
-        self.ctx = ctx
-        await ctx.send("build your quest proposal:", view=self)
-
-        try:
-            await self.wait()
-        except asyncio.TimeoutError:
-            self.stop()
-        else:
-            return (
-                self.select1.selected_value,
-                int(self.select2.selected_value),
-                self.select3.selected_value,
-            )
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.channel != self.ctx.channel:
-            await interaction.response.send_message(
-                "this interaction is not in the expected channel.", ephemeral=True
-            )
-            return False
-        elif interaction.user != self.ctx.author:
-            await interaction.response.send_message(
-                "Only the original author can interact with this view.", ephemeral=True
-            )
-            return False
-        return True
-
-
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
@@ -312,7 +311,7 @@ async def propose_quest(ctx):
     """
     Propose a game of d20 governance.
     """
-    print("Waiting for proposal...")
+    print("Waiting for proposal to be built...")
     view = QuestBuilderView()
     selected_values = await view.wait_for_input(ctx)
     if selected_values is None:
@@ -322,7 +321,6 @@ async def propose_quest(ctx):
     if not 1 <= num_players <= 20:
         await ctx.send("The game requires at least 1 and at most 20 players")
         return
-    print(f"The players selected {quest_mode}, {num_players}, and {img_flag}.")
     global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
     QUEST_MODE = quest_mode
     QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = load_quest_mode(quest_mode)
@@ -412,14 +410,12 @@ async def start_quest(ctx, img_flag):
     # await future
     # print("Generated audio file...")
 
-    if img_flag:
+    if img_flag == "True":
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
-        print("generated image")
     else:
         # Create a white background image canvas instead of generating an image
         image = Image.new("RGB", (512, 512), (255, 255, 255))
-        print("did not generate image")
 
     llm_chain = None
     if QUEST_MODE == QUEST_MODE_LLM:
@@ -502,7 +498,7 @@ async def process_stage(ctx, stage, img_flag):
     # future = loop.run_in_executor(None, tts, message, audio_filename)
     # await future
 
-    if img_flag:
+    if img_flag == "True":
         # Generate intro image and send to temporary channel
         image = generate_image(message)
     else:
@@ -538,7 +534,7 @@ async def process_stage(ctx, stage, img_flag):
 @bot.command()
 async def countdown(ctx, countdown_seconds):
     remaining_seconds = int(countdown_seconds)
-    sleep_interval = remaining_seconds / 3
+    sleep_interval = remaining_seconds / 10
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
         remaining_minutes = round(remaining_minutes, 2)
