@@ -10,10 +10,6 @@ game:
     piecing together meaning, navigating conversations, and making collective decisions
     in this delightful chaos."
 
-  meta_commands:
-  - /info
-  - /help
-
   stages:
       - stage: "obscure-patterns"
         message: "The Obscurity:\n\n

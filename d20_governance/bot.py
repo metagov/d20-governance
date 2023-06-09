@@ -1,3 +1,4 @@
+from code import interact
 import discord
 import os
 import asyncio
@@ -7,6 +8,8 @@ from discord.ext import commands
 from typing import Set
 from ruamel.yaml import YAML
 from collections import OrderedDict
+
+from sqlalchemy import Select
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
@@ -35,11 +38,12 @@ print("Logging to logs/bot.log")
 
 
 class JoinLeaveView(discord.ui.View):
-    def __init__(self, ctx: commands.Context, num_players: int, gen_img: str):
+    def __init__(self, ctx: commands.Context, quest_mode, num_players, img_flag):
         super().__init__(timeout=None)
         self.ctx = ctx
+        self.quest_mode = quest_mode
         self.num_players = num_players
-        self.gen_img = gen_img
+        self.img_flag = img_flag
         self.joined_players: Set[str] = set()
 
     @discord.ui.button(
@@ -74,7 +78,7 @@ class JoinLeaveView(discord.ui.View):
             needed_players = self.num_players - len(self.joined_players)
 
             embed = discord.Embed(
-                title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
+                title=f"{self.ctx.author.display_name} Has Proposed The {self.quest_mode}: Join or Leave",
                 description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
             )  # Note: Not possible to mention author in embeds
             await interaction.message.edit(embed=embed, view=self)
@@ -89,7 +93,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx, self.gen_img == "gen_img")
+                await start_quest(self.ctx, self.img_flag)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -162,46 +166,172 @@ async def on_reaction_add(reaction, user):
             bot.voters.add(user.id)
 
 
+class QuestBuilder(discord.ui.Select):
+    def __init__(self, placeholder, options):
+        super().__init__(
+            placeholder=placeholder,
+            options=options,
+            max_values=1,
+            min_values=1,
+        )
+        self.selected_value = None
+
+    async def callback(self, interaction: discord.Interaction):
+        self.selected_value = self.values[0]
+        await interaction.response.defer()
+        if all(
+            dropdown.selected_value is not None
+            for dropdown in [self, self.view.select2, self.view.select3]
+        ):
+            self.view.enable_button()
+            print("All selects not None")
+
+
+class QuestBuilderView(discord.ui.View):
+    def __init__(self, *, timeout=120):
+        super().__init__(timeout=timeout)
+        self.select1 = QuestBuilder(
+            placeholder="Select Quest",
+            options=[
+                discord.SelectOption(
+                    label="QUEST: WHIMSY",
+                    emoji="🤪",
+                    description="A whimsical governance game",
+                    value=QUEST_WHIMSY,
+                ),
+                discord.SelectOption(
+                    label="QUEST: MASCOT",
+                    emoji="🐻‍❄️",
+                    description="Propose a new community mascot",
+                    value=QUEST_MASCOT,
+                ),
+                discord.SelectOption(
+                    label="QUEST: COLONY",
+                    emoji="🛸",
+                    description="Governance under space colony",
+                    value=QUEST_COLONY,
+                ),
+                discord.SelectOption(
+                    label="QUEST: ???",
+                    emoji="🤔",
+                    description="A random game of d20 governance",
+                    value=QUEST_MODE_LLM,
+                ),
+                discord.SelectOption(
+                    label="MINIGAME: JOSH GAME",
+                    emoji="🙅",
+                    description="Decide the real Josh",
+                    value=MINIGAME_JOSH,
+                ),
+            ],
+        )
+        self.select2 = QuestBuilder(
+            placeholder="Select number of players",
+            options=[
+                discord.SelectOption(label=str(n), value=str(n)) for n in range(1, 20)
+            ],
+        )
+        self.select3 = QuestBuilder(
+            placeholder="Generate images?",
+            options=[
+                discord.SelectOption(
+                    label="Yes",
+                    emoji="🖼️",
+                    description="Turn image generation on",
+                    value="True",
+                ),
+                discord.SelectOption(
+                    label="No",
+                    emoji="🔳",
+                    description="Turn image generation off",
+                    value="False",
+                ),
+            ],
+        )
+        self.add_item(self.select1)
+        self.add_item(self.select2)
+        self.add_item(self.select3)
+
+        self.button = discord.ui.Button(
+            label="Propose Quest",
+            style=discord.ButtonStyle.green,
+            disabled=False,  # disable the button initially
+            emoji="✅",
+        )
+        self.add_item(self.button)
+
+        self.button.callback = self.on_button_click
+
+    def get_results(self):
+        return (
+            self.select1.selected_value,
+            self.select2.selected_value,
+            self.select3.selected_value,
+        )
+
+    def enable_button(self):
+        self.button.disabled = False
+
+    async def on_button_click(self, interaction: discord.Interaction):
+        self.stop()
+        await interaction.response.defer()
+
+    async def wait_for_input(self, ctx):
+        self.ctx = ctx
+        await ctx.send("build your quest proposal:", view=self)
+
+        try:
+            await self.wait()
+        except asyncio.TimeoutError:
+            self.stop()
+        else:
+            return (
+                self.select1.selected_value,
+                int(self.select2.selected_value),
+                self.select3.selected_value,
+            )
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.channel != self.ctx.channel:
+            await interaction.response.send_message(
+                "this interaction is not in the expected channel.", ephemeral=True
+            )
+            return False
+        elif interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                "Only the original author can interact with this view.", ephemeral=True
+            )
+            return False
+        return True
+
+
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(
-    ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None
-):
+async def propose_quest(ctx):
     """
-    Command to propose a game of d20 governance with the specified number of players.
-
-    Parameters:
-      num_players (int): The number of players required to start the game. Must be at least 2.
-
-    Example:
-      /propose_quest 4
+    Propose a game of d20 governance.
     """
-    print("Starting...")
-    if quest_mode != QUEST_MODE_YAML and quest_mode != QUEST_MODE_LLM:
-        raise ValueError("Invalid quest mode")
-    global QUEST_MODE
+    print("Waiting for proposal...")
+    view = QuestBuilderView()
+    selected_values = await view.wait_for_input(ctx)
+    if selected_values is None:
+        await ctx.author.send("The quest proposal timed out.", ephemeral=True)
+        return
+    quest_mode, num_players, img_flag = selected_values
+    if not 1 <= num_players <= 20:
+        await ctx.send("The game requires at least 1 and at most 20 players")
+        return
+    print(f"The players selected {quest_mode}, {num_players}, and {img_flag}.")
+    global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
     QUEST_MODE = quest_mode
-    if num_players is None:
-        await ctx.send(
-            "Specify the number of players needed to start the game. Type `/ help start_game` for more information."
-        )
-        return
-    if num_players < 1:  # FIXME: Change back to 2 after testing with others
-        await ctx.send("The game requires at least 2 players to start")
-        return
-    if num_players > 20:
-        await ctx.send("The maximum number of players that can play at once is 20")
-        return
-    else:
-        print("Waiting...")
-        view = JoinLeaveView(ctx, num_players, gen_img)
-
-        embed = discord.Embed(
-            title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave"
-        )
-
-        await ctx.send(embed=embed, view=view)
+    QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = load_quest_mode(quest_mode)
+    join_leave_view = JoinLeaveView(ctx, quest_mode, num_players, img_flag)
+    embed = discord.Embed(
+        title=f"{ctx.author.display_name} Has Proposed {quest_mode}: Join or Leave"
+    )
+    await ctx.send(embed=embed, view=join_leave_view)
+    print("Waiting for players...")
 
 
 async def setup(ctx, joined_players):
@@ -269,25 +399,27 @@ def get_llm_chain():
     return llm_chain
 
 
-async def start_quest(ctx, gen_img: bool):
+async def start_quest(ctx, img_flag):
     """
     Start a quest and create a new channel
     """
     global QUEST_INTRO
     text = QUEST_INTRO
-    loop = asyncio.get_event_loop()
+    # print("Generating audio file...")
+    # loop = asyncio.get_event_loop()
     # audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
-    print("Generating audio file...")
     # future = loop.run_in_executor(None, tts, text, audio_filename)
     # await future
     # print("Generated audio file...")
 
-    if gen_img:
+    if img_flag:
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
+        print("generated image")
     else:
         # Create a white background image canvas instead of generating an image
         image = Image.new("RGB", (512, 512), (255, 255, 255))
+        print("did not generate image")
 
     llm_chain = None
     if QUEST_MODE == QUEST_MODE_LLM:
@@ -321,21 +453,6 @@ async def start_quest(ctx, gen_img: bool):
     # Stream message
     await stream_message(TEMP_CHANNEL, QUEST_INTRO)
 
-    # Pin the intro message img
-    await intro_image_message.pin()
-
-    # Send commands message to temporary channel
-    available_commands = "\n".join([f"`{command}`" for command in QUEST_COMMANDS])
-    embed = discord.Embed(
-        title="Available Commands",
-        description=available_commands,
-        color=discord.Color.blue(),
-    )
-    commands_message = await TEMP_CHANNEL.send(embed=embed)
-
-    # Pin the available commands message
-    await commands_message.pin()
-
     for stage in QUEST_STAGES:
         if QUEST_MODE == QUEST_MODE_LLM:
             MAX_ATTEMPTS = 5
@@ -365,13 +482,13 @@ async def start_quest(ctx, gen_img: bool):
                 )
 
         print(f"Processing stage {stage[QUEST_STAGE_NAME]}")
-        result = await process_stage(ctx, stage, gen_img)
+        result = await process_stage(ctx, stage, img_flag)
         if not result:
             await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
             break
 
 
-async def process_stage(ctx, stage, gen_img):
+async def process_stage(ctx, stage, img_flag):
     """
     Run stages from yaml config
     """
@@ -385,7 +502,7 @@ async def process_stage(ctx, stage, gen_img):
     # future = loop.run_in_executor(None, tts, message, audio_filename)
     # await future
 
-    if gen_img:
+    if img_flag:
         # Generate intro image and send to temporary channel
         image = generate_image(message)
     else:

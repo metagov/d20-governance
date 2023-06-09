@@ -47,12 +47,14 @@ LOG_FILE_NAME = f"{LOGGING_PATH}/bot.log"
 
 # CONFIG PATHS
 # QUEST CONFIGS
-QUEST_CONFIG_PATH = "d20_governance/quest_config.yaml"
+QUEST_WHIMSY = "d20_governance/d20_configs/quest_configs/whimsy.yaml"
+QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
+QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
+QUEST_MODE_LLM = "llm"
+QUEST_CUSTOM = "d20_governance/d20_configs/quest_configs/custom.yaml"
 
 # MINIGAME CONFIGS
-JOSH_GAME_CONFIG_PATH = (
-    "d20_governance/d20_configs/minigame_configs/josh_game_config.yaml"
-)
+MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
 
 # GOVERNANCE CONFIGS
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
@@ -79,33 +81,47 @@ MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
 # Init
-QUEST_MODE = None
+QUEST_DATA = None
+QUEST_GAME = None
+QUEST_TITLE = None
+QUEST_INTRO = None
+QUEST_STAGES = None
+QUEST_STAGE_MESSAGE = "message"
+QUEST_STAGE_ACTION = "action"
+QUEST_STAGE_TIMEOUT = "timeout_mins"
+QUEST_APPLY_OUTCOME = "apply_outcome"
+QUEST_STAGE_NAME = "stage"
 OBSCURITY = False
 ELOQUENCE = False
 RITUAL = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 
-# Set Quest Config Variables
-QUEST_DATA = read_config(QUEST_CONFIG_PATH)
-QUEST_GAME = QUEST_DATA["game"]
-QUEST_TITLE = QUEST_GAME["title"]
-QUEST_INTRO = QUEST_GAME["intro"]
-QUEST_COMMANDS = QUEST_GAME["meta_commands"]
-QUEST_STAGES = QUEST_GAME["stages"]
-QUEST_STAGE_MESSAGE = "message"
-QUEST_STAGE_ACTION = "action"
-QUEST_STAGE_TIMEOUT = "timeout_mins"
-QUEST_APPLY_OUTCOME = "apply_outcome"
-QUEST_STAGE_NAME = "stage"
+
+# Define Quest Config Variables based on selected quest mode
+def load_quest_mode(quest_mode):
+    global QUEST_DATA, QUEST_GAME, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
+    QUEST_DATA = read_config(quest_mode)
+    QUEST_GAME = QUEST_DATA.get("game")
+    QUEST_TITLE = QUEST_GAME.get("title")
+    QUEST_INTRO = QUEST_GAME.get("intro")
+    QUEST_STAGES = QUEST_GAME.get("stages")
+    return QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
+
 
 # Stores the number of messages sent by each user
 user_message_count = {}
 
 # Maps player name to nickname
 players_to_nicknames = {}
-nicknames = ["Jigsaw Joshy", "Josh-a-mania", "Jovial Joshington", "Jalapeño Josh", "Jitterbug Joshie", "Jamboree Josh", "Jumping Jack Josh", "Just Joking Josh"]
+nicknames = [
+    "Jigsaw Joshy",
+    "Josh-a-mania",
+    "Jovial Joshington",
+    "Jalapeño Josh",
+    "Jitterbug Joshie",
+    "Jamboree Josh",
+    "Jumping Jack Josh",
+    "Just Joking Josh",
+]
 nicknames_to_speeches = {}
-
-QUEST_MODE_YAML = "yaml"
-QUEST_MODE_LLM = "llm"
