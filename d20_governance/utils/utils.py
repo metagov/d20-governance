@@ -1,5 +1,6 @@
 from click import command
 import discord
+from discord.ext import commands
 from pytest import param
 import requests
 import random
@@ -18,6 +19,38 @@ from d20_governance.utils.constants import *
 import shlex
 from io import BytesIO
 import os
+
+
+# Decorator for access control management
+def access_control():
+    async def predicate(ctx):
+        # If condition is true, command is able to be executed
+        # Check if command matches command_name
+        if ctx.command.name == ACCESS_CONTROL_SETTINGS["command_name"]:
+            return True
+
+        # Check if the author is a bot
+        if ctx.author.bot:
+            return True
+
+        # Check if the user has an allowed role
+        for role in ctx.author.roles:
+            print(role)
+            if role.name in ACCESS_CONTROL_SETTINGS["allowed_roles"]:
+                return True
+
+        # Check if the user should be excluded based on role
+        for role in ctx.author.roles:
+            if role.name in ACCESS_CONTROL_SETTINGS["excluded_roles"]:
+                message = f"This command is not available with the {role.name} role"  # might be useful for josh game, use not-josh role
+
+        # If none of the above, the user doesn't have access to the command
+        # Send an error message
+        message = "Sorry, you do not have permission to run this command at this time."
+        await ctx.send(message)
+        return False
+
+    return commands.check(predicate)
 
 
 # Setup Utils
@@ -78,6 +111,8 @@ async def execute_action(bot, action_string, temp_channel, stage):
         command = bot.get_command(command_name)
         if command is None:
             continue
+
+        print(f"Executing {command}")
 
         # Get the last message object from the channel to set context
         message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)

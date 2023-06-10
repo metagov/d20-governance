@@ -6,71 +6,57 @@ game:
   stages:
       - stage: "Writes Speechs"
         message: "All Joshes have 3 minutes to submit their speech. Use `/speech [message]`."
-        action: "countdown"
-          # /speech is available during this time
+        action: ["countdown"]
           # would be nice to move to the next section if all speeches are submitted before this time        
         timeout_secs: 120
 
       - stage: "Submission Period"
         message: "A silence sweeps over Joshs. You have 1 minute to submit any remaining speeches or forever hold your peace."
-        action: ["silence", "countdown"]
-          # /speech is available during this time
+        action: ["change_cmd_acl allowed_roles none speech", "is_quiet", "countdown", "change_cmd_acl allowed_roles @everyone none"]
         timeout_secs: 60
       
       - stage: "Deliberation"
         message: "A clamor of claims erupts. It is time to decide who amongst us is the real Josh. discuss and build consensus.\n\n
         If consensus is not reached only two will move forward. You have 3 minutes to deliberate"
           # what about ties? 
-        action: ["post_speeches", "countdown"]
+        action: ["is_not_quiet", "post_speeches", "countdown"]
         timeout_secs: 180
       
       - stage: "Voting"
         message: "The Joshes have spoken. It is time to vote for the real Josh!.\n\n
         You have 30 seconds to vote."
-        action: ['vote_speeches "Who is the real Josh?"', "countdown"]
-          # add /silence function here
+        action: ["is_quiet", 'vote_speeches "Who is the real Josh?"', "countdown"]
         timeout_secs: 30
 
       - stage: "Failed Consensus Obscurity"
         message: "The real Josh is still obscured from us. We need another round of speeches, deliberation, and voting to uncover the real Josh.\n\n
-        Meanwhile, a blanket of obscurity bests our Joshs."
-        action: "obscurity"
-          # /speech is available during this time
+        Meanwhile, a blanket of obscurity bests our Joshs.\n\n
+        The reamining candidates have 3 minutes to write and submit their speeches."
+        action: ["is_not_quiet", "clear_speeches", "obscurity", "countdown"]
           # /speech is only available to reamining candidates 
-        timeout_secs: 0
-        # TODO Add a condition if no single josh voted on move to this stage, else move to end
-
-      - stage: "Write Speechs [Obscurity]"
-        message: "The reamining candidates have 3 minutes to write and submit their speeches.\n\n
-        Meanwhile, a blanket of obscurity bests our Joshs."
-        action: ["clear_speeches", "countdown"]
-          # /speech is available during this time
-          # /speech is only available to reamining candidates 
+          # maybe a /restrict_cmd function that returns the list of eligible users from a list?
         timeout_secs: 120
 
       - stage: "Submission Period [Obscurity]"
         message: "A silence sweeps over Joshs. You have 1 minute to submit any remaining speeches."
-        action: ["silence", "countdown"]
-          # add /silence
-          # /speech is available during this time
+        action: ["change_cmd_acl allowed_roles none speech", "is_quiet", "countdown", "change_cmd_acl allowed_roles @everyone none"]
         timeout_secs: 60
-          # can this be a float? 30 seconds?
 
       - stage: "Deliberation [Obscurity]"
         message: "It's time to deliberate once more. Beware of impersonators trying to throw us off course.\n\n
-        Work towards building consensus. This is necessary for the final decision. You have 3 minute to deliberate"
-        action: ["post_speeches", "countdown"]
+        Work towards building consensus. This is necessary for the final decision.\n\n
+        You have 3 minute to deliberate"
+        action: ["is_not_quiet", "post_speeches", "countdown"]
         timeout_secs: 180
 
       - stage: "Vote [Obscurity]"
-        message: "It's time to vote! Let's build consensus and crown the real Josh. The fate of Josh rests in your collective hands.\n\n
+        message: "It's time to vote! A stillness sets in while we cast our votes. The fate of Josh rests in our collective hands.\n\n
         You have 30 seconds to vote."
-        action: ['vote_speeches "Who is the real Josh?"', "countdown"]
-          # add /silence
+        action: ["is_quiet", 'vote_speeches "Who is the real Josh?"', "countdown"]
           # enforce consensus
         timeout_secs: 30
       
       - stage: "End"
         message: "And just like that, we return to the agora, a new Josh perhaps identified amongst the many."
-        action: "dissolve"
+        action: ["is_not_quiet", "clear_speeches", "dissolve"]
         timeout_secs: 0

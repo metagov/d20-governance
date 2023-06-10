@@ -96,6 +96,15 @@ ELOQUENCE = False
 RITUAL = False
 TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
+IS_QUIET = False
+COMMAND_VISIBILITY = {}
+
+# Init internal access control settings
+ACCESS_CONTROL_SETTINGS = {
+    "allowed_roles": ["@everyone"],
+    "excluded_roles": [],
+    "command_name": [],
+}
 
 
 # Define Quest Config Variables based on selected quest mode

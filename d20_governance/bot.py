@@ -1,5 +1,4 @@
 import argparse
-from code import interact
 import discord
 import os
 import asyncio
@@ -19,7 +18,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
-description = """A bot for experimenting with governance"""
+description = """📦 A bot for experimenting with modular governance 📦"""
 
 intents = discord.Intents.default()
 intents.members = True
@@ -326,7 +325,7 @@ async def on_reaction_add(reaction, user):
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def embark(ctx, *args):
     """
-    Propose a game of d20 governance.
+    Embark on a d20 governance quest
     """
     # Parse argument flags
     parser = argparse.ArgumentParser()
@@ -358,7 +357,7 @@ async def embark(ctx, *args):
             quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
             if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
                 for stage in quest_mode_data["game"]["stages"]:
-                    stage["timeout_secs"] = 5
+                    stage["timeout_secs"] = 15
         QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
 
     # Create Join View
@@ -416,9 +415,10 @@ def get_llm_chain():
     action: "vote_governance <culture or decision>"
     timeout_mins: 1
 
-    For the action field, you must select either "vote_governance culture" or "vote_governance decision". For the message field, make sure you are crafting an interesting and fun story that ties in with
-    the overall game narrative so far. Also make sure that the message ties in with the action you 
-    have selected. Your output MUST be valid yaml.
+    For the action field, you must select either "vote_governance culture" or "vote_governance decision". 
+    For the message field, make sure you are crafting an interesting and fun story that ties in with the overall game narrative so far. 
+    Also make sure that the message ties in with the action you have selected. 
+    Your output MUST be valid yaml.
 
     {chat_history}
     Human: {human_input}
@@ -549,8 +549,6 @@ async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_sec
     """
     Run stages from yaml config
     """
-
-    # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
     stage_name = stage[QUEST_STAGE_NAME]
 
@@ -606,14 +604,14 @@ async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_sec
         pass  # pass if no value assigned to action key
 
     # Check for countdown
-    contains_countdown = False
+    skip_sleep = False
     for action in action_string:
         if "countdown" in action:
-            contains_countdown = True
+            skip_sleep = True
             break
 
     # If countdown action defer to countdown await
-    if contains_countdown:
+    if skip_sleep:
         pass
     else:
         await asyncio.sleep(timeout_seconds)
@@ -621,7 +619,8 @@ async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_sec
     return True
 
 
-@bot.command()
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
     print("Counting down...")
     remaining_seconds = int(timeout_seconds)
@@ -641,18 +640,6 @@ async def countdown(ctx, timeout_seconds):
 
     await message.edit(content="⏲️ Counting down finished.")
     print("Counting down finished.")
-
-
-@bot.command()
-async def silence(ctx):
-    await ctx.send("silence")
-    pass
-
-
-@bot.command()
-async def post_results(ctx):
-    await ctx.send("post_results")
-    pass
 
 
 async def end(ctx):
@@ -680,9 +667,15 @@ async def end(ctx):
 
 
 # CULTURE COMMANDS
+active_culture_modes = []
+
+
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def transparency(ctx):
+    """
+    Toggle transparency module
+    """
     embed = discord.Embed(
         title="New Culture: Transparency",
         description="The community has chosen to adopt a culture of transparency.",
@@ -694,6 +687,9 @@ async def transparency(ctx):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def secrecy(ctx):
+    """
+    Toggle secrecy module
+    """
     embed = discord.Embed(
         title="New Culture: Secrecy",
         description="The community has chosen to adopt a culture of secrecy.",
@@ -705,6 +701,9 @@ async def secrecy(ctx):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def autonomy(ctx):
+    """
+    Toggle autonomy module
+    """
     embed = discord.Embed(
         title="New Culture: Autonomy",
         description="The community has chosen to adopt a culture of autonomy.",
@@ -715,20 +714,9 @@ async def autonomy(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def secret_message(ctx):
-    """
-    Secrecy: Randomly Send Messages to DMs
-    """
-    print("Secret message command triggered.")
-    await send_msg_to_random_player(TEMP_CHANNEL)
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def obscurity(ctx, mode: str = None):
     """
-    Toggle the obscurity mode or set it. Valid options are "scramble", "replace_vowels", "pig_latin", "camel_case". If no parameter is passed,
-    obscurity will be toggled on or off.
+    Toggle obscurity module
     """
     global OBSCURITY
     global OBSCURITY_MODE
@@ -793,6 +781,9 @@ async def obscurity(ctx, mode: str = None):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def eloquence(ctx):
+    """
+    Toggle eloquence module
+    """
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
     if ELOQUENCE:
@@ -844,6 +835,9 @@ async def eloquence(ctx):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def diversity(ctx):
+    """
+    Toggle diversity module
+    """
     # Display the message count for each user
     message = "Message count by user:\n"
 
@@ -905,14 +899,23 @@ async def ritual(ctx):
         await ctx.send(embed=embed)
 
 
-# CULTURE MODES
-active_culture_modes = []
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def secret_message(ctx):
+    """
+    Secrecy: Randomly Send Messages to DMs
+    """
+    print("Secret message command triggered.")
+    await send_msg_to_random_player(TEMP_CHANNEL)
 
 
 # DECISION COMMANDS
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
 async def vote(ctx, question: str, *options: str):
+    """
+    Trigger a vote
+    """
     # Set starting decision module if necessary
     current_modules = get_current_governance_stack()["modules"]
     decision_module = next(
@@ -1001,8 +1004,8 @@ async def vote(ctx, question: str, *options: str):
     return winning_votes[0]
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
 async def vote_governance(ctx, governance_type: str):
     if governance_type is None:
         await ctx.send("Invalid governance type: {governance_type}")
@@ -1027,14 +1030,25 @@ async def vote_governance(ctx, governance_type: str):
     return winning_module_name
 
 
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def post_results(ctx):
+    await ctx.send("post_results")
+    pass
+
+
 # META GAME COMMANDS
 @bot.command()
+@access_control()
 async def info(
     ctx,
     culture_module=None,
     current_decision_module=None,
     starting_decision_module=None,
 ):
+    """
+    View meta information
+    """
     # TODO Pass starting or current decision module into the info command
     decision_module = current_decision_module or starting_decision_module
     embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
@@ -1044,7 +1058,11 @@ async def info(
 
 
 @bot.command()
-async def show_governance(ctx):
+@access_control()
+async def stack(ctx):
+    """
+    Post governance stack
+    """
     await post_governance(ctx)
 
 
@@ -1058,20 +1076,24 @@ async def quit(ctx):
     # TODO: Implement the logic for quitting the game and ending it for the user
 
 
-@bot.command()
+@bot.command(hidden=True)
 async def dissolve(ctx):
     """
     Trigger end of game
     """
-    global FILE_COUNT
-
     print("Ending game...")
     await end(ctx)
     print("Game ended.")
 
-    # Call generate_governance_stack_gif() to create a GIF from the saved snapshots
-    generate_governance_journey_gif()
 
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def post_governance_gif(ctx):
+    """
+    Call generate_governance_stack_gif() to create a GIF from the saved snapshots
+    """
+    global FILE_COUNT
+    generate_governance_journey_gif()
     await ctx.send("Here is a gif of your governance journey:")
 
     # Open the generated GIF and send it to Discord
@@ -1083,8 +1105,26 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
+# META CONDITION COMMANDS
+@bot.command(hidden=True)
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def is_quiet(ctx):
+    global IS_QUIET
+    IS_QUIET = True
+    print("Quiet mode is on.")
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def is_not_quiet(ctx):
+    global IS_QUIET
+    IS_QUIET = False
+    print("Quiet mode is off.")
+
+
 # MISC COMMANDS
 @bot.command()
+@access_control()
 async def speech(ctx, *, text: str):
     # delete the user's message
     await ctx.message.delete()
@@ -1106,7 +1146,8 @@ async def speech(ctx, *, text: str):
     await ctx.send(f"Added {nickname}'s speech to the list!")
 
 
-@bot.command()
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
 async def post_speeches(ctx):
     speeches = []
     speeches.append("The following are the nominees' speeches: \n")
@@ -1123,7 +1164,8 @@ async def post_speeches(ctx):
     await ctx.send(formatted_speeches)
 
 
-@bot.command()
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
 async def vote_speeches(ctx, question: str):
     # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
     nicknames = list(nicknames_to_speeches.keys())
@@ -1134,12 +1176,18 @@ async def vote_speeches(ctx, question: str):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def clean(ctx):
+    """
+    Clean the temporary files
+    """
     clean_temp_files()
 
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def clean_category_channels(ctx, category_name="d20-quests"):
+    """
+    Clean category channels
+    """
     guild = ctx.guild
     category = discord.utils.get(guild.categories, name=category_name)
     if category is None:
@@ -1156,6 +1204,9 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_randomize_snapshot(ctx):
+    """
+    Test making a randomized governance snapshot
+    """
     shuffle_modules()
     make_governance_snapshot()
 
@@ -1163,6 +1214,9 @@ async def test_randomize_snapshot(ctx):
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
 async def test_png_creation(ctx):
+    """
+    Test governance stack png creation
+    """
     make_governance_snapshot()
     with open("output.png", "rb") as f:
         png_file = discord.File(f, "output.svg")
@@ -1171,7 +1225,7 @@ async def test_png_creation(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_generation(ctx):
+async def test_img_generation(ctx):
     """
     Test stability image generation
     """
@@ -1206,9 +1260,48 @@ async def test_decision(ctx):
     await vote_governance(ctx, "decision")
 
 
+@bot.command(hidden=True)
+@access_control()
+async def ping(ctx):
+    """
+    A ping command for testing
+    """
+    await ctx.send("Pong!")
+
+
+# /change_access_control allowed_roles [] info
+# COMMAND MANAGEMENT
+@bot.command(hidden=True)
+async def change_cmd_acl(ctx, setting_name, value, command_name=""):
+    """
+    Change settings for the @access_control decorator
+    """
+    if value.lower() == "none":
+        value = ""
+    if command_name.lower() == "none":
+        command_name = ""
+
+    valid_settings = ["allowed_roles", "excluded_roles"]
+    if setting_name not in valid_settings:
+        message = "Invalid setting name. Allowed setting names are, `allowed_roles`, `excluded_roles`, and `user_override`."
+        print(message)
+        return
+
+    elif setting_name == "allowed_roles" or setting_name == "excluded_roles":
+        value = value.split("|")
+    print(value)
+
+    ACCESS_CONTROL_SETTINGS[setting_name] = value
+
+    if command_name != None:
+        print(command_name)
+        ACCESS_CONTROL_SETTINGS["command_name"] = command_name
+
+
 # ON MESSAGE
 @bot.event
 async def on_message(message):
+    global IS_QUIET
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
             return
@@ -1224,51 +1317,54 @@ async def on_message(message):
             user_message_count[user_id] = 0
         user_message_count[user_id] += 1
 
-        # Check if any modes are active and apply filters in list order
-        filtered_message = message.content
-        if active_culture_modes:
+        if IS_QUIET and not message.author.bot:
             await message.delete()
-            bot_message = await message.channel.send(
-                f"{message.author.mention} posted: {filtered_message}"
-            )
-        for mode in active_culture_modes:
-            if mode == "RITUAL":
-                # Get the most recently posted message in the channel that isn't from a bot
-                async for msg in message.channel.history(limit=100):
-                    if msg.id == message.id:
-                        continue
-                    if msg.author.bot:
-                        continue
-                    if msg.content.startswith("/"):
-                        continue
-                    previous_message = msg.content
-                    break
+        else:
+            # Check if any modes are active and apply filters in list order
+            filtered_message = message.content
+            if active_culture_modes:
+                await message.delete()
+                bot_message = await message.channel.send(
+                    f"{message.author.mention} posted: {filtered_message}"
+                )
+            for mode in active_culture_modes:
+                if mode == "RITUAL":
+                    # Get the most recently posted message in the channel that isn't from a bot
+                    async for msg in message.channel.history(limit=100):
+                        if msg.id == message.id:
+                            continue
+                        if msg.author.bot:
+                            continue
+                        if msg.content.startswith("/"):
+                            continue
+                        previous_message = msg.content
+                        break
 
-                processing_message = await message.channel.send(
-                    f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
-                )
-                filtered_message = initialize_ritual_agreement(
-                    previous_message, filtered_message
-                )
-                await processing_message.delete()
-                await bot_message.edit(
-                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
-                )
-            if mode == "OBSCURITY":
-                obscurity_function = globals()[OBSCURITY_MODE]
-                filtered_message = obscurity_function(filtered_message)
-                await bot_message.edit(
-                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
-                )
-            if mode == "ELOQUENCE":
-                processing_message = await message.channel.send(
-                    f"Making {message.author.mention}'s post eloquent"
-                )
-                filtered_message = await filter_eloquence(filtered_message)
-                await processing_message.delete()
-                await bot_message.edit(
-                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
-                )
+                    processing_message = await message.channel.send(
+                        f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
+                    )
+                    filtered_message = initialize_ritual_agreement(
+                        previous_message, filtered_message
+                    )
+                    await processing_message.delete()
+                    await bot_message.edit(
+                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                    )
+                if mode == "OBSCURITY":
+                    obscurity_function = globals()[OBSCURITY_MODE]
+                    filtered_message = obscurity_function(filtered_message)
+                    await bot_message.edit(
+                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                    )
+                if mode == "ELOQUENCE":
+                    processing_message = await message.channel.send(
+                        f"Making {message.author.mention}'s post eloquent"
+                    )
+                    filtered_message = await filter_eloquence(filtered_message)
+                    await processing_message.delete()
+                    await bot_message.edit(
+                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                    )
 
     except Exception as e:
         print(f"An error occurred: {e}")
