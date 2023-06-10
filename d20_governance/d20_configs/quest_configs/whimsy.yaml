@@ -1,61 +1,74 @@
 game:
-  title: "Whimsical Governance Adventure"
-  intro: "The Intro:
-
-    You have just stumbled upon a whimsical online realm,
-    where the inhabitants communicate and govern themselves in peculiar ways.
-
-    Unusual decision-making structures and communication constraints are the norm here.
-    As a newcomer, you must adapt to these unconventional methods,
-    piecing together meaning, navigating conversations, and making collective decisions
-    in this delightful chaos."
-
+  intro: "Welcome Joshes! Get ready for _The Josh Fight_, where you'll battle to claim\
+    \ the coveted title of the 'Ultimate Josh'!\n\n To begin, submit your speech laying\
+    \ out your claim to joshdom using `/speech [message]`. You have 3 minutes to prepare.\
+    \ To see your current Josh name, type `/whichJosh`."
   stages:
-      - stage: "obscure-patterns"
-        message: "The Obscurity:\n\n
-        As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
-        action: "vote_governance culture"
-        timeout_mins: 1
-
-      - stage: "secret-message"
-        message: "The Secret Message:\n\n
-        Amidst the secrecy of obscurity, one of you receives a secret message from an unknown sender.\n
-        The message contains information about an upcoming decision. Will this information assymetry affect how this community makes decisions?\n
-        Will the group decide to reveal who recieved the message or proceed pleasantly ignorant?"
-        action: "secret_message"
-        decision: "reveal"
-        timeout_mins: 2
-
-      - stage: "obscurity-ends"
-        message: "Suddenly, a bright light pierces through the darkness**\n\n 
-        The location of the group is revealed.\n
-        The obscurity ends as the group is exposed to the surroundings. 
-        You can all understand each other's messages now.\n 
-        Will this change your interactions in any way?"
-        action: "obscurity"
-        timeout_mins: 2
-
-      - stage: "design-flag"
-        message: "Your community is enamaoured with joy of clarity\n\n
-        The very air is suffused with a vitality born of absolute perspicuity. Speech flows from each tongue with enchanting eloquence, as though the mundane strictures of daily life were an insipid memory unworthy of recall.\n 
-        Buoyed by this whimsy, your esteemed group elects to join forces and craft a standard. Pray, offer up a single element (be it hue, shape, or semblance) to adorn the banner.\n
-        Once all components have been proffered, cast thy votes for the finest of these with the noble ✅ emoji (not yet enobled). The three most favored elements shall punctuate the glorious flag henceforth."
-        action: "eloquence"
-        timeout_mins: 3
-
-      - stage: "establish-culture"
-        message: "Next, select a new culture for your community by voting for one option. The winning culture will be adopted by your community."
-        action: "vote_governance culture'"
-        apply_outcome: True
-        timeout_mins: 2
-
-      - stage: "select-spokescreature"
-        message: "Finally, it's time to select a spokescreature to represent your community in interactions with other whimsical realms. Propose various magical or mythical creatures and vote for your favorite using the ✅ emoji. The creature with the highest number of votes will become your community's spokescreature."
-        action: "vote"
-        timeout_mins: 2
-
-      - stage: "obscure-patterns"
-        message: "The Obscurity:\n\n
-        As you dive further into this whimsical realm, you find yourself in a mysterious location beyond the grasp of the light. Perhaps nobody else has discovered it yet; or perhaps it is where the community convenes for secret meetings. Either way, you sense that something unusual is happening here."
-        action: "obscurity"
-        timeout_mins: 2
+  - action: countdown 120
+    message: All Joshes have 3 minutes to submit their speech. Use `speech [message]`.
+    stage: Writes Speechs
+    timeout_mins: 0.0
+  - action: ''
+    message: A silence sweeps over Joshs. Submit any remaining speeches or forever
+      hold your peace.
+    stage: Submission Period
+    timeout_mins: 0.0
+  - action: countdown 60
+    message: You have 1 minute to make your submission.
+    stage: Countdown
+    timeout_mins: 0.0
+  - action: post_speeches
+    message: "A clamor of claims erupts. It is time to decide who amongst us is the\
+      \ real Josh. discuss and build consensus.\n\n If consensus is not reached only\
+      \ two will move forward."
+    stage: Deliberation
+    timeout_mins: 0.0
+  - action: countdown 240
+    message: You have 3 minutes to deliberate.
+    stage: Countdown
+    timeout_mins: 0.0
+  - action: vote_speeches
+    message: "The Joshes have spoken. It is time to vote for the real Josh!.\n\n You\
+      \ have 30 seconds to vote."
+    stage: Voting
+    timeout_mins: 0.5
+  - action: obscurity
+    message_mins: "The real Josh is still obscured from us. We need another round\
+      \ of speeches, deliberation, and voting to uncover the real Josh.\n\n Meanwhile,\
+      \ a blanket of obscurity bests our Joshs."
+    stage: Failed Consensus Obscurity
+    timeout_mins: 0.0
+  - action: countdown 120
+    message_mins: "The reamining candidates have three minutes to write and submit\
+      \ their speeches.\n\n Meanwhile, a blanket of obscurity bests our Joshs."
+    stage: Write Speechs [Obscurity]
+    timeout_mins: 0.0
+  - action: silence
+    message: A silence sweeps over Joshs. It's time for any remaining submissions.
+    stage: Submission Period [Obscurity]
+    timeout_mins: 0.0
+  - action: countdown 60
+    message: You have 1 minute to make your final submission
+    stage: Countdown
+    timeout_mins: 0.0
+  - action: post_speeches
+    message: "It's time to deliberate once more. Beware of impersonators trying to\
+      \ throw us off course.\n\n Work towards building consensus. This is necessary\
+      \ for the final decision."
+    stage: Deliberation [Obscurity]
+    timeout_mins: 0.0
+  - action: countdown 240
+    message: You have 3 minute to deliberate
+    stage: Countdown
+    timeout_mins: 0.0
+  - action: vote_speeches
+    message: "It's time to vote! Let's build consensus and crown the real Josh. The\
+      \ fate of Josh rests in your collective hands.\n\n You have 30 seconds to vote."
+    stage: Vote [Obscurity]
+    timeout_mins: 0.5
+  - action: dissolve
+    message: And just like that, we return to the agora, a new Josh identified amongst
+      the many.
+    stage: End
+    timeout_mins: 0
+  title: 'Minigame: Josh Fight'

@@ -99,7 +99,12 @@ class QuestBuilderView(discord.ui.View):
         self.select2 = QuestBuilder(
             placeholder="Select number of players",
             options=[
-                discord.SelectOption(label=str(n), value=str(n)) for n in range(1, 20)
+                discord.SelectOption(
+                    label=n,
+                    emoji="#️⃣",
+                    value=str(n),
+                )
+                for n in range(1, 20)
             ],
         )
         self.select3 = QuestBuilder(
@@ -184,7 +189,7 @@ class JoinLeaveView(discord.ui.View):
         num_players,
         img_flag,
         audio_flag,
-        timeout_flag,
+        fast_flag,
     ):
         super().__init__(timeout=None)
         self.ctx = ctx
@@ -192,7 +197,7 @@ class JoinLeaveView(discord.ui.View):
         self.num_players = num_players
         self.img_flag = img_flag
         self.audio_flag = audio_flag
-        self.timeout_flag = timeout_flag
+        self.fast_flag = fast_flag
         self.joined_players: Set[str] = set()
 
     @discord.ui.button(
@@ -243,7 +248,7 @@ class JoinLeaveView(discord.ui.View):
                 )
                 await interaction.message.edit(embed=embed)
                 await start_quest(
-                    self.ctx, self.img_flag, self.audio_flag, self.timeout_flag
+                    self.ctx, self.img_flag, self.audio_flag, self.fast_flag
                 )
 
         else:
@@ -288,7 +293,6 @@ async def on_ready():
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
-    bot.tree.remove_command("propose_quest")
     check_dirs()
 
 
@@ -320,19 +324,17 @@ async def on_reaction_add(reaction, user):
 # QUEST START AND PROGRESSION
 @bot.command()
 @commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(ctx, *args):
+async def embark(ctx, *args):
     """
     Propose a game of d20 governance.
     """
     # Parse argument flags
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--audio", action="store_true", help="Generate TTS audio")
-    parser.add_argument(
-        "-t", "--timeout", type=int, help="Set quest timeout in seconds"
-    )
+    parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
     args = parser.parse_args(args)
     audio_flag = args.audio
-    timeout_flag = args.timeout
+    fast_flag = args.fast
 
     # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
@@ -345,11 +347,23 @@ async def propose_quest(ctx, *args):
     if not 1 <= num_players <= 20:
         await ctx.send("The game requires at least 1 and at most 20 players")
         return
+
+    # Set values for global yaml variables
     global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
     QUEST_MODE = quest_mode
-    QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = load_quest_mode(quest_mode)
+    if QUEST_MODE == QUEST_MODE_LLM:
+        pass
+    else:
+        with open(quest_mode, "r") as f:
+            quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
+            if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
+                for stage in quest_mode_data["game"]["stages"]:
+                    stage["timeout_secs"] = 5
+        QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
+
+    # Create Join View
     join_leave_view = JoinLeaveView(
-        ctx, quest_mode, num_players, img_flag, audio_flag, timeout_flag
+        ctx, quest_mode, num_players, img_flag, audio_flag, fast_flag
     )
     embed = discord.Embed(
         title=f"{ctx.author.display_name} Has Proposed {quest_mode}: Join or Leave"
@@ -423,7 +437,7 @@ def get_llm_chain():
     return llm_chain
 
 
-async def start_quest(ctx, img_flag, audio_flag, timeout_flag):
+async def start_quest(ctx, img_flag, audio_flag, fast_flag):
     """
     Start a quest and create a new channel
     """
@@ -443,8 +457,15 @@ async def start_quest(ctx, img_flag, audio_flag, timeout_flag):
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
     else:
-        # Create a white background image canvas instead of generating an image
-        image = Image.new("RGB", (512, 512), (255, 255, 255))
+        # Create an empty image representing the void
+        size = (256, 256)
+        border = 10
+        image = Image.new("RGB", size, (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            [(border, border), (size[0] - border, size[1] - border)],
+            fill=(20, 20, 20),
+        )
 
     llm_chain = None
     if QUEST_MODE == QUEST_MODE_LLM:
@@ -470,15 +491,22 @@ async def start_quest(ctx, img_flag, audio_flag, timeout_flag):
     os.remove("generated_image.png")  # Clean up the image file
 
     # Send audio file
-    # with open(audio_filename, "rb") as f:
-    #     audio = discord.File(f)
-    #     await TEMP_CHANNEL.send(file=audio)
-    # os.remove(audio_filename)
+    if audio_flag:
+        with open(audio_filename, "rb") as f:
+            audio = discord.File(f)
+            await TEMP_CHANNEL.send(file=audio)
+        os.remove(audio_filename)
+    else:
+        pass
 
     # Stream message
-    await stream_message(TEMP_CHANNEL, QUEST_INTRO)
+    if fast_flag:
+        await TEMP_CHANNEL.send(QUEST_INTRO)
+    else:
+        await stream_message(TEMP_CHANNEL, QUEST_INTRO)
 
     for stage in QUEST_STAGES:
+        timeout_seconds = stage[QUEST_STAGE_TIMEOUT]
         if QUEST_MODE == QUEST_MODE_LLM:
             MAX_ATTEMPTS = 5
             attempt = 0
@@ -506,14 +534,18 @@ async def start_quest(ctx, img_flag, audio_flag, timeout_flag):
                     "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
                 )
 
-        print(f"Processing stage {stage[QUEST_STAGE_NAME]}")
-        result = await process_stage(ctx, stage, img_flag, audio_flag, timeout_flag)
+        print(
+            f"Processing stage {stage[QUEST_STAGE_NAME]} for {timeout_seconds} seconds"
+        )
+        result = await process_stage(
+            ctx, stage, img_flag, audio_flag, fast_flag, timeout_seconds
+        )
         if not result:
             await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
             break
 
 
-async def process_stage(ctx, stage, img_flag, audio_flag, timeout_flag):
+async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_seconds):
     """
     Run stages from yaml config
     """
@@ -521,7 +553,6 @@ async def process_stage(ctx, stage, img_flag, audio_flag, timeout_flag):
     # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
     stage_name = stage[QUEST_STAGE_NAME]
-    timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
 
     if audio_flag:
         loop = asyncio.get_event_loop()
@@ -535,10 +566,18 @@ async def process_stage(ctx, stage, img_flag, audio_flag, timeout_flag):
         # Generate intro image and send to temporary channel
         image = generate_image(message)
     else:
-        # Create a white background image canvas instead og generating an image
-        image = Image.new("RGB", (512, 512), (255, 255, 255))
+        # Create an empty image representing the void
+        size = (256, 256)
+        border = 10
+        image = Image.new("RGB", size, (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            [(border, border), (size[0] - border, size[1] - border)],
+            fill=(20, 20, 20),
+        )
 
     image.save("generated_image.png")  # Save the image to a file
+
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
@@ -553,33 +592,55 @@ async def process_stage(ctx, stage, img_flag, audio_flag, timeout_flag):
         pass
 
     # Stream message
-    await stream_message(TEMP_CHANNEL, message)
+    if fast_flag:
+        await TEMP_CHANNEL.send(message)
+    else:
+        await stream_message(TEMP_CHANNEL, message)
 
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]
-    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL)
+    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL, stage)
     if action_outcome is not None:
-        await execute_action(bot, action_outcome, TEMP_CHANNEL)
+        await execute_action(bot, action_outcome, TEMP_CHANNEL, stage)
+    else:
+        pass  # pass if no value assigned to action key
 
-    # Wait for the timeout period
-    await asyncio.sleep(timeout_seconds)
+    # Check for countdown
+    contains_countdown = False
+    for action in action_string:
+        if "countdown" in action:
+            contains_countdown = True
+            break
+
+    # If countdown action defer to countdown await
+    if contains_countdown:
+        pass
+    else:
+        await asyncio.sleep(timeout_seconds)
 
     return True
 
 
 @bot.command()
-async def countdown(ctx, countdown_seconds):
-    remaining_seconds = int(countdown_seconds)
-    sleep_interval = remaining_seconds / 10
+async def countdown(ctx, timeout_seconds):
+    print("Counting down...")
+    remaining_seconds = int(timeout_seconds)
+    sleep_interval = remaining_seconds / 5
+
+    message = None
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
-        remaining_minutes = round(remaining_minutes, 2)
-        message = (
-            f"{remaining_minutes} minutes remaining before the next stage of the game."
-        )
-        await ctx.send(message)
+        new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+        if message is None:
+            message = await ctx.send(new_message)
+        else:
+            await message.edit(content=new_message)
+
         remaining_seconds -= sleep_interval
         await asyncio.sleep(sleep_interval)
+
+    await message.edit(content="⏲️ Counting down finished.")
+    print("Counting down finished.")
 
 
 @bot.command()

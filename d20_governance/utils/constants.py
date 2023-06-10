@@ -88,7 +88,7 @@ QUEST_INTRO = QUEST_GAME.get("intro")
 QUEST_STAGES = QUEST_GAME.get("stages")
 QUEST_STAGE_MESSAGE = "message"
 QUEST_STAGE_ACTION = "action"
-QUEST_STAGE_TIMEOUT = "timeout_mins"
+QUEST_STAGE_TIMEOUT = "timeout_secs"
 QUEST_APPLY_OUTCOME = "apply_outcome"
 QUEST_STAGE_NAME = "stage"
 OBSCURITY = False
@@ -99,9 +99,9 @@ OBSCURITY_MODE = "scramble"
 
 
 # Define Quest Config Variables based on selected quest mode
-def load_quest_mode(quest_mode):
+def set_quest_vars(quest_mode_data):
     global QUEST_DATA, QUEST_GAME, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
-    QUEST_DATA = read_config(quest_mode)
+    QUEST_DATA = quest_mode_data
     QUEST_GAME = QUEST_DATA.get("game")
     QUEST_TITLE = QUEST_GAME.get("title")
     QUEST_INTRO = QUEST_GAME.get("intro")

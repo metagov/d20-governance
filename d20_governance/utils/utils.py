@@ -1,4 +1,6 @@
+from click import command
 import discord
+from pytest import param
 import requests
 import random
 import base64
@@ -65,6 +67,35 @@ async def setup_server(guild):
         logging.info("Necessary channels and categories exist.")
     else:
         logging.info("Some necessary channels or categories are missing.")
+
+
+# Yaml command callback and parsing
+async def execute_action(bot, action_string, temp_channel, stage):
+    command_strings = parse_action_string(action_string)
+    for command_string in command_strings:
+        tokens = shlex.split(command_string.lower())
+        command_name, *args = tokens
+        command = bot.get_command(command_name)
+        if command is None:
+            continue
+
+        # Get the last message object from the channel to set context
+        message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+
+        # Create a context object for the message
+        ctx = await bot.get_context(message_obj)
+
+        if command_name == "countdown":
+            await command.callback(ctx, stage.get("timeout_secs"))
+        else:
+            await command.callback(ctx, *args)
+
+
+def parse_action_string(action_string):
+    if isinstance(action_string, list):
+        return action_string
+    else:
+        return [action_string]
 
 
 # Module Management
@@ -174,58 +205,42 @@ def chunk_text(text):
     return chunks
 
 
-# def distort_text(word_list):
-#     distorted_list = []
-#     for i, word in enumerate(word_list):
-#         distortion_level = i + 1
-#         if len(word) <= 3:
-#             distorted_list.append(word)
-#             continue
-#         first_char = word[0]
-#         last_char = word[-1]
-#         middle_chars = list(word[1:-1])
-#         middle_chars_count = len(middle_chars)
-#         middle_chars_index = middle_chars_count // 2
-#         distorted_middle_chars = middle_chars.copy()
-#         if distortion_level > 1:
-#             if distortion_level > 2:
-#                 if random.random() < 0.5 * distortion_level:
-#                     distorted_middle_chars[middle_chars_index] = "||"
-#             if random.random() < 0.4 * distortion_level:
-#                 distorted_middle_chars[middle_chars_index] = "_"
-#         distorted_word = first_char + "".join(distorted_middle_chars) + last_char
-#         if len(distorted_word) > 3:
-#             distorted_word = (
-#                 distorted_word[:3]
-#                 + "".join(random.sample(string.punctuation, 3))
-#                 + distorted_word[3:]
-#             )
-#         # Apply distortion based on probability and distortion level
-#         if random.random() < 0.1 * distortion_level:
-#             distorted_list.append("*" + word + "*")
-#         elif random.random() < 0.35 * distortion_level:
-#             distorted_list.append("_" + word + "_")
-#         elif random.random() < 0.6 * distortion_level:
-#             distorted_list.append("||" + word + "||")
-#         else:
-#             distorted_list.append(word)
-#     return distorted_list
-
-
-# def distort_text_simple(text_list):
-#     distorted_list = []
-#     for i, text in enumerate(text_list):
-#         distortion_level = i + 1
-#         # Apply distortion based on probability and distortion level
-#         if random.random() < 0.1 * distortion_level:
-#             distorted_list.append("*" + text + "*")
-#         elif random.random() < 0.35 * distortion_level:
-#             distorted_list.append("_" + text + "_")
-#         elif random.random() < 0.6 * distortion_level:
-#             distorted_list.append("||" + text + "||")
-#         else:
-#             distorted_list.append(text)
-#     return distorted_list
+def distort_text(word_list):
+    distorted_list = []
+    for i, word in enumerate(word_list):
+        distortion_level = i + 1
+        if len(word) <= 3:
+            distorted_list.append(word)
+            continue
+        first_char = word[0]
+        last_char = word[-1]
+        middle_chars = list(word[1:-1])
+        middle_chars_count = len(middle_chars)
+        middle_chars_index = middle_chars_count // 2
+        distorted_middle_chars = middle_chars.copy()
+        if distortion_level > 1:
+            if distortion_level > 2:
+                if random.random() < 0.5 * distortion_level:
+                    distorted_middle_chars[middle_chars_index] = "||"
+            if random.random() < 0.4 * distortion_level:
+                distorted_middle_chars[middle_chars_index] = "_"
+        distorted_word = first_char + "".join(distorted_middle_chars) + last_char
+        if len(distorted_word) > 3:
+            distorted_word = (
+                distorted_word[:3]
+                + "".join(random.sample(string.punctuation, 3))
+                + distorted_word[3:]
+            )
+        # Apply distortion based on probability and distortion level
+        if random.random() < 0.1 * distortion_level:
+            distorted_list.append("*" + word + "*")
+        elif random.random() < 0.35 * distortion_level:
+            distorted_list.append("_" + word + "_")
+        elif random.random() < 0.6 * distortion_level:
+            distorted_list.append("||" + word + "||")
+        else:
+            distorted_list.append(word)
+    return distorted_list
 
 
 # Audio Utils
@@ -280,46 +295,46 @@ def generate_image(prompt):
     return Image.open("generated_image.png")
 
 
-# def wrap_text(text, font, max_width):
-#     lines = []
-#     words = text.split()
-#     current_line = words[0]
+def wrap_text(text, font, max_width):
+    lines = []
+    words = text.split()
+    current_line = words[0]
 
-#     for word in words[1:]:
-#         if font.getsize(current_line + " " + word)[0] <= max_width:
-#             current_line += " " + word
-#         else:
-#             lines.append(current_line)
-#             current_line = word
+    for word in words[1:]:
+        if font.getsize(current_line + " " + word)[0] <= max_width:
+            current_line += " " + word
+        else:
+            lines.append(current_line)
+            current_line = word
 
-#     lines.append(current_line)
-#     return lines
+    lines.append(current_line)
+    return lines
 
 
-# def overlay_text(image, text):
-#     """
-#     Overlay text on images
-#     """
-#     draw = ImageDraw.Draw(image)
-#     font_size = 25
-#     font = ImageFont.truetype(FONT_PATH_BUBBLE, font_size)
+def overlay_text(image, text):
+    """
+    Overlay text on images
+    """
+    draw = ImageDraw.Draw(image)
+    font_size = 25
+    font = ImageFont.truetype(FONT_PATH_BUBBLE, font_size)
 
-#     max_width = image.size[0] - 20
-#     wrapped_text = wrap_text(text, font, max_width)
+    max_width = image.size[0] - 20
+    wrapped_text = wrap_text(text, font, max_width)
 
-#     text_height = font_size + len(wrapped_text)
-#     image_width, image_height = image.size
-#     y_offset = (image_height - text_height) // 5
+    text_height = font_size + len(wrapped_text)
+    image_width, image_height = image.size
+    y_offset = (image_height - text_height) // 5
 
-#     for line in wrapped_text:
-#         text_width, _ = draw.textsize(line, font)
-#         position = ((image_width - text_width) // 2, y_offset)
-#         draw.text(
-#             position, line, (0, 0, 0), font, stroke_width=2, stroke_fill=(255, 255, 255)
-#         )
-#         y_offset += font_size
+    for line in wrapped_text:
+        text_width, _ = draw.textsize(line, font)
+        position = ((image_width - text_width) // 2, y_offset)
+        draw.text(
+            position, line, (0, 0, 0), font, stroke_width=2, stroke_fill=(255, 255, 255)
+        )
+        y_offset += font_size
 
-#     return image
+    return image
 
 
 # Generate Governance Stack Images
@@ -565,6 +580,7 @@ def shuffle_modules():
     return modules_combined
 
 
+# Post and show governance stack
 def generate_governance_journey_gif():
     frames = []
 
@@ -604,20 +620,7 @@ async def post_governance(ctx):
             print(f"{os.path.basename(latest_snapshot)}")
 
 
-def parse_action_string(action_string):
-    return shlex.split(action_string.lower())
-
-
-async def send_msg_to_random_player(temp_channel):
-    print("Sending random DM...")
-    players = [member for member in temp_channel.members if not member.bot]
-    random_player = random.choice(players)
-    dm_channel = await random_player.create_dm()
-    await dm_channel.send(
-        "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
-    )
-
-
+# Cleanup
 def clean_temp_files():
     """
     Delete temporary files
