@@ -212,21 +212,8 @@ class JoinLeaveView(discord.ui.View):
                 f"{player_name} has joined the quest!"
             )
 
-            # Assign player nickname
-            # Make sure there are still nicknames available
-            if len(nicknames) == 0:
-                raise Exception("No more nicknames available.")
-
-            # Randomly select a nickname
-            nickname = random.choice(nicknames)
-
-            # Assign the nickname to the player
-            players_to_nicknames[player_name] = nickname
-
-            # Remove the nickname from the list so it can't be used again
-            nicknames.remove(nickname)
-
-            print(f"Assigned nickname '{nickname}' to player '{player_name}'.")
+            if QUEST_MODE == MINIGAME_JOSH:
+                await assign_nickname(player_name)
 
             needed_players = self.num_players - len(self.joined_players)
 
@@ -1070,6 +1057,20 @@ async def info(
     embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
     embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
     await ctx.send(embed=embed)
+
+
+@bot.command()
+async def nickname(ctx):
+    player_name = ctx.author.name
+    nickname = players_to_nicknames.get(player_name)
+    if nickname is not None:
+        # Make a link back to the original context
+        original_context_link = discord.utils.escape_markdown(ctx.channel.mention)
+        await ctx.author.send(
+            f"Your nickname is {nickname}. Return to the game: {original_context_link}"
+        )
+    else:
+        await ctx.author.send("You haven't been assigned a nickname yet")
 
 
 @bot.command()

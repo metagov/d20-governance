@@ -133,6 +133,27 @@ def parse_action_string(action_string):
         return [action_string]
 
 
+# Name Functions
+async def assign_nickname(player_name):
+    """
+    Assign player nickname
+    """
+    # Make sure there are still nicknames available
+    if len(nicknames) == 0:
+        raise Exception("No more nicknames available.")
+
+    # Randomly select a nickname
+    nickname = random.choice(nicknames)
+
+    # Assign the nickname to the player
+    players_to_nicknames[player_name] = nickname
+
+    # Remove the nickname from the list so it can't be used again
+    nicknames.remove(nickname)
+
+    print(f"Assigned nickname '{nickname}' to player '{player_name}'.")
+
+
 # Module Management
 def get_modules_for_type(governance_type):
     """

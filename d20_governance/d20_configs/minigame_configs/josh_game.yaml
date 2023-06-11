@@ -1,7 +1,7 @@
 game:
   title: "Minigame: Josh Fight"
   intro: "**Welcome Joshes!** Get ready for _The Josh Fight_, where you'll battle to claim the coveted title of the **Ultimate Josh**!\n\n
-  To begin, submit your speech laying out your claim to joshdom using `/speech [message]`. You have 3 minutes to prepare. To see your current Josh name, type `/whichJosh`."
+  To begin, submit your speech laying out your claim to joshdom using `/speech [message]`. You have 3 minutes to prepare. To see your current Josh name, type `/nickname`."
 
   stages:
       - stage: "Writes Speechs"
@@ -34,7 +34,7 @@ game:
         The reamining candidates have 2 minutes to write and submit their speeches."
         action: ["is_not_quiet", "clear_speeches", "obscurity", "countdown"]
           # /speech is only available to reamining candidates 
-          # maybe a /restrict_cmd function that returns the list of eligible users from a list?
+          # maybe use /change_cmd_acl excluded_roles not_josh
         timeout_secs: 90
 
       - stage: "Submission Period [Obscurity]"
