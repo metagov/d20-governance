@@ -6,6 +6,7 @@ import datetime
 import logging
 from discord.ext import commands
 from typing import Set
+from interactions import is_owner
 from ruamel.yaml import YAML
 from collections import OrderedDict
 
@@ -85,7 +86,7 @@ class QuestBuilderView(discord.ui.View):
                     label="QUEST: ???",
                     emoji="🤔",
                     description="A random game of d20 governance",
-                    value=QUEST_MODE_LLM,
+                    value=QUEST_LLM,
                 ),
                 discord.SelectOption(
                     label="MINIGAME: JOSH GAME",
@@ -113,13 +114,13 @@ class QuestBuilderView(discord.ui.View):
                     label="Yes",
                     emoji="🖼️",
                     description="Turn image generation on",
-                    value="True",
+                    value=True,
                 ),
                 discord.SelectOption(
                     label="No",
                     emoji="🔳",
                     description="Turn image generation off",
-                    value="False",
+                    value=False,
                 ),
             ],
         )
@@ -163,7 +164,7 @@ class QuestBuilderView(discord.ui.View):
             return (
                 self.select1.selected_value,
                 int(self.select2.selected_value),
-                self.select3.selected_value,
+                bool(self.select3.selected_value),
             )
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -218,7 +219,7 @@ class JoinLeaveView(discord.ui.View):
             needed_players = self.num_players - len(self.joined_players)
 
             embed = discord.Embed(
-                title=f"{self.ctx.author.display_name} Has Proposed The {self.quest_mode}: Join or Leave",
+                title=f"{self.ctx.author.display_name} has proposed a game of {self.quest_mode} for {self.num_players} players: Join or Leave",
                 description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
             )  # Note: Not possible to mention author in embeds
             await interaction.message.edit(embed=embed, view=self)
@@ -227,9 +228,9 @@ class JoinLeaveView(discord.ui.View):
                 # remove join and leave buttons
                 await interaction.message.edit(view=None)
                 # return variables from setup()
-                TEMP_CHANNEL = await setup(self.ctx, self.joined_players)
+                TEMP_CHANNEL = await make_temp_channel(self.ctx, self.joined_players)
                 embed = discord.Embed(
-                    title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
+                    title=f"{self.ctx.author.display_name}'s proposal to play {self.quest_mode} has enough players, and is ready to play",
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
@@ -259,7 +260,7 @@ class JoinLeaveView(discord.ui.View):
             )
             needed_players = self.num_players - len(self.joined_players)
             embed = discord.Embed(
-                title=f"{self.ctx.author.mention} Has Proposed a Quest: Join or Leave",
+                title=f"{self.ctx.author.display_name} has proposed a game of {self.quest_mode} for {self.num_players} players: Join or Leave",
                 description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
             )
             await interaction.message.edit(embed=embed, view=self)
@@ -309,7 +310,7 @@ async def on_reaction_add(reaction, user):
 
 # QUEST START AND PROGRESSION
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def embark(ctx, *args):
     """
     Embark on a d20 governance quest
@@ -337,7 +338,7 @@ async def embark(ctx, *args):
     # Set values for global yaml variables
     global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
     QUEST_MODE = quest_mode
-    if QUEST_MODE == QUEST_MODE_LLM:
+    if QUEST_MODE == QUEST_LLM:
         pass
     else:
         with open(quest_mode, "r") as f:
@@ -352,17 +353,17 @@ async def embark(ctx, *args):
         ctx, quest_mode, num_players, img_flag, audio_flag, fast_flag
     )
     embed = discord.Embed(
-        title=f"{ctx.author.display_name} Has Proposed {quest_mode}: Join or Leave"
+        title=f"{ctx.author.display_name} has proposed a game of {quest_mode} for {num_players} players: Join or Leave"
     )
     await ctx.send(embed=embed, view=join_leave_view)
-    print("Waiting for players...")
+    print("Waiting for players to join...")
 
 
-async def setup(ctx, joined_players):
+async def make_temp_channel(ctx, joined_players):
     """
     Game State: Setup the config and create unique quest channel
     """
-    print("Setting up...")
+    print("Making temporary channel...")
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
@@ -442,7 +443,7 @@ async def start_quest(ctx, img_flag, audio_flag, fast_flag):
     else:
         pass
 
-    if img_flag == "True":
+    if img_flag == True:
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
     else:
@@ -457,7 +458,7 @@ async def start_quest(ctx, img_flag, audio_flag, fast_flag):
         )
 
     llm_chain = None
-    if QUEST_MODE == QUEST_MODE_LLM:
+    if QUEST_MODE == QUEST_LLM:
         await TEMP_CHANNEL.send("generating next narrative step with llm..")
         llm_chain = get_llm_chain()
         yaml_string = llm_chain.predict(
@@ -502,7 +503,7 @@ async def start_quest(ctx, img_flag, audio_flag, fast_flag):
 
     for stage in QUEST_STAGES:
         timeout_seconds = stage[QUEST_STAGE_TIMEOUT]
-        if QUEST_MODE == QUEST_MODE_LLM:
+        if QUEST_MODE == QUEST_LLM:
             MAX_ATTEMPTS = 5
             attempt = 0
             stage = None
@@ -555,7 +556,7 @@ async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_sec
     else:
         pass
 
-    if img_flag == "True":
+    if img_flag == True:
         # Generate intro image and send to temporary channel
         image = generate_image(message)
     else:
@@ -641,7 +642,7 @@ async def countdown(ctx, timeout_seconds):
         await asyncio.sleep(sleep_interval)
 
     await message.edit(content="⏲️ Counting down finished.")
-    print("Counting down finished.")
+    print("Countdown finished.")
 
 
 async def end(ctx):
@@ -673,7 +674,7 @@ active_culture_modes = []
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def transparency(ctx):
     """
     Toggle transparency module
@@ -687,7 +688,7 @@ async def transparency(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def secrecy(ctx):
     """
     Toggle secrecy module
@@ -700,8 +701,8 @@ async def secrecy(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@bot.command(brief="Toggle autonomy module")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def autonomy(ctx):
     """
     Toggle autonomy module
@@ -715,7 +716,7 @@ async def autonomy(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def obscurity(ctx, mode: str = None):
     """
     Toggle obscurity module
@@ -781,7 +782,7 @@ async def obscurity(ctx, mode: str = None):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def eloquence(ctx):
     """
     Toggle eloquence module
@@ -835,7 +836,7 @@ async def eloquence(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def diversity(ctx):
     """
     Toggle diversity module
@@ -855,7 +856,7 @@ async def diversity(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def ritual(ctx):
     """
     Toggle ritual module.
@@ -913,7 +914,7 @@ async def secret_message(ctx):
 
 # DECISION COMMANDS
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def vote(ctx, question: str, *options: str):
     """
     Trigger a vote
@@ -1123,7 +1124,16 @@ async def post_governance_gif(ctx):
 
 # META CONDITION COMMANDS
 @bot.command(hidden=True)
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+async def update_bot_icon(ctx):
+    # Update the bot profile picture
+    with open(BOT_ICON, "rb") as image_file:
+        image_bytes = image_file.read()
+
+    await bot.user.edit(avatar=image_bytes)
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def is_quiet(ctx):
     global IS_QUIET
     IS_QUIET = True
@@ -1131,7 +1141,7 @@ async def is_quiet(ctx):
 
 
 @bot.command(hidden=True)
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def is_not_quiet(ctx):
     global IS_QUIET
     IS_QUIET = False
@@ -1190,7 +1200,7 @@ async def vote_speeches(ctx, question: str):
 
 # CLEANING COMMANDS
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def clean(ctx):
     """
     Clean the temporary files
@@ -1199,8 +1209,8 @@ async def clean(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def clean_category_channels(ctx, category_name="d20-quests"):
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def clean_cat_chans(ctx, category_name="d20-quests"):
     """
     Clean category channels
     """
@@ -1217,8 +1227,67 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
 
 
 # TEST COMMANDS
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def solo(ctx, *args, quest_mode="default", num_players=1):
+    """
+    Solo quest mode
+    """
+
+    if quest_mode == "llm":
+        quest_mode = QUEST_LLM
+    if quest_mode == "default":
+        quest_mode = QUEST_DEFAULT
+    else:
+        await ctx.send(
+            "Quest mode is invalid. Valid quest modes are `llm` or `default`"
+        )
+
+    # Parse argument flags
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-a", "--audio", action="store_true", help="Generate TTS audio")
+    parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
+    parser.add_argument(
+        "-i", "--image", action="store_true", help="Turn on image generation"
+    )
+    args = parser.parse_args(args)
+    audio_flag = args.audio
+    fast_flag = args.fast
+    img_flag = args.image
+
+    # Set values for global yaml variables
+    global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
+    QUEST_MODE = quest_mode
+    if QUEST_MODE == QUEST_LLM:
+        pass
+    else:
+        with open(quest_mode, "r") as f:
+            quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
+            if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
+                for stage in quest_mode_data["game"]["stages"]:
+                    stage["timeout_secs"] = 15
+        QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
+
+    player: Set[str] = set()
+    player_name = ctx.author.name
+    player.add(player_name)
+
+    if recurively_search_yaml(quest_mode_data, "/nickname"):
+        await assign_nickname(player_name)
+
+    global TEMP_CHANNEL
+    # store name os command executor in joined_players
+    TEMP_CHANNEL = await make_temp_channel(ctx, player)
+    embed = discord.Embed(
+        title="Solo game ready to play",
+        description=f"Play here: {TEMP_CHANNEL.mention}",
+    )
+    await ctx.send(embed=embed)
+    await start_quest(ctx, img_flag, audio_flag, fast_flag)
+
+
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_randomize_snapshot(ctx):
     """
     Test making a randomized governance snapshot
@@ -1228,7 +1297,7 @@ async def test_randomize_snapshot(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_png_creation(ctx):
     """
     Test governance stack png creation
@@ -1240,7 +1309,7 @@ async def test_png_creation(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_img_generation(ctx):
     """
     Test stability image generation
@@ -1259,7 +1328,7 @@ async def test_img_generation(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
@@ -1268,7 +1337,7 @@ async def test_culture(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_decision(ctx):
     """
     Test and demo the decision message functionality
@@ -1300,26 +1369,78 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
     valid_settings = ["allowed_roles", "excluded_roles"]
     if setting_name not in valid_settings:
         message = "Invalid setting name. Allowed setting names are, `allowed_roles`, `excluded_roles`, and `user_override`."
-        print(message)
         return
 
     elif setting_name == "allowed_roles" or setting_name == "excluded_roles":
         value = value.split("|")
-    print(value)
 
     ACCESS_CONTROL_SETTINGS[setting_name] = value
 
     if command_name != None:
-        print(command_name)
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
 
 
 # ON MESSAGE
+
+bot.remove_command("help")
+
+
+@bot.command()
+async def help(ctx, command: str = None):
+    prefix = bot.command_prefix
+    if command:
+        # Display help for a specific command
+        cmd = bot.get_command(command)
+        if not cmd:
+            await ctx.send(f"Sorry, I couldn't find command **{command}**.")
+            return
+        cmd_help = cmd.help or "No help available."
+        help_embed = discord.Embed(
+            title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
+        )
+        await ctx.send(embed=help_embed)
+    else:
+        # Display a list of available commands
+        cmds = [c.name for c in bot.commands if not c.hidden]
+        cmds.sort()
+        embed = discord.Embed(
+            title="Commands List",
+            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.",
+            color=0x00FF00,
+        )
+        for cmd in cmds:
+            command = bot.get_command(cmd)
+            # if cmd == None:
+            #     continue
+            description = command.brief or command.short_doc
+            embed.add_field(
+                name=f"{prefix}{cmd}",
+                value=description or "No description available.",
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
+
+@bot.event
+async def on_command(ctx):
+    print(f"Command invoked: {ctx.command.name}")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    print(f"Error invoking command: {ctx.command.name} - {error}")
+
+
 @bot.event
 async def on_message(message):
     global IS_QUIET
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
+            return
+
+        # Allow the "/help" command to run without channel checks
+        if message.content.startswith("/help"):
+            await bot.process_commands(message)
             return
 
         # If message is a command, proceed directly to processing
@@ -1383,46 +1504,60 @@ async def on_message(message):
                     )
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
         await message.channel.send("An error occurred")
 
 
 # BOT CHANNEL CHECKS
-@bot.check
-async def validate_channels(ctx):
+async def check_cmd_channel(ctx, channel_name):
     """
     Check that the test_game and start_game commands are run in the `d20-agora` channel
     """
-    # Check is "d20-agora" channel exists on server
-    agora_channel = discord.utils.get(ctx.guild.channels, name="d20-agora")
-    if agora_channel is None:
+    # Check if the command being run is /help and allow it to bypass checks
+    channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+    if ctx.command.name == "help":
+        return True
+    elif ctx.channel.name != channel.name:
         embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.",
+            title="Error: This command cannot be run in this channel.",
+            description=f"Run this command in <#{channel.id}>",
             color=discord.Color.red(),
-        )
-        embed.add_field(
-            name=f"Missing channel: {agora_channel.name}",
-            value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
-            f"The `{agora_channel.name}` channel was not found on this server.\n\n"
-            f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
-            f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
-            f"**Note:** The channel name must be exactly `{agora_channel.name}`.",
-        )
-        await ctx.send(embed=embed)
-        return False
-    if not agora_channel:
-        embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.",
-            color=discord.Color.red(),
-        )
-        embed.add_field(
-            name=f"Wrong Channel: run in {agora_channel.name}",
-            value=f"This command can only be run in the `{agora_channel.name}` channel.",
         )
         await ctx.send(embed=embed)
         return False
     else:
         return True
+
+    # Check is "d20-agora" channel exists on server
+    # agora_channel = discord.utils.get(ctx.guild.channels, name="d20-agora")
+    # if agora_channel is None:
+    #     embed = discord.Embed(
+    #         title="Error - This command cannot be run in this channel.",
+    #         color=discord.Color.red(),
+    #     )
+    #     embed.add_field(
+    #         name=f"Missing channel: {agora_channel.name}",
+    #         value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
+    #         f"The `{agora_channel.name}` channel was not found on this server.\n\n"
+    #         f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
+    #         f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
+    #         f"**Note:** The channel name must be exactly `{agora_channel.name}`.",
+    #     )
+    #     await ctx.send(embed=embed)
+    #     return False
+    # if not agora_channel:
+    #     embed = discord.Embed(
+    #         title="Error - This command cannot be run in this channel.",
+    #         color=discord.Color.red(),
+    #     )
+    #     embed.add_field(
+    #         name=f"Wrong Channel: run in {agora_channel.name}",
+    #         value=f"This command can only be run in the `{agora_channel.name}` channel.",
+    #     )
+    #     await ctx.send(embed=embed)
+    #     return False
+    # else:
+    #     return True
 
 
 # REPO DIRECTORY CHECKS

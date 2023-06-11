@@ -46,12 +46,15 @@ LOGGING_PATH = "logs"
 LOG_FILE_NAME = f"{LOGGING_PATH}/bot.log"
 
 # CONFIG PATHS
+# BOT IMAGES
+BOT_ICON = "assets/imgs/game_icons/d20-gov-icon.png"
+
 # QUEST CONFIGS
 QUEST_WHIMSY = "d20_governance/d20_configs/quest_configs/whimsy.yaml"
 QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
 QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
-QUEST_MODE_LLM = "llm"
-QUEST_DEFAULT = "d20_governance/d20_configs/quest_configs/custom.yaml"
+QUEST_LLM = "llm"
+QUEST_DEFAULT = "d20_governance/d20_configs/default.yaml"
 
 # MINIGAME CONFIGS
 MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"

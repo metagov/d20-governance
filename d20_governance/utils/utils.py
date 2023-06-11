@@ -25,6 +25,11 @@ import os
 def access_control():
     async def predicate(ctx):
         # If condition is true, command is able to be executed
+        # Check if the command being run is /help and allow it to bypass checks
+        if ctx.command.name == "help":
+            print("Bypassing access_control check")
+            return True
+
         # Check if command matches command_name
         if ctx.command.name == ACCESS_CONTROL_SETTINGS["command_name"]:
             return True
@@ -131,6 +136,23 @@ def parse_action_string(action_string):
         return action_string
     else:
         return [action_string]
+
+
+def recurively_search_yaml(data, search_string):
+    """
+    Recurively search a YAML data structure for a given string
+    """
+    if isinstance(data, str):
+        return search_string in data
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if recurively_search_yaml(value, search_string):
+                return True
+    elif isinstance(data, list):
+        for item in data:
+            if recurively_search_yaml(item, search_string):
+                return True
+    return False
 
 
 # Name Functions
