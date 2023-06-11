@@ -442,12 +442,14 @@ async def start_quest(ctx, img_flag, audio_flag, fast_flag):
     Start a quest and create a new channel
     """
     global QUEST_INTRO
-    text = QUEST_INTRO
+    global QUEST_TITLE
+    title = QUEST_TITLE
+    intro = QUEST_INTRO
     if audio_flag:
         print("Generating audio file...")
         loop = asyncio.get_event_loop()
         audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
-        future = loop.run_in_executor(None, tts, text, audio_filename)
+        future = loop.run_in_executor(None, tts, intro, audio_filename)
         await future
         print("Generated audio file...")
     else:
@@ -499,11 +501,17 @@ async def start_quest(ctx, img_flag, audio_flag, fast_flag):
     else:
         pass
 
+    embed = discord.Embed(
+        title=title,
+        description=intro,
+        color=discord.Color.dark_orange(),
+    )
+
     # Stream message
     if fast_flag:
-        await TEMP_CHANNEL.send(QUEST_INTRO)
+        await TEMP_CHANNEL.send(embed=embed)
     else:
-        await stream_message(TEMP_CHANNEL, QUEST_INTRO)
+        await stream_message(TEMP_CHANNEL, intro, embed)
 
     for stage in QUEST_STAGES:
         timeout_seconds = stage[QUEST_STAGE_TIMEOUT]
@@ -589,11 +597,18 @@ async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_sec
     else:
         pass
 
+    embed = discord.Embed(
+        title=stage_name,
+        description=message,
+        color=discord.Color.dark_orange(),
+    )
+
     # Stream message
     if fast_flag:
-        await TEMP_CHANNEL.send(message)
+        # embed
+        await TEMP_CHANNEL.send(embed=embed)
     else:
-        await stream_message(TEMP_CHANNEL, message)
+        await stream_message(TEMP_CHANNEL, message, embed)
 
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]

@@ -201,18 +201,21 @@ def add_module_to_stack(module):
 
 
 # Text Utils
-async def stream_message(ctx, text):
-    message_canvas = await ctx.send("[...]")
-    # Use the typing context manager to simulate typing
+async def stream_message(ctx, text, original_embed):
+    embed = original_embed.copy()
+    embed.description = "[...]"
+    message_canvas = await ctx.send(embed=embed)
     try:
         chunks = chunk_text(text)
         joined_text = []
         for chunk in chunks:
+            # Use the typing context manager to simulate typing
             async with ctx.typing():
                 joined_text.append(chunk)
-                # distorted_text = distort_text(joined_text)
-                joined_text_str = " ".join(joined_text) + " []"
-                await message_canvas.edit(content=joined_text_str)
+                # distorted_text = distort_text(joined_text)  # distorted text disabled
+                joined_text_str = " ".join(joined_text)
+                embed.description = joined_text_str
+                await message_canvas.edit(embed=embed)
                 sleep_time = random.uniform(0.7, 1.2)
                 for word in chunk.split():
                     if "," in word:
@@ -222,8 +225,9 @@ async def stream_message(ctx, text):
                     else:
                         pass
                 await asyncio.sleep(sleep_time)
-        final_message = "".join(joined_text_str) + " [*]"
-        await message_canvas.edit(content=final_message)
+        final_message = "".join(joined_text_str) + " ✨"
+        embed.description = final_message
+        await message_canvas.edit(embed=embed)
     except Exception as e:
         print(e)
 
