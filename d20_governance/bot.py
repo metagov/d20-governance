@@ -1,3 +1,4 @@
+import argparse
 import discord
 import os
 import asyncio
@@ -5,8 +6,11 @@ import datetime
 import logging
 from discord.ext import commands
 from typing import Set
+from interactions import is_owner
 from ruamel.yaml import YAML
 from collections import OrderedDict
+
+from sqlalchemy import Select
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
@@ -15,7 +19,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
-description = """A bot for experimenting with governance"""
+description = """📦 A bot for experimenting with modular governance 📦"""
 
 intents = discord.Intents.default()
 intents.members = True
@@ -34,12 +38,166 @@ logging.basicConfig(
 print("Logging to logs/bot.log")
 
 
+class QuestBuilder(discord.ui.Select):
+    def __init__(self, placeholder, options):
+        super().__init__(
+            placeholder=placeholder,
+            options=options,
+            max_values=1,
+            min_values=1,
+        )
+        self.selected_value = None
+
+    async def callback(self, interaction: discord.Interaction):
+        self.selected_value = self.values[0]
+        await interaction.response.defer()
+        if all(
+            dropdown.selected_value is not None
+            for dropdown in [self.view.select1, self.view.select2, self.view.select3]
+        ):
+            self.view.enable_button()  # FIXME: Doesn't trigger function
+
+
+class QuestBuilderView(discord.ui.View):
+    def __init__(self, *, timeout=120):
+        super().__init__(timeout=timeout)
+        self.select1 = QuestBuilder(
+            placeholder="Select Quest",
+            options=[
+                discord.SelectOption(
+                    label="QUEST: WHIMSY",
+                    emoji="🤪",
+                    description="A whimsical governance game",
+                    value=QUEST_WHIMSY,
+                ),
+                discord.SelectOption(
+                    label="QUEST: MASCOT",
+                    emoji="🐻‍❄️",
+                    description="Propose a new community mascot",
+                    value=QUEST_MASCOT,
+                ),
+                discord.SelectOption(
+                    label="QUEST: COLONY",
+                    emoji="🛸",
+                    description="Governance under space colony",
+                    value=QUEST_COLONY,
+                ),
+                discord.SelectOption(
+                    label="QUEST: ???",
+                    emoji="🤔",
+                    description="A random game of d20 governance",
+                    value=QUEST_LLM,
+                ),
+                discord.SelectOption(
+                    label="MINIGAME: JOSH GAME",
+                    emoji="🙅",
+                    description="Decide the real Josh",
+                    value=MINIGAME_JOSH,
+                ),
+            ],
+        )
+        self.select2 = QuestBuilder(
+            placeholder="Select number of players",
+            options=[
+                discord.SelectOption(
+                    label=n,
+                    emoji="#️⃣",
+                    value=str(n),
+                )
+                for n in range(1, 20)
+            ],
+        )
+        self.select3 = QuestBuilder(
+            placeholder="Generate images?",
+            options=[
+                discord.SelectOption(
+                    label="Yes",
+                    emoji="🖼️",
+                    description="Turn image generation on",
+                    value=True,
+                ),
+                discord.SelectOption(
+                    label="No",
+                    emoji="🔳",
+                    description="Turn image generation off",
+                    value=False,
+                ),
+            ],
+        )
+        self.add_item(self.select1)
+        self.add_item(self.select2)
+        self.add_item(self.select3)
+
+        self.button = discord.ui.Button(
+            label="Propose Quest",
+            style=discord.ButtonStyle.green,
+            disabled=False,  # FIXME: should be set to True and enabled through enable_button
+            emoji="✅",
+        )
+        self.add_item(self.button)
+
+        self.button.callback = self.on_button_click
+
+    def get_results(self):
+        return (
+            self.select1.selected_value,
+            self.select2.selected_value,
+            self.select3.selected_value,
+        )
+
+    def enable_button(self):
+        self.button.disabled = False
+
+    async def on_button_click(self, interaction: discord.Interaction):
+        self.stop()
+        await interaction.response.defer()
+
+    async def wait_for_input(self, ctx):
+        self.ctx = ctx
+        await ctx.send("build your quest proposal:", view=self)
+
+        try:
+            await self.wait()
+        except asyncio.TimeoutError:
+            self.stop()
+        else:
+            return (
+                self.select1.selected_value,
+                int(self.select2.selected_value),
+                bool(self.select3.selected_value),
+            )
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.channel != self.ctx.channel:
+            await interaction.response.send_message(
+                "this interaction is not in the expected channel.", ephemeral=True
+            )
+            return False
+        elif interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                "Only the original author can interact with this view.", ephemeral=True
+            )
+            return False
+        return True
+
+
 class JoinLeaveView(discord.ui.View):
-    def __init__(self, ctx: commands.Context, num_players: int, gen_img: str):
+    def __init__(
+        self,
+        ctx: commands.Context,
+        quest_mode,
+        num_players,
+        img_flag,
+        audio_flag,
+        fast_flag,
+    ):
         super().__init__(timeout=None)
         self.ctx = ctx
+        self.quest_mode = quest_mode
         self.num_players = num_players
-        self.gen_img = gen_img
+        self.img_flag = img_flag
+        self.audio_flag = audio_flag
+        self.fast_flag = fast_flag
         self.joined_players: Set[str] = set()
 
     @discord.ui.button(
@@ -54,9 +212,14 @@ class JoinLeaveView(discord.ui.View):
             await interaction.response.send_message(
                 f"{player_name} has joined the quest!"
             )
+
+            if QUEST_MODE == MINIGAME_JOSH:
+                await assign_nickname(player_name)
+
             needed_players = self.num_players - len(self.joined_players)
+
             embed = discord.Embed(
-                title=f"{self.ctx.author.display_name} Has Proposed a Quest: Join or Leave",
+                title=f"{self.ctx.author.display_name} has proposed a game of {self.quest_mode} for {self.num_players} players: Join or Leave",
                 description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
             )  # Note: Not possible to mention author in embeds
             await interaction.message.edit(embed=embed, view=self)
@@ -65,13 +228,15 @@ class JoinLeaveView(discord.ui.View):
                 # remove join and leave buttons
                 await interaction.message.edit(view=None)
                 # return variables from setup()
-                TEMP_CHANNEL = await setup(self.ctx, self.joined_players)
+                TEMP_CHANNEL = await make_temp_channel(self.ctx, self.joined_players)
                 embed = discord.Embed(
-                    title=f"The Quest That {self.ctx.author.display_name} Proposed is Ready to Play",
+                    title=f"{self.ctx.author.display_name}'s proposal to play {self.quest_mode} has enough players, and is ready to play",
                     description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx, self.gen_img == "gen_img")
+                await start_quest(
+                    self.ctx, self.img_flag, self.audio_flag, self.fast_flag
+                )
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -95,7 +260,7 @@ class JoinLeaveView(discord.ui.View):
             )
             needed_players = self.num_players - len(self.joined_players)
             embed = discord.Embed(
-                title=f"{self.ctx.author.mention} Has Proposed a Quest: Join or Leave",
+                title=f"{self.ctx.author.display_name} has proposed a game of {self.quest_mode} for {self.num_players} players: Join or Leave",
                 description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
             )
             await interaction.message.edit(embed=embed, view=self)
@@ -115,7 +280,6 @@ async def on_ready():
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
-    bot.tree.remove_command("propose_quest")
     check_dirs()
 
 
@@ -146,51 +310,60 @@ async def on_reaction_add(reaction, user):
 
 # QUEST START AND PROGRESSION
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def propose_quest(
-    ctx, num_players: int = None, quest_mode: str = QUEST_MODE_YAML, gen_img: str = None
-):
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def embark(ctx, *args):
     """
-    Command to propose a game of d20 governance with the specified number of players.
-
-    Parameters:
-      num_players (int): The number of players required to start the game. Must be at least 2.
-
-    Example:
-      /propose_quest 4
+    Embark on a d20 governance quest
     """
-    print("Starting...")
-    if quest_mode != QUEST_MODE_YAML and quest_mode != QUEST_MODE_LLM:
-        raise ValueError("Invalid quest mode")
-    global QUEST_MODE
+    # Parse argument flags
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-a", "--audio", action="store_true", help="Generate TTS audio")
+    parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
+    args = parser.parse_args(args)
+    audio_flag = args.audio
+    fast_flag = args.fast
+
+    # Make Quest Builder view and return values from selections
+    print("Waiting for proposal to be built...")
+    view = QuestBuilderView()
+    selected_values = await view.wait_for_input(ctx)
+    if selected_values is None:
+        await ctx.send("The quest proposal timed out.", ephemeral=True)
+        return
+    quest_mode, num_players, img_flag = selected_values
+    if not 1 <= num_players <= 20:
+        await ctx.send("The game requires at least 1 and at most 20 players")
+        return
+
+    # Set values for global yaml variables
+    global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
     QUEST_MODE = quest_mode
-    if num_players is None:
-        await ctx.send(
-            "Specify the number of players needed to start the game. Type `/ help start_game` for more information."
-        )
-        return
-    if num_players < 1:  # FIXME: Change back to 2 after testing with others
-        await ctx.send("The game requires at least 2 players to start")
-        return
-    if num_players > 20:
-        await ctx.send("The maximum number of players that can play at once is 20")
-        return
+    if QUEST_MODE == QUEST_LLM:
+        pass
     else:
-        print("Waiting...")
-        view = JoinLeaveView(ctx, num_players, gen_img)
+        with open(quest_mode, "r") as f:
+            quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
+            if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
+                for stage in quest_mode_data["game"]["stages"]:
+                    stage["timeout_secs"] = 15
+        QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
 
-        embed = discord.Embed(
-            title=f"{ctx.author.display_name} Has Proposed a Quest: Join or Leave"
-        )
+    # Create Join View
+    join_leave_view = JoinLeaveView(
+        ctx, quest_mode, num_players, img_flag, audio_flag, fast_flag
+    )
+    embed = discord.Embed(
+        title=f"{ctx.author.display_name} has proposed a game of {quest_mode} for {num_players} players: Join or Leave"
+    )
+    await ctx.send(embed=embed, view=join_leave_view)
+    print("Waiting for players to join...")
 
-        await ctx.send(embed=embed, view=view)
 
-
-async def setup(ctx, joined_players):
+async def make_temp_channel(ctx, joined_players):
     """
     Game State: Setup the config and create unique quest channel
     """
-    print("Setting up...")
+    print("Making temporary channel...")
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
@@ -230,9 +403,10 @@ def get_llm_chain():
     action: "vote_governance <culture or decision>"
     timeout_mins: 1
 
-    For the action field, you must select either "vote_governance culture" or "vote_governance decision". For the message field, make sure you are crafting an interesting and fun story that ties in with
-    the overall game narrative so far. Also make sure that the message ties in with the action you 
-    have selected. Your output MUST be valid yaml.
+    For the action field, you must select either "vote_governance culture" or "vote_governance decision". 
+    For the message field, make sure you are crafting an interesting and fun story that ties in with the overall game narrative so far. 
+    Also make sure that the message ties in with the action you have selected. 
+    Your output MUST be valid yaml.
 
     {chat_history}
     Human: {human_input}
@@ -251,28 +425,40 @@ def get_llm_chain():
     return llm_chain
 
 
-async def start_quest(ctx, gen_img: bool):
+async def start_quest(ctx, img_flag, audio_flag, fast_flag):
     """
     Start a quest and create a new channel
     """
     global QUEST_INTRO
-    text = QUEST_INTRO
-    loop = asyncio.get_event_loop()
-    audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
-    print("Generating audio file...")
-    future = loop.run_in_executor(None, tts, text, audio_filename)
-    await future
-    print("Generated audio file...")
+    global QUEST_TITLE
+    title = QUEST_TITLE
+    intro = QUEST_INTRO
+    if audio_flag:
+        print("Generating audio file...")
+        loop = asyncio.get_event_loop()
+        audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
+        future = loop.run_in_executor(None, tts, intro, audio_filename)
+        await future
+        print("Generated audio file...")
+    else:
+        pass
 
-    if gen_img:
+    if img_flag == True:
         # Generate intro image and send to temporary channel
         image = generate_image(QUEST_INTRO)
     else:
-        # Create a white background image canvas instead of generating an image
-        image = Image.new("RGB", (512, 512), (255, 255, 255))
+        # Create an empty image representing the void
+        size = (256, 256)
+        border = 10
+        image = Image.new("RGB", size, (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            [(border, border), (size[0] - border, size[1] - border)],
+            fill=(20, 20, 20),
+        )
 
     llm_chain = None
-    if QUEST_MODE == QUEST_MODE_LLM:
+    if QUEST_MODE == QUEST_LLM:
         await TEMP_CHANNEL.send("generating next narrative step with llm..")
         llm_chain = get_llm_chain()
         yaml_string = llm_chain.predict(
@@ -287,7 +473,6 @@ async def start_quest(ctx, gen_img: bool):
         else:
             raise ValueError("yaml output in wrong format")
 
-    image = overlay_text(image, QUEST_INTRO)
     image.save("generated_image.png")  # Save the image to a file
     # Post the image to the Discord channel
     intro_image_message = await TEMP_CHANNEL.send(
@@ -296,31 +481,29 @@ async def start_quest(ctx, gen_img: bool):
     os.remove("generated_image.png")  # Clean up the image file
 
     # Send audio file
-    with open(audio_filename, "rb") as f:
-        audio = discord.File(f)
-        await TEMP_CHANNEL.send(file=audio)
-    os.remove(audio_filename)
+    if audio_flag:
+        with open(audio_filename, "rb") as f:
+            audio = discord.File(f)
+            await TEMP_CHANNEL.send(file=audio)
+        os.remove(audio_filename)
+    else:
+        pass
+
+    embed = discord.Embed(
+        title=title,
+        description=intro,
+        color=discord.Color.dark_orange(),
+    )
 
     # Stream message
-    await stream_message(TEMP_CHANNEL, QUEST_INTRO)
-
-    # Pin the intro message img
-    await intro_image_message.pin()
-
-    # Send commands message to temporary channel
-    available_commands = "\n".join([f"`{command}`" for command in QUEST_COMMANDS])
-    embed = discord.Embed(
-        title="Available Commands",
-        description=available_commands,
-        color=discord.Color.blue(),
-    )
-    commands_message = await TEMP_CHANNEL.send(embed=embed)
-
-    # Pin the available commands message
-    await commands_message.pin()
+    if fast_flag:
+        await TEMP_CHANNEL.send(embed=embed)
+    else:
+        await stream_message(TEMP_CHANNEL, intro, embed)
 
     for stage in QUEST_STAGES:
-        if QUEST_MODE == QUEST_MODE_LLM:
+        timeout_seconds = stage[QUEST_STAGE_TIMEOUT]
+        if QUEST_MODE == QUEST_LLM:
             MAX_ATTEMPTS = 5
             attempt = 0
             stage = None
@@ -347,59 +530,119 @@ async def start_quest(ctx, gen_img: bool):
                     "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
                 )
 
-        print(f"Processing stage {stage[QUEST_STAGE_NAME]}")
-        result = await process_stage(ctx, stage, gen_img)
+        print(
+            f"Processing stage {stage[QUEST_STAGE_NAME]} for {timeout_seconds} seconds"
+        )
+        result = await process_stage(
+            ctx, stage, img_flag, audio_flag, fast_flag, timeout_seconds
+        )
         if not result:
             await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
             break
 
 
-async def process_stage(ctx, stage, gen_img):
+async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_seconds):
     """
     Run stages from yaml config
     """
-
-    # Generate stage message into image and send to temporary channel
     message = stage[QUEST_STAGE_MESSAGE]
     stage_name = stage[QUEST_STAGE_NAME]
-    loop = asyncio.get_event_loop()
-    audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
-    future = loop.run_in_executor(None, tts, message, audio_filename)
-    await future
 
-    if gen_img:
+    if audio_flag:
+        loop = asyncio.get_event_loop()
+        audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
+        future = loop.run_in_executor(None, tts, message, audio_filename)
+        await future
+    else:
+        pass
+
+    if img_flag == True:
         # Generate intro image and send to temporary channel
         image = generate_image(message)
     else:
-        # Create a white background image canvas instead og generating an image
-        image = Image.new("RGB", (512, 512), (255, 255, 255))
+        # Create an empty image representing the void
+        size = (256, 256)
+        border = 10
+        image = Image.new("RGB", size, (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            [(border, border), (size[0] - border, size[1] - border)],
+            fill=(20, 20, 20),
+        )
 
-    image = overlay_text(image, message)
     image.save("generated_image.png")  # Save the image to a file
+
     # Post the image to the Discord channel
     await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
 
-    # Post audio file
-    with open(audio_filename, "rb") as f:
-        audio = discord.File(f)
-        await TEMP_CHANNEL.send(file=audio)
-    os.remove(audio_filename)
+    if audio_flag:
+        # Post audio file
+        with open(audio_filename, "rb") as f:
+            audio = discord.File(f)
+            await TEMP_CHANNEL.send(file=audio)
+        os.remove(audio_filename)
+    else:
+        pass
+
+    embed = discord.Embed(
+        title=stage_name,
+        description=message,
+        color=discord.Color.dark_orange(),
+    )
 
     # Stream message
-    await stream_message(TEMP_CHANNEL, message)
+    if fast_flag:
+        # embed
+        await TEMP_CHANNEL.send(embed=embed)
+    else:
+        await stream_message(TEMP_CHANNEL, message, embed)
 
     # Call the command corresponding to the event
     action_string = stage[QUEST_STAGE_ACTION]
-    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL)
+    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL, stage)
     if action_outcome is not None:
-        await execute_action(bot, action_outcome, TEMP_CHANNEL)
+        await execute_action(bot, action_outcome, TEMP_CHANNEL, stage)
+    else:
+        pass  # pass if no value assigned to action key
 
-    # Wait for the timeout period
-    timeout_seconds = stage[QUEST_STAGE_TIMEOUT] * 60
-    await asyncio.sleep(timeout_seconds)
+    # Check for countdown
+    skip_sleep = False
+    for action in action_string:
+        if "countdown" in action:
+            skip_sleep = True
+            break
+
+    # If countdown action defer to countdown await
+    if skip_sleep:
+        pass
+    else:
+        await asyncio.sleep(timeout_seconds)
 
     return True
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def countdown(ctx, timeout_seconds):
+    print("Counting down...")
+    remaining_seconds = int(timeout_seconds)
+    sleep_interval = remaining_seconds / 5
+
+    message = None
+    while remaining_seconds > 0:
+        remaining_minutes = remaining_seconds / 60
+        new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+        if message is None:
+            message = await ctx.send(new_message)
+        else:
+            await message.edit(content=new_message)
+
+        remaining_seconds -= sleep_interval
+        await asyncio.sleep(sleep_interval)
+
+    await message.edit(content="⏲️ Counting down finished.")
+    print("Countdown finished.")
 
 
 async def end(ctx):
@@ -427,9 +670,15 @@ async def end(ctx):
 
 
 # CULTURE COMMANDS
+active_culture_modes = []
+
+
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def transparency(ctx):
+    """
+    Toggle transparency module
+    """
     embed = discord.Embed(
         title="New Culture: Transparency",
         description="The community has chosen to adopt a culture of transparency.",
@@ -439,8 +688,11 @@ async def transparency(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def secrecy(ctx):
+    """
+    Toggle secrecy module
+    """
     embed = discord.Embed(
         title="New Culture: Secrecy",
         description="The community has chosen to adopt a culture of secrecy.",
@@ -449,9 +701,12 @@ async def secrecy(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@bot.command(brief="Toggle autonomy module")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def autonomy(ctx):
+    """
+    Toggle autonomy module
+    """
     embed = discord.Embed(
         title="New Culture: Autonomy",
         description="The community has chosen to adopt a culture of autonomy.",
@@ -461,21 +716,10 @@ async def autonomy(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
-async def secret_message(ctx):
-    """
-    Secrecy: Randomly Send Messages to DMs
-    """
-    print("Secret message command triggered.")
-    await send_msg_to_random_player(TEMP_CHANNEL)
-
-
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def obscurity(ctx, mode: str = None):
     """
-    Toggle the obscurity mode or set it. Valid options are "scramble", "replace_vowels", "pig_latin", "camel_case". If no parameter is passed,
-    obscurity will be toggled on or off.
+    Toggle obscurity module
     """
     global OBSCURITY
     global OBSCURITY_MODE
@@ -538,8 +782,11 @@ async def obscurity(ctx, mode: str = None):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def eloquence(ctx):
+    """
+    Toggle eloquence module
+    """
     global ELOQUENCE
     ELOQUENCE = not ELOQUENCE
     if ELOQUENCE:
@@ -589,8 +836,11 @@ async def eloquence(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def diversity(ctx):
+    """
+    Toggle diversity module
+    """
     # Display the message count for each user
     message = "Message count by user:\n"
 
@@ -606,7 +856,7 @@ async def diversity(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def ritual(ctx):
     """
     Toggle ritual module.
@@ -652,14 +902,23 @@ async def ritual(ctx):
         await ctx.send(embed=embed)
 
 
-# CULTURE MODES
-active_culture_modes = []
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def secret_message(ctx):
+    """
+    Secrecy: Randomly Send Messages to DMs
+    """
+    print("Secret message command triggered.")
+    await send_msg_to_random_player(TEMP_CHANNEL)
 
 
 # DECISION COMMANDS
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def vote(ctx, question: str, *options: str):
+    """
+    Trigger a vote
+    """
     # Set starting decision module if necessary
     current_modules = get_current_governance_stack()["modules"]
     decision_module = next(
@@ -668,9 +927,9 @@ async def vote(ctx, question: str, *options: str):
     if decision_module is None:
         await set_starting_decision_module()
 
-    if len(options) <= 1:
-        await ctx.send("Error: A poll must have at least two options.")
-        return
+    # if len(options) <= 1: # UNCOMMENT AFTER TESTIN
+    #     await ctx.send("Error: A poll must have at least two options.")
+    #     return
     if len(options) > 10:
         await ctx.send("Error: A poll cannot have more than 10 options.")
         return
@@ -748,8 +1007,8 @@ async def vote(ctx, question: str, *options: str):
     return winning_votes[0]
 
 
-@bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-agora")
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
 async def vote_governance(ctx, governance_type: str):
     if governance_type is None:
         await ctx.send("Invalid governance type: {governance_type}")
@@ -774,14 +1033,25 @@ async def vote_governance(ctx, governance_type: str):
     return winning_module_name
 
 
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def post_results(ctx):
+    await ctx.send("post_results")
+    pass
+
+
 # META GAME COMMANDS
 @bot.command()
+@access_control()
 async def info(
     ctx,
     culture_module=None,
     current_decision_module=None,
     starting_decision_module=None,
 ):
+    """
+    View meta information
+    """
     # TODO Pass starting or current decision module into the info command
     decision_module = current_decision_module or starting_decision_module
     embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
@@ -791,7 +1061,25 @@ async def info(
 
 
 @bot.command()
-async def show_governance(ctx):
+async def nickname(ctx):
+    player_name = ctx.author.name
+    nickname = players_to_nicknames.get(player_name)
+    if nickname is not None:
+        # Make a link back to the original context
+        original_context_link = discord.utils.escape_markdown(ctx.channel.mention)
+        await ctx.author.send(
+            f"Your nickname is {nickname}. Return to the game: {original_context_link}"
+        )
+    else:
+        await ctx.author.send("You haven't been assigned a nickname yet")
+
+
+@bot.command()
+@access_control()
+async def stack(ctx):
+    """
+    Post governance stack
+    """
     await post_governance(ctx)
 
 
@@ -805,20 +1093,24 @@ async def quit(ctx):
     # TODO: Implement the logic for quitting the game and ending it for the user
 
 
-@bot.command()
+@bot.command(hidden=True)
 async def dissolve(ctx):
     """
     Trigger end of game
     """
-    global FILE_COUNT
-
     print("Ending game...")
     await end(ctx)
     print("Game ended.")
 
-    # Call generate_governance_stack_gif() to create a GIF from the saved snapshots
-    generate_governance_journey_gif()
 
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def post_governance_gif(ctx):
+    """
+    Call generate_governance_stack_gif() to create a GIF from the saved snapshots
+    """
+    global FILE_COUNT
+    generate_governance_journey_gif()
     await ctx.send("Here is a gif of your governance journey:")
 
     # Open the generated GIF and send it to Discord
@@ -830,16 +1122,98 @@ async def dissolve(ctx):
     FILE_COUNT = 0
 
 
+# META CONDITION COMMANDS
+@bot.command(hidden=True)
+async def update_bot_icon(ctx):
+    # Update the bot profile picture
+    with open(BOT_ICON, "rb") as image_file:
+        image_bytes = image_file.read()
+
+    await bot.user.edit(avatar=image_bytes)
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def is_quiet(ctx):
+    global IS_QUIET
+    IS_QUIET = True
+    print("Quiet mode is on.")
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def is_not_quiet(ctx):
+    global IS_QUIET
+    IS_QUIET = False
+    print("Quiet mode is off.")
+
+
+# MISC COMMANDS
+@bot.command()
+@access_control()
+async def speech(ctx, *, text: str):
+    # delete the user's message
+    await ctx.message.delete()
+
+    # get the player name
+    player_name = ctx.author.display_name
+
+    # check if this player has a nickname
+    if player_name not in players_to_nicknames:
+        await ctx.send(f"Error: No nickname found for player!")
+        return
+
+    # get the nickname of the user invoking the command
+    nickname = players_to_nicknames[player_name]
+
+    # add the speech to the list associated with the nickname
+    nicknames_to_speeches[nickname] = text
+
+    await ctx.send(f"Added {nickname}'s speech to the list!")
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def post_speeches(ctx):
+    speeches = []
+    speeches.append("The following are the nominees' speeches: \n")
+
+    # Go through all nicknames and their speeches
+    for nickname, speech in nicknames_to_speeches.items():
+        # Append a string formatted with the nickname and their speech
+        speeches.append(f"**{nickname}**: {speech}")
+
+    # Join all speeches together with a newline in between each one
+    formatted_speeches = "\n\n".join(speeches)
+
+    # Send the formatted speeches to the context
+    await ctx.send(formatted_speeches)
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: False)
+async def vote_speeches(ctx, question: str):
+    # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
+    nicknames = list(nicknames_to_speeches.keys())
+    await vote(ctx, question, *nicknames)
+
+
 # CLEANING COMMANDS
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def clean(ctx):
+    """
+    Clean the temporary files
+    """
     clean_temp_files()
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def clean_category_channels(ctx, category_name="d20-quests"):
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def clean_cat_chans(ctx, category_name="d20-quests"):
+    """
+    Clean category channels
+    """
     guild = ctx.guild
     category = discord.utils.get(guild.categories, name=category_name)
     if category is None:
@@ -853,16 +1227,81 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
 
 
 # TEST COMMANDS
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def solo(ctx, *args, quest_mode="default", num_players=1):
+    """
+    Solo quest mode
+    """
+
+    if quest_mode == "llm":
+        quest_mode = QUEST_LLM
+    if quest_mode == "default":
+        quest_mode = QUEST_DEFAULT
+    else:
+        await ctx.send(
+            "Quest mode is invalid. Valid quest modes are `llm` or `default`"
+        )
+
+    # Parse argument flags
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-a", "--audio", action="store_true", help="Generate TTS audio")
+    parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
+    parser.add_argument(
+        "-i", "--image", action="store_true", help="Turn on image generation"
+    )
+    args = parser.parse_args(args)
+    audio_flag = args.audio
+    fast_flag = args.fast
+    img_flag = args.image
+
+    # Set values for global yaml variables
+    global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
+    QUEST_MODE = quest_mode
+    if QUEST_MODE == QUEST_LLM:
+        pass
+    else:
+        with open(quest_mode, "r") as f:
+            quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
+            if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
+                for stage in quest_mode_data["game"]["stages"]:
+                    stage["timeout_secs"] = 15
+        QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
+
+    player: Set[str] = set()
+    player_name = ctx.author.name
+    player.add(player_name)
+
+    if recurively_search_yaml(quest_mode_data, "/nickname"):
+        await assign_nickname(player_name)
+
+    global TEMP_CHANNEL
+    # store name os command executor in joined_players
+    TEMP_CHANNEL = await make_temp_channel(ctx, player)
+    embed = discord.Embed(
+        title="Solo game ready to play",
+        description=f"Play here: {TEMP_CHANNEL.mention}",
+    )
+    await ctx.send(embed=embed)
+    await start_quest(ctx, img_flag, audio_flag, fast_flag)
+
+
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_randomize_snapshot(ctx):
+    """
+    Test making a randomized governance snapshot
+    """
     shuffle_modules()
     make_governance_snapshot()
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_png_creation(ctx):
+    """
+    Test governance stack png creation
+    """
     make_governance_snapshot()
     with open("output.png", "rb") as f:
         png_file = discord.File(f, "output.svg")
@@ -870,14 +1309,13 @@ async def test_png_creation(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
-async def test_generation(ctx):
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def test_img_generation(ctx):
     """
     Test stability image generation
     """
     text = "Obscurity"
     image = generate_image(text)
-    image = overlay_text(image, text)
 
     # Save the image to a file
     image.save("generated_image.png")
@@ -890,7 +1328,7 @@ async def test_generation(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_culture(ctx):
     """
     A way to test and demo the culture messaging functionality
@@ -899,7 +1337,7 @@ async def test_culture(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: ctx.channel.name == "d20-testing")
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_decision(ctx):
     """
     Test and demo the decision message functionality
@@ -907,11 +1345,102 @@ async def test_decision(ctx):
     await vote_governance(ctx, "decision")
 
 
+@bot.command(hidden=True)
+@access_control()
+async def ping(ctx):
+    """
+    A ping command for testing
+    """
+    await ctx.send("Pong!")
+
+
+# /change_access_control allowed_roles [] info
+# COMMAND MANAGEMENT
+@bot.command(hidden=True)
+async def change_cmd_acl(ctx, setting_name, value, command_name=""):
+    """
+    Change settings for the @access_control decorator
+    """
+    if value.lower() == "none":
+        value = ""
+    if command_name.lower() == "none":
+        command_name = ""
+
+    valid_settings = ["allowed_roles", "excluded_roles"]
+    if setting_name not in valid_settings:
+        message = "Invalid setting name. Allowed setting names are, `allowed_roles`, `excluded_roles`, and `user_override`."
+        return
+
+    elif setting_name == "allowed_roles" or setting_name == "excluded_roles":
+        value = value.split("|")
+
+    ACCESS_CONTROL_SETTINGS[setting_name] = value
+
+    if command_name != None:
+        ACCESS_CONTROL_SETTINGS["command_name"] = command_name
+
+
 # ON MESSAGE
+
+bot.remove_command("help")
+
+
+@bot.command()
+async def help(ctx, command: str = None):
+    prefix = bot.command_prefix
+    if command:
+        # Display help for a specific command
+        cmd = bot.get_command(command)
+        if not cmd:
+            await ctx.send(f"Sorry, I couldn't find command **{command}**.")
+            return
+        cmd_help = cmd.help or "No help available."
+        help_embed = discord.Embed(
+            title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
+        )
+        await ctx.send(embed=help_embed)
+    else:
+        # Display a list of available commands
+        cmds = [c.name for c in bot.commands if not c.hidden]
+        cmds.sort()
+        embed = discord.Embed(
+            title="Commands List",
+            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.",
+            color=0x00FF00,
+        )
+        for cmd in cmds:
+            command = bot.get_command(cmd)
+            # if cmd == None:
+            #     continue
+            description = command.brief or command.short_doc
+            embed.add_field(
+                name=f"{prefix}{cmd}",
+                value=description or "No description available.",
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
+
+@bot.event
+async def on_command(ctx):
+    print(f"Command invoked: {ctx.command.name}")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    print(f"Error invoking command: {ctx.command.name} - {error}")
+
+
 @bot.event
 async def on_message(message):
+    global IS_QUIET
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
+            return
+
+        # Allow the "/help" command to run without channel checks
+        if message.content.startswith("/help"):
+            await bot.process_commands(message)
             return
 
         # If message is a command, proceed directly to processing
@@ -925,93 +1454,110 @@ async def on_message(message):
             user_message_count[user_id] = 0
         user_message_count[user_id] += 1
 
-        # Check if any modes are active and apply filters in list order
-        filtered_message = message.content
-        if active_culture_modes:
+        if IS_QUIET and not message.author.bot:
             await message.delete()
-            bot_message = await message.channel.send(
-                f"{message.author.mention} posted: {filtered_message}"
-            )
-        for mode in active_culture_modes:
-            if mode == "RITUAL":
-                # Get the most recently posted message in the channel that isn't from a bot
-                async for msg in message.channel.history(limit=100):
-                    if msg.id == message.id:
-                        continue
-                    if msg.author.bot:
-                        continue
-                    if msg.content.startswith("/"):
-                        continue
-                    previous_message = msg.content
-                    break
+        else:
+            # Check if any modes are active and apply filters in list order
+            filtered_message = message.content
+            if active_culture_modes:
+                await message.delete()
+                bot_message = await message.channel.send(
+                    f"{message.author.mention} posted: {filtered_message}"
+                )
+            for mode in active_culture_modes:
+                if mode == "RITUAL":
+                    # Get the most recently posted message in the channel that isn't from a bot
+                    async for msg in message.channel.history(limit=100):
+                        if msg.id == message.id:
+                            continue
+                        if msg.author.bot:
+                            continue
+                        if msg.content.startswith("/"):
+                            continue
+                        previous_message = msg.content
+                        break
 
-                processing_message = await message.channel.send(
-                    f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
-                )
-                filtered_message = initialize_ritual_agreement(
-                    previous_message, filtered_message
-                )
-                await processing_message.delete()
-                await bot_message.edit(
-                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
-                )
-            if mode == "OBSCURITY":
-                obscurity_function = globals()[OBSCURITY_MODE]
-                filtered_message = obscurity_function(filtered_message)
-                await bot_message.edit(
-                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
-                )
-            if mode == "ELOQUENCE":
-                processing_message = await message.channel.send(
-                    f"Making {message.author.mention}'s post eloquent"
-                )
-                filtered_message = await filter_eloquence(filtered_message)
-                await processing_message.delete()
-                await bot_message.edit(
-                    content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
-                )
+                    processing_message = await message.channel.send(
+                        f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
+                    )
+                    filtered_message = initialize_ritual_agreement(
+                        previous_message, filtered_message
+                    )
+                    await processing_message.delete()
+                    await bot_message.edit(
+                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                    )
+                if mode == "OBSCURITY":
+                    obscurity_function = globals()[OBSCURITY_MODE]
+                    filtered_message = obscurity_function(filtered_message)
+                    await bot_message.edit(
+                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                    )
+                if mode == "ELOQUENCE":
+                    processing_message = await message.channel.send(
+                        f"Making {message.author.mention}'s post eloquent"
+                    )
+                    filtered_message = await filter_eloquence(filtered_message)
+                    await processing_message.delete()
+                    await bot_message.edit(
+                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                    )
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
         await message.channel.send("An error occurred")
 
 
 # BOT CHANNEL CHECKS
-@bot.check
-async def validate_channels(ctx):
+async def check_cmd_channel(ctx, channel_name):
     """
     Check that the test_game and start_game commands are run in the `d20-agora` channel
     """
-    # Check is "d20-agora" channel exists on server
-    agora_channel = discord.utils.get(ctx.guild.channels, name="d20-agora")
-    if agora_channel is None:
+    # Check if the command being run is /help and allow it to bypass checks
+    channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+    if ctx.command.name == "help":
+        return True
+    elif ctx.channel.name != channel.name:
         embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.",
+            title="Error: This command cannot be run in this channel.",
+            description=f"Run this command in <#{channel.id}>",
             color=discord.Color.red(),
-        )
-        embed.add_field(
-            name=f"Missing channel: {agora_channel.name}",
-            value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
-            f"The `{agora_channel.name}` channel was not found on this server.\n\n"
-            f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
-            f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
-            f"**Note:** The channel name must be exactly `{agora_channel.name}`.",
-        )
-        await ctx.send(embed=embed)
-        return False
-    if not agora_channel:
-        embed = discord.Embed(
-            title="Error - This command cannot be run in this channel.",
-            color=discord.Color.red(),
-        )
-        embed.add_field(
-            name=f"Wrong Channel: run in {agora_channel.name}",
-            value=f"This command can only be run in the `{agora_channel.name}` channel.",
         )
         await ctx.send(embed=embed)
         return False
     else:
         return True
+
+    # Check is "d20-agora" channel exists on server
+    # agora_channel = discord.utils.get(ctx.guild.channels, name="d20-agora")
+    # if agora_channel is None:
+    #     embed = discord.Embed(
+    #         title="Error - This command cannot be run in this channel.",
+    #         color=discord.Color.red(),
+    #     )
+    #     embed.add_field(
+    #         name=f"Missing channel: {agora_channel.name}",
+    #         value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
+    #         f"The `{agora_channel.name}` channel was not found on this server.\n\n"
+    #         f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
+    #         f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
+    #         f"**Note:** The channel name must be exactly `{agora_channel.name}`.",
+    #     )
+    #     await ctx.send(embed=embed)
+    #     return False
+    # if not agora_channel:
+    #     embed = discord.Embed(
+    #         title="Error - This command cannot be run in this channel.",
+    #         color=discord.Color.red(),
+    #     )
+    #     embed.add_field(
+    #         name=f"Wrong Channel: run in {agora_channel.name}",
+    #         value=f"This command can only be run in the `{agora_channel.name}` channel.",
+    #     )
+    #     await ctx.send(embed=embed)
+    #     return False
+    # else:
+    #     return True
 
 
 # REPO DIRECTORY CHECKS
@@ -1022,6 +1568,13 @@ def check_dirs():
     if not os.path.exists(GOVERNANCE_STACK_SNAPSHOTS_PATH):
         os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH)
         print(f"Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory")
+    if not os.path.exists(LOGGING_PATH):
+        os.makedirs(LOGGING_PATH)
+        print(f"Created {LOGGING_PATH} directory")
+    if not os.path.exists(LOG_FILE_NAME):
+        with open(LOG_FILE_NAME, "w") as f:
+            f.write("This is a new log file.")
+            print(f"Creates {LOG_FILE_NAME} file")
 
 
 try:

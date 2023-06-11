@@ -1,4 +1,7 @@
+from click import command
 import discord
+from discord.ext import commands
+from pytest import param
 import requests
 import random
 import base64
@@ -16,6 +19,43 @@ from d20_governance.utils.constants import *
 import shlex
 from io import BytesIO
 import os
+
+
+# Decorator for access control management
+def access_control():
+    async def predicate(ctx):
+        # If condition is true, command is able to be executed
+        # Check if the command being run is /help and allow it to bypass checks
+        if ctx.command.name == "help":
+            print("Bypassing access_control check")
+            return True
+
+        # Check if command matches command_name
+        if ctx.command.name == ACCESS_CONTROL_SETTINGS["command_name"]:
+            return True
+
+        # Check if the author is a bot
+        if ctx.author.bot:
+            return True
+
+        # Check if the user has an allowed role
+        for role in ctx.author.roles:
+            print(role)
+            if role.name in ACCESS_CONTROL_SETTINGS["allowed_roles"]:
+                return True
+
+        # Check if the user should be excluded based on role
+        for role in ctx.author.roles:
+            if role.name in ACCESS_CONTROL_SETTINGS["excluded_roles"]:
+                message = f"This command is not available with the {role.name} role"  # might be useful for josh game, use not-josh role
+
+        # If none of the above, the user doesn't have access to the command
+        # Send an error message
+        message = "Sorry, you do not have permission to run this command at this time."
+        await ctx.send(message)
+        return False
+
+    return commands.check(predicate)
 
 
 # Setup Utils
@@ -65,6 +105,75 @@ async def setup_server(guild):
         logging.info("Necessary channels and categories exist.")
     else:
         logging.info("Some necessary channels or categories are missing.")
+
+
+# Yaml command callback and parsing
+async def execute_action(bot, action_string, temp_channel, stage):
+    command_strings = parse_action_string(action_string)
+    for command_string in command_strings:
+        tokens = shlex.split(command_string.lower())
+        command_name, *args = tokens
+        command = bot.get_command(command_name)
+        if command is None:
+            continue
+
+        print(f"Executing {command}")
+
+        # Get the last message object from the channel to set context
+        message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+
+        # Create a context object for the message
+        ctx = await bot.get_context(message_obj)
+
+        if command_name == "countdown":
+            await command.callback(ctx, stage.get("timeout_secs"))
+        else:
+            await command.callback(ctx, *args)
+
+
+def parse_action_string(action_string):
+    if isinstance(action_string, list):
+        return action_string
+    else:
+        return [action_string]
+
+
+def recurively_search_yaml(data, search_string):
+    """
+    Recurively search a YAML data structure for a given string
+    """
+    if isinstance(data, str):
+        return search_string in data
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if recurively_search_yaml(value, search_string):
+                return True
+    elif isinstance(data, list):
+        for item in data:
+            if recurively_search_yaml(item, search_string):
+                return True
+    return False
+
+
+# Name Functions
+async def assign_nickname(player_name):
+    """
+    Assign player nickname
+    """
+    # Make sure there are still nicknames available
+    if len(nicknames) == 0:
+        raise Exception("No more nicknames available.")
+
+    # Randomly select a nickname
+    nickname = random.choice(nicknames)
+
+    # Assign the nickname to the player
+    players_to_nicknames[player_name] = nickname
+
+    # Remove the nickname from the list so it can't be used again
+    nicknames.remove(nickname)
+
+    print(f"Assigned nickname '{nickname}' to player '{player_name}'.")
 
 
 # Module Management
@@ -135,18 +244,21 @@ def add_module_to_stack(module):
 
 
 # Text Utils
-async def stream_message(ctx, text):
-    message_canvas = await ctx.send("[]")
-    # Use the typing context manager to simulate typing
+async def stream_message(ctx, text, original_embed):
+    embed = original_embed.copy()
+    embed.description = "[...]"
+    message_canvas = await ctx.send(embed=embed)
     try:
         chunks = chunk_text(text)
         joined_text = []
         for chunk in chunks:
+            # Use the typing context manager to simulate typing
             async with ctx.typing():
                 joined_text.append(chunk)
-                distorted_text = distort_text(joined_text)
-                joined_text_str = " ".join(distorted_text) + " []"
-                await message_canvas.edit(content=joined_text_str)
+                # distorted_text = distort_text(joined_text)  # distorted text disabled
+                joined_text_str = " ".join(joined_text)
+                embed.description = joined_text_str
+                await message_canvas.edit(embed=embed)
                 sleep_time = random.uniform(0.7, 1.2)
                 for word in chunk.split():
                     if "," in word:
@@ -156,8 +268,9 @@ async def stream_message(ctx, text):
                     else:
                         pass
                 await asyncio.sleep(sleep_time)
-        final_message = " ".join(distorted_text) + " [Done!]"
-        await message_canvas.edit(content=final_message)
+        final_message = "".join(joined_text_str) + " ✨"
+        embed.description = final_message
+        await message_canvas.edit(embed=embed)
     except Exception as e:
         print(e)
 
@@ -167,7 +280,7 @@ def chunk_text(text):
     chunks = []
     i = 0
     while i < len(words):
-        chunk_size = 2 if random.random() < 0.6 else 3
+        chunk_size = 14 if random.random() < 0.6 else 16
         chunk = " ".join(words[i : i + chunk_size])
         chunks.append(chunk)
         i += chunk_size
@@ -209,22 +322,6 @@ def distort_text(word_list):
             distorted_list.append("||" + word + "||")
         else:
             distorted_list.append(word)
-    return distorted_list
-
-
-def distort_text_simple(text_list):
-    distorted_list = []
-    for i, text in enumerate(text_list):
-        distortion_level = i + 1
-        # Apply distortion based on probability and distortion level
-        if random.random() < 0.1 * distortion_level:
-            distorted_list.append("*" + text + "*")
-        elif random.random() < 0.35 * distortion_level:
-            distorted_list.append("_" + text + "_")
-        elif random.random() < 0.6 * distortion_level:
-            distorted_list.append("||" + text + "||")
-        else:
-            distorted_list.append(text)
     return distorted_list
 
 
@@ -565,6 +662,7 @@ def shuffle_modules():
     return modules_combined
 
 
+# Post and show governance stack
 def generate_governance_journey_gif():
     frames = []
 
@@ -604,20 +702,7 @@ async def post_governance(ctx):
             print(f"{os.path.basename(latest_snapshot)}")
 
 
-def parse_action_string(action_string):
-    return shlex.split(action_string.lower())
-
-
-async def send_msg_to_random_player(temp_channel):
-    print("Sending random DM...")
-    players = [member for member in temp_channel.members if not member.bot]
-    random_player = random.choice(players)
-    dm_channel = await random_player.create_dm()
-    await dm_channel.send(
-        "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
-    )
-
-
+# Cleanup
 def clean_temp_files():
     """
     Delete temporary files

@@ -6,13 +6,6 @@ game:
 
     Throughout the game, you will face various challenges and decisions that will shape the future of your community. Embrace your roles, engage in discussions, and allocate resources wisely to build a successful and inclusive society on this new planet."
 
-  commands:
-  - decisions
-  - culture
-  - obscurity
-  - secret_message
-  - quit
-
   stages:
       - stage: "role-assignment"
         message: "**Role Assignment:**
