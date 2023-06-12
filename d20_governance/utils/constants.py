@@ -1,9 +1,7 @@
 import os
 import yaml as py_yaml
-import emoji
 from dotenv import load_dotenv
 from ruamel.yaml import YAML
-
 
 def read_config(file_path):
     """
@@ -13,9 +11,10 @@ def read_config(file_path):
         config = py_yaml.safe_load(f)
     return config
 
-
 ru_yaml = YAML()
 ru_yaml.indent(mapping=2, sequence=4, offset=2)
+
+# API Keys and Info
 
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -27,6 +26,8 @@ if STABILITY_TOKEN is None:
     raise Exception("Missing Stability API key.")
 
 API_HOST = "https://api.stability.ai"
+STABILITY_API_HOST = "https://api.stability.ai"
+ENGINE_ID = "stable-diffusion-v1-5"
 
 
 # Timeouts
@@ -36,8 +37,6 @@ GAME_TIMEOUT = (
 )
 VOTE_DURATION_SECONDS = 60
 
-STABILITY_API_HOST = "https://api.stability.ai"
-ENGINE_ID = "stable-diffusion-v1-5"
 
 # TEMP DIRECTORY PATHS
 AUDIO_MESSAGES_PATH = "assets/audio/bot_generated"
@@ -45,7 +44,6 @@ GOVERNANCE_STACK_SNAPSHOTS_PATH = "assets/user_created/governance_stack_snapshot
 LOGGING_PATH = "logs"
 LOG_FILE_NAME = f"{LOGGING_PATH}/bot.log"
 
-# CONFIG PATHS
 # BOT IMAGES
 BOT_ICON = "assets/imgs/game_icons/d20-gov-icon.png"
 
@@ -53,11 +51,13 @@ BOT_ICON = "assets/imgs/game_icons/d20-gov-icon.png"
 QUEST_WHIMSY = "d20_governance/d20_configs/quest_configs/whimsy.yaml"
 QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
 QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
-QUEST_LLM = "llm"
-QUEST_DEFAULT = "d20_governance/d20_configs/default.yaml"
-
-# MINIGAME CONFIGS
 MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
+QUEST_MODE_LLM = "llm"
+QUEST_STAGE_MESSAGE = "message"
+QUEST_STAGE_NAME = "stage"
+QUEST_STAGE_ACTION = "actions"
+QUEST_STAGE_TIMEOUT = "timeout_secs"
+
 
 # GOVERNANCE CONFIGS
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
@@ -74,7 +74,7 @@ GOVERNANCE_TYPES = {
     "structure": "d20_governance/governance_stacks/types/structure.yaml",
 }
 
-# Fonts
+# FONTS
 FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
 FONT_PATH_LATO = "assets/fonts/Lato-Regular.ttf"
 
@@ -96,50 +96,33 @@ FILE_COUNT = 0  # Global variable to store the count of created files
 MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
-# Init
-QUEST_DATA = read_config(QUEST_DEFAULT)
-QUEST_GAME = QUEST_DATA.get("game")
-QUEST_TITLE = QUEST_GAME.get("title")
-QUEST_INTRO = QUEST_GAME.get("intro")
-QUEST_STAGES = QUEST_GAME.get("stages")
-QUEST_STAGE_MESSAGE = "message"
-QUEST_STAGE_ACTION = "action"
-QUEST_STAGE_TIMEOUT = "timeout_secs"
-QUEST_APPLY_OUTCOME = "apply_outcome"
-QUEST_STAGE_NAME = "stage"
+# CULTURE MODES
 OBSCURITY = False
 ELOQUENCE = False
 RITUAL = False
-TEMP_CHANNEL = None
 OBSCURITY_MODE = "scramble"
 IS_QUIET = False
 COMMAND_VISIBILITY = {}
 DECISION_MODULE = None
 MAX_VOTE_TRIGGERS = 3
 
-# Init internal access control settings
+# INTERNAL ACCESS CONTROL SETTINGS 
 ACCESS_CONTROL_SETTINGS = {
     "allowed_roles": ["@everyone"],
     "excluded_roles": [],
     "command_name": [],
 }
 
+# MISC
+COMMAND_VISIBILITY = {}
 
-# Define Quest Config Variables based on selected quest mode
-def set_quest_vars(quest_mode_data):
-    global QUEST_DATA, QUEST_GAME, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
-    QUEST_DATA = quest_mode_data
-    QUEST_GAME = QUEST_DATA.get("game")
-    QUEST_TITLE = QUEST_GAME.get("title")
-    QUEST_INTRO = QUEST_GAME.get("intro")
-    QUEST_STAGES = QUEST_GAME.get("stages")
-    return QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
-
+# CULTURE COMMANDS
+active_culture_modes = []
 
 # Stores the number of messages sent by each user
 user_message_count = {}
 
-# Maps player name to nickname
+# JOSH GAME # todo: move this out to game-specific file
 players_to_nicknames = {}
 nicknames = [
     "Jigsaw Joshy",
@@ -150,5 +133,18 @@ nicknames = [
     "Jamboree Josh",
     "Jumping Jack Josh",
     "Just Joking Josh",
+    "Jubilant Jostler",
+    "Jazz Hands Josh",
+    "Jetset Josh",
+    "Java Junkie Josh",
+    "Juicy Josh",
+    "Jigsaw Juggler Josh",
+    "Joyful Jester Josh",
+    "Jackpot Josh",
+    "Jeopardy Josh",
+    "Jammin' Josh",
+    "Jurassic Josh",
+    "Jingle Bell Josh",
 ]
+
 nicknames_to_speeches = {}

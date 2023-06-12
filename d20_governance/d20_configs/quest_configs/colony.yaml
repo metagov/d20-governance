@@ -1,12 +1,15 @@
 game:
   title: "Planet Governance"
   intro: "**The Intro:**
-
     Welcome to Planet Governance! You are part of a group of new settlers who have just arrived on an uncharted planet. Your mission is to establish a thriving colony and create a sustainable governance system that ensures the well-being of all settlers.
-
     Throughout the game, you will face various challenges and decisions that will shape the future of your community. Embrace your roles, engage in discussions, and allocate resources wisely to build a successful and inclusive society on this new planet."
 
   stages:
+      - stage: "Intro"
+        message: "**The Intro:**
+        Welcome to Planet Governance! You are part of a group of new settlers who have just arrived on an uncharted planet. Your mission is to establish a thriving colony and create a sustainable governance system that ensures the well-being of all settlers.
+        Throughout the game, you will face various challenges and decisions that will shape the future of your community. Embrace your roles, engage in discussions, and allocate resources wisely to build a successful and inclusive society on this new planet."
+
       - stage: "role-assignment"
         message: "**Role Assignment:**
 

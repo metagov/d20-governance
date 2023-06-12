@@ -69,7 +69,7 @@ async def filter_eloquence(text):
 
 async def send_msg_to_random_player():
     print("Sending random DM...")
-    players = [member for member in TEMP_CHANNEL.members if not member.bot]
+    players = [member for member in GAME_CHANNEL.members if not member.bot]
     random_player = random.choice(players)
     dm_channel = await random_player.create_dm()
     await dm_channel.send(
