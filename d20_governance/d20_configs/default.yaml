@@ -25,7 +25,8 @@ game:
       - stage: "Voting"
         message: "The Joshes have spoken. It is time to vote for the real Josh!.\n\n
         You have 20 seconds to vote."
-        action: ["is_quiet", 'vote_speeches "Who is the real Josh?"', "countdown"]
+        action: ["is_quiet", 'vote_speeches "Who is the real Josh?" majority', "countdown"]
+        # TODO: check why passing a string "20" in vote_speeches won't replace the default value for timeout
         timeout_secs: 20
 
       - stage: "Failed Consensus Obscurity"
@@ -52,7 +53,7 @@ game:
       - stage: "Vote [Obscurity]"
         message: "It's time to vote! A stillness sets in while we cast our votes. The fate of Josh rests in our collective hands.\n\n
         You have 20 seconds to vote."
-        action: ["is_quiet", 'vote_speeches "Who is the real Josh?"', "countdown"]
+        action: ["is_quiet", 'vote_speeches "Who is the real Josh?" consensus', "countdown"]
           # enforce consensus
         timeout_secs: 20
       
