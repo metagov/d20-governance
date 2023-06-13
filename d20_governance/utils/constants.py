@@ -79,7 +79,7 @@ FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
 FONT_PATH_LATO = "assets/fonts/Lato-Regular.ttf"
 
 # GRAPHIC SETS
-CIRCLE_EMOJIES = [
+CIRCLE_EMOJIS = [
     "🔴",
     "🟠",
     "🟡",
@@ -115,6 +115,7 @@ OBSCURITY_MODE = "scramble"
 IS_QUIET = False
 COMMAND_VISIBILITY = {}
 DECISION_MODULE = None
+MAX_VOTE_TRIGGERS = 3
 
 # Init internal access control settings
 ACCESS_CONTROL_SETTINGS = {
