@@ -51,13 +51,10 @@ class Quest:
         self.update_vars()
 
     def update_vars(self):
-            # Set timeouts in fast mode 
+        # LLM mode does not have yaml 
         if self.mode is not QUEST_MODE_LLM:
             with open(self.mode, "r") as f:
                 quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
-                if self.fast_mode and isinstance(quest_data["stages"], list):
-                    for stage in quest_data["stages"]:
-                        stage["timeout_secs"] = 15
                 self.quest_data = quest_data
 
         if self.quest_data is not None:

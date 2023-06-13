@@ -162,6 +162,8 @@ async def process_stage(stage: Stage, quest: Quest):
         await asyncio.gather(*tasks)  # wait for all actions to complete
 
     async def progress_checker():
+        if progress_conditions == None or len(progress_conditions) == 0:
+            return
         while True:
             tasks = []
             for condition in progress_conditions:
@@ -179,7 +181,7 @@ async def process_stage(stage: Stage, quest: Quest):
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
     await asyncio.gather(action_runner(), progress_checker())
 
-async def time_elapsed():
+async def all_speeches_submitted():
     rand = random.randint(0, 10)
     if rand < 5:
         return False
@@ -595,6 +597,10 @@ async def make_game_channel(ctx, quest: Quest):
 @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
     print("Counting down...")
+    if bot.quest.fast_mode:
+        await asyncio.sleep(7)
+        return
+    
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
 
@@ -1524,13 +1530,13 @@ async def on_message(message):
                     )
                     await processing_message.delete()
                     await bot_message.edit(
-                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                        content=f"{message.author.mention}: {filtered_message}"
                     )
                 if mode == "OBSCURITY":
                     obscurity_function = globals()[OBSCURITY_MODE]
                     filtered_message = obscurity_function(filtered_message)
                     await bot_message.edit(
-                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                        content=f"{message.author.mention}: {filtered_message}"
                     )
                 if mode == "ELOQUENCE":
                     processing_message = await message.channel.send(
@@ -1539,7 +1545,7 @@ async def on_message(message):
                     filtered_message = await filter_eloquence(filtered_message)
                     await processing_message.delete()
                     await bot_message.edit(
-                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                        content=f"{message.author.mention}: {filtered_message}"
                     )
 
     except Exception as e:
