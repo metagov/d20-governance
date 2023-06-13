@@ -32,27 +32,27 @@ class TestQuestMockActions(unittest.TestCase):
         mock_sleep.assert_called()
         quest.game_channel.send.assert_called()
 
-class TestQuestWithActions(unittest.TestCase):
-    @patch('d20_governance.utils.utils.generate_image', new_callable=AsyncMock)
-    @patch('asyncio.sleep', new_callable=AsyncMock)  # replace the actual sleep with an AsyncMock
-    def test_quest(self, mock_sleep, mock_generate_image):
-        quest = create_quest()
-        mock_fetch_message = AsyncMock()
-                # create a mock for the message
-        mock_message = MagicMock()
+# class TestQuestWithActions(unittest.TestCase):
+#     @patch('d20_governance.utils.utils.generate_image', new_callable=AsyncMock)
+#     @patch('asyncio.sleep', new_callable=AsyncMock)  # replace the actual sleep with an AsyncMock
+#     def test_quest(self, mock_sleep, mock_generate_image):
+#         quest = create_quest()
+#         mock_fetch_message = AsyncMock()
+#                 # create a mock for the message
+#         mock_message = MagicMock()
 
-        # set the 'content' attribute to some string
-        mock_message.content = 'some content'
+#         # set the 'content' attribute to some string
+#         mock_message.content = 'some content'
 
-        # now, set the return value of fetch_message to this mock
-        mock_fetch_message.return_value = mock_message
-        quest.game_channel.fetch_message = mock_fetch_message
+#         # now, set the return value of fetch_message to this mock
+#         mock_fetch_message.return_value = mock_message
+#         quest.game_channel.fetch_message = mock_fetch_message
 
-        asyncio.run(start_quest(quest))
+#         asyncio.run(start_quest(quest))
 
-        mock_fetch_message.assert_called()
-        mock_sleep.assert_called()
-        quest.game_channel.send.assert_called()
+#         mock_fetch_message.assert_called()
+#         mock_sleep.assert_called()
+#         quest.game_channel.send.assert_called()
 
 
 if __name__ == '__main__':

@@ -17,7 +17,7 @@ stages:
     
     - stage: "Deliberation"
       message: "A clamor of claims erupts. It is time to decide who amongst us is the real Josh. discuss and build consensus.\n\n
-      If consensus is not reached only two will move forward. You have 2 minutes to deliberate"
+      If consensus is not reached only two will move forward. You have 2 minutes to deliberate."
         # TODO: what about ties?
       actions: ["post_speeches", "countdown 120"]
       progress_conditions: ["all_speeches_submitted"]

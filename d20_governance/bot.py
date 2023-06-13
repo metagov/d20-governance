@@ -107,6 +107,7 @@ async def process_stage(stage: Stage, quest: Quest):
     """
     Run stages from yaml config
     """
+
     if quest.gen_audio:
         loop = asyncio.get_event_loop()
         audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage.name}.mp3"
@@ -182,11 +183,10 @@ async def process_stage(stage: Stage, quest: Quest):
     await asyncio.gather(action_runner(), progress_checker())
 
 async def all_speeches_submitted():
-    rand = random.randint(0, 10)
-    if rand < 5:
-        return False
-    else:
+    if players_to_nicknames and nicknames_to_speeches and len(players_to_nicknames) == len(nicknames_to_speeches):
+        print("All speeches submitted.")
         return True
+    return False
 
 async def end(ctx, quest: Quest):
     """
@@ -596,7 +596,6 @@ async def make_game_channel(ctx, quest: Quest):
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
-    print("Counting down...")
     if bot.quest.fast_mode:
         await asyncio.sleep(7)
         return
@@ -1278,12 +1277,13 @@ async def speech(ctx, *, text: str):
 @commands.check(lambda ctx: False)
 async def post_speeches(ctx):
     speeches = []
+    global nicknames_to_speeches
     title = "The following are the nominees' speeches"
 
     # Go through all nicknames and their speeches
     for nickname, speech in nicknames_to_speeches.items():
         # Append a string formatted with the nickname and their speech
-        speeches.append(f"📜**{nickname}**:\n\n   🗣️{speech}")
+        speeches.append(f"📜**{nickname}**:\n\n   🗣️ {speech}")
 
     # Join all speeches together with a newline in between each one
     formatted_speeches = "\n\n\n".join(speeches)
@@ -1291,6 +1291,9 @@ async def post_speeches(ctx):
     embed = discord.Embed(
         title=title, description=formatted_speeches, color=discord.Color.dark_teal()
     )
+
+    # Reset the nicknames_to_speeches dictionary for the next round
+    nicknames_to_speeches = {}
 
     # Send the formatted speeches to the context
     await ctx.send(embed=embed)
