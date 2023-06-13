@@ -1,6 +1,11 @@
 title: "Minigame: Josh Fight"
 
 stages:
+    - stage: "Intro"
+      message: "**Welcome Joshes!** Get ready for _The Josh Fight_, where you'll battle to claim the coveted title of the **Ultimate Josh**!\n\n To begin, submit your speech laying out your claim to joshdom using `/speech [message]`. You have 3 minutes to prepare. To see your current Josh name, type `/nickname`."
+      actions: ["countdown 45"]
+      progress_conditions: []
+
     - stage: "Write Speeches"
       message: "All Joshes have 2 minutes to submit their speech. Use `/speech [message]`."
       actions: ["countdown 90"]
@@ -46,7 +51,7 @@ stages:
 
     - stage: "Deliberation [Obscurity]"
       message: "It's time to deliberate once more. Beware of impersonators trying to throw us off course.\n\n
-      Work towards building consensus. This is necessary for the final decision.\n\n
+      Work towards building consensus on the real Josh. If you don't reach consensus, the game will fail.\n\n
       You have 2 minute to deliberate"
       actions: ["post_speeches", "countdown 120"]
       progress_conditions: []

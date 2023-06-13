@@ -15,6 +15,7 @@ from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
+from d20_governance.utils.voting import vote
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -74,8 +75,8 @@ print("Logging to logs/bot.log")
 
 # QUEST FLOW
 
-def setup_quest(quest_mode, gen_images, gen_audio, fast_mode):
-    quest = Quest(quest_mode, gen_images, gen_audio, fast_mode)
+def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
+    quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
     return quest
 
@@ -183,6 +184,8 @@ async def process_stage(stage: Stage, quest: Quest):
     await asyncio.gather(action_runner(), progress_checker())
 
 async def all_speeches_submitted():
+    players_to_nicknames = bot.quest.players_to_nicknames
+    nicknames_to_speeches = bot.quest.nicknames_to_speeches
     if players_to_nicknames and nicknames_to_speeches and len(players_to_nicknames) == len(nicknames_to_speeches):
         print("All speeches submitted.")
         return True
@@ -437,47 +440,6 @@ class JoinLeaveView(discord.ui.View):
             )
 
 
-class VoteView(discord.ui.View):
-    def __init__(self, ctx, timeout):
-        super().__init__(timeout=timeout)
-        self.ctx = ctx
-        self.votes = {}
-
-    async def on_timeout(self):
-        self.stop()
-
-    def add_option(self, label, value, emoji=None):
-        option = discord.SelectOption(label=label, value=value, emoji=emoji)
-        if not self.children:
-            self.add_item(
-                discord.ui.Select(
-                    options=[option],
-                    placeholder="Vote on the available options.",
-                    min_values=1,
-                    max_values=1,
-                    custom_id="vote_select",
-                )
-            )
-        else:
-            self.children[0].options.append(option)
-
-    @discord.ui.select(custom_id="vote_select")
-    async def on_vote_select(
-        self, interaction: discord.Interaction, select: discord.ui.Select
-    ):
-        if interaction.user not in self.votes or (
-            interaction.user in self.votes
-            and self.votes[interaction.user] != interaction.data.get("values")
-        ):
-            self.votes[interaction.user] = interaction.data.get("values")
-            await interaction.response.send_message(
-                "Your vote has been recorded.", ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                "You've already voted.", ephemeral=True
-            )
-
 
 # EVENTS
 @bot.event
@@ -540,12 +502,12 @@ async def embark(ctx, *args):
         return
     quest_mode, num_players, gen_images = selected_values
 
-    if not 1 <= num_players <= 20:
-        await ctx.send("The game requires at least 1 and at most 20 players")
+    if not 2 <= num_players <= 20:
+        await ctx.send("The game requires at least 2 and at most 20 players")
         return
 
     # Quest setup
-    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode)
+    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=False)
 
     # Create Join View
     join_leave_view = JoinLeaveView(
@@ -874,184 +836,6 @@ async def set_decision_module():
 
     return decision_module
 
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def start_vote(
-    ctx,
-    decision_module: str = "majority",
-    timeout: int = 60,
-    question: str = None,
-    options: List[str] = [],
-):
-    """
-    Trigger a vote
-    """
-    print(f"A vote has been triggered. The decision module is: {decision_module}")
-    print(options)
-    # if options.startswith("[") and options.endswith("]"):
-    #     # Parse the options string as a list
-    #     options = tuple(ast.literial_eval(options))
-    # else:
-    #     # Split the options string into strings
-    #     options = options.split()
-
-    # Init
-    tie = False
-    winning_votes = []
-
-    # Check number of options
-    # if len(options) <= 1:
-    #     await ctx.send("Error: A poll must have at least two options.")  # maybe we can add a if statement if in /solo mode
-    #     return
-    if len(options) > 10:
-        await ctx.send("Error: A poll cannot have more than 10 options.")
-        return
-
-    # Define embed
-    embed = discord.Embed(
-        title=f"Vote: {question}",
-        description=f"Decision module: {decision_module}",
-        color=discord.Color.dark_gold(),
-    )
-
-    # Create list of options with emojis
-    assigned_emojis = random.sample(CIRCLE_EMOJIS, len(options))
-
-    options_text = ""
-    for i, option in enumerate(options):
-        options_text += f"{assigned_emojis[i]} {option}\n"
-
-    # Create vote view UI
-    vote_view = VoteView(ctx, timeout)
-
-    # Add options to the view dropdown select menu
-    for i, option in enumerate(options):
-        vote_view.add_option(label=option, value=str(i), emoji=assigned_emojis[i])
-
-    # Send embed message and view
-    await ctx.send(embed=embed, view=vote_view)
-    await vote_view.wait()
-
-    # Calculate total votes per member interaction
-    results, total_votes, message = await get_vote_results(
-        ctx,
-        vote_view,
-        options
-    )
-
-    if decision_module == "consensus":
-        message, winning_votes = await determine_winning_vote_consensus(
-            message,
-            total_votes,
-            results
-        )
-
-    elif decision_module == "majority":
-        message, winning_votes = await determine_winning_vote_majority(
-            message,
-            total_votes,
-            results,
-        )
-
-    # Calculate results
-    embed = discord.Embed(
-        title=f"Results for: `{question}`:",
-        description=message,
-        color=discord.Color.dark_gold(),
-    )
-
-    await ctx.send(embed=embed)
-
-    return winning_votes[0]
-
-
-async def get_vote_results(
-    ctx, vote_view, options
-):
-    print("Getting vote results")
-    results = {}
-    total_votes = 0
-    # for each member return results of vote
-    for member, vote in vote_view.votes.items():
-        index = int(vote[0])
-        option = options[index]
-        results[option] = results.get(option, 0) + 1
-        total_votes += 1
-
-    if total_votes == 0:
-        await ctx.send("No votes recieved. Re-vote")
-        return
-
-    message = f"Total votes: {total_votes}\n\n"
-    for option, votes in results.items():
-        percentage = (votes / total_votes) * 100 if total_votes else 0
-        message += f"Option `{option}` recieved `{votes}` votes ({percentage:.2f}%)\n\n"
-
-    return results, total_votes, message
-
-
-async def determine_winning_vote_consensus(
-    message,
-    total_votes,
-    results,
-):
-    print("Determining winning vote based on consensus")
-    winning_votes = []
-
-    # Set the threshold for consensus decision
-    if len(results) == total_votes:
-        winning_votes = list(results.keys())
-    else:
-        message = "Not everyboy voted. Consensus is required. Re-vote."
-    if winning_votes:
-        message += f"Consensus was achieved. `{winning_votes[0]}` was selected."
-    else:
-        message += "Consensus was not achieved"
-
-    return message, winning_votes
-
-
-async def determine_winning_vote_majority(
-    message,
-    total_votes,
-    results,
-):
-    print("Determining winning vote based on majority")
-    winning_votes = []
-
-    # Define tie condition
-    tie = len(winning_votes) > 1
-
-    # Calculate majority condition
-    for option, votes in results.items():
-        if votes > total_votes / 2:
-            winning_votes = [option]
-    if tie:
-        message += "The vote resulted in a tie. Vote again."
-        # Vote retry
-        # options_str = " ".join(
-        #     options
-        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
-        # await asyncio.sleep(1)
-        # await start_vote(
-        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
-        # )
-    elif winning_votes:
-        message += f"The winning vote is `{winning_votes[0]}`."
-    else:
-        message += "No option reached majority. Vote again."
-        # Vote retry
-        # options_str = " ".join(
-        #     options
-        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
-        # await asyncio.sleep(1)
-        # await start_vote(
-        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
-        # )
-    return message, winning_votes
-
-
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def vote_governance(ctx, governance_type: str):
@@ -1063,7 +847,7 @@ async def vote_governance(ctx, governance_type: str):
     question = f"Which {governance_type} should we select?"
     decision_module = await set_decision_module()
     timeout = 60
-    winning_module_name = await start_vote(
+    winning_module_name = await vote(
         ctx, question, decision_module, timeout, *module_names
     )
     # TODO: if no winning_module, hold retry logic or decide what to do
@@ -1112,7 +896,7 @@ async def info(
 @bot.command()
 async def nickname(ctx):
     player_name = ctx.author.name
-    nickname = players_to_nicknames.get(player_name)
+    nickname = bot.quest.players_to_nicknames.get(player_name)
     if nickname is not None:
         # Make a link back to the original context
         original_context_link = discord.utils.escape_markdown(ctx.channel.mention)
@@ -1121,7 +905,6 @@ async def nickname(ctx):
         )
     else:
         await ctx.author.send("You haven't been assigned a nickname yet")
-
 
 @bot.command()
 @access_control()
@@ -1203,21 +986,7 @@ async def is_not_quiet(ctx):
 async def speech(ctx, *, text: str):
     # delete the user's message
     await ctx.message.delete()
-
-    # get the player name
-    player_name = ctx.author.display_name
-
-    # check if this player has a nickname
-    if player_name not in players_to_nicknames:
-        await ctx.send(f"Error: No nickname found for player!")
-        return
-
-    # get the nickname of the user invoking the command
-    nickname = players_to_nicknames[player_name]
-
-    # add the speech to the list associated with the nickname
-    nicknames_to_speeches[nickname] = text
-
+    bot.quest.add_speech(ctx, text)
     await ctx.send(f"Added {nickname}'s speech to the list!")
 
 
@@ -1225,7 +994,7 @@ async def speech(ctx, *, text: str):
 @commands.check(lambda ctx: False)
 async def post_speeches(ctx):
     speeches = []
-    global nicknames_to_speeches
+    nicknames_to_speeches = bot.quest.nicknames_to_speeches
     title = "The following are the nominees' speeches"
 
     # Go through all nicknames and their speeches
@@ -1247,15 +1016,13 @@ async def post_speeches(ctx):
 # @commands.check(lambda ctx: False)
 async def vote_speeches(ctx, question: str, decision_module=None, timeout=20):
     # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
-    print(timeout)
-    global nicknames_to_speeches
-    contenders = list(nicknames_to_speeches.keys())
-    print(contenders)
+    contenders = list(bot.quest.nicknames_to_speeches.keys())
     if decision_module == None:
         decision_module = await set_decision_module()
-    await start_vote(ctx, decision_module, timeout, question, contenders)
+    quest = bot.quest
+    await vote(ctx, quest, question, contenders, decision_module, timeout)
      # Reset the nicknames_to_speeches dictionary for the next round
-    nicknames_to_speeches = {}
+    bot.quest.reset_speeches()
 
 # CLEANING COMMANDS
 @bot.command()
@@ -1307,7 +1074,7 @@ async def solo(ctx, *args, quest_mode=MINIGAME_JOSH):
     gen_images = args.image
 
     # Set up quest
-    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode)
+    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=True)
     quest.add_player(ctx.author.name)
 
     await make_game_channel(ctx, quest)
@@ -1421,8 +1188,7 @@ async def on_command(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
-    print(f"Error invoking command: {ctx.command.name} - {error}")
-
+    print(f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}")
 
 @bot.event
 async def on_message(message):

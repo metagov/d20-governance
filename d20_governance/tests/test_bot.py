@@ -3,21 +3,11 @@ from unittest.mock import patch, MagicMock, AsyncMock
 import asyncio
 import discord
 from d20_governance.bot import process_stage, start_quest
+from d20_governance.tests.utils import create_quest
 from d20_governance.utils.constants import MINIGAME_JOSH
 from d20_governance.utils.utils import Quest  # replace with actual import
 
 
-def create_quest():
-    # Create a real Quest object
-    quest = Quest(quest_mode=MINIGAME_JOSH, gen_images=False, gen_audio=False, fast_mode=True)
-
-    # Create a mock for the game_channel
-    mock_game_channel = MagicMock()
-    mock_game_channel.send = AsyncMock()  # mock the send method
-
-    # Assign the mock game_channel to the Quest
-    quest.game_channel = mock_game_channel
-    return quest
 
 
 class TestQuestMockActions(unittest.TestCase):

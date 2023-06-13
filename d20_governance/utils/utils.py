@@ -35,18 +35,23 @@ class Stage:
 
 
 class Quest:
-    def __init__(self, quest_mode, gen_images, gen_audio, fast_mode):
+    def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
         self.quest_data = None
         self.mode = quest_mode
         self.title = None
         self.stages = None
         self.joined_players = set()
 
-        # game flags
+        # meta game vars
         self.gen_audio = gen_audio
         self.gen_images = gen_images
         self.fast_mode = fast_mode
         self.game_channel = None
+        self.solo_mode = solo_mode
+
+        # josh game specific # TODO: find a more general solution
+        self.nicknames_to_speeches = {}
+        self.players_to_nicknames = {}
 
         self.update_vars()
 
@@ -77,11 +82,25 @@ class Quest:
             nickname = random.choice(nicknames)
 
             # Assign the nickname to the player
-            players_to_nicknames[player_name] = nickname
+            self.players_to_nicknames[player_name] = nickname
 
             # Remove the nickname from the list so it can't be used again
             nicknames.remove(nickname)
 
+    def add_speech(self, ctx, text):
+        # get the name of the user invoking the command
+        player_name = str(ctx.message.author.name)
+        # get the nickname of the user invoking the command
+        nickname = self.players_to_nicknames.get(player_name)
+        if nickname is None:
+            print(f"No nickname found for player:  {player_name}")
+            return
+        
+        # add the speech to the list associated with the nickname
+        self.nicknames_to_speeches[nickname] = text
+
+    def reset_speeches(self):
+        self.nicknames_to_speeches = {}
 
 # Decorator for access control management
 def access_control():
@@ -167,26 +186,6 @@ async def setup_server(guild):
     else:
         logging.info("Some necessary channels or categories are missing.")
 
-
-# Yaml command callback and parsing
-async def execute_action(bot, action, temp_channel):
-    command_strings = parse_action(action)
-    for command_string in command_strings:
-        tokens = shlex.split(command_string.lower())
-        command_name, *args = tokens
-        command = bot.get_command(command_name)
-        if command is None:
-            continue
-
-        print(f"Executing {command}")
-
-        # Get the last message object from the channel to set context
-        message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
-
-        # Create a context object for the message
-        ctx = await bot.get_context(message_obj)
-
-        await command.callback(ctx, *args)
 
 # Yaml command callback and parsing
 async def execute_action(bot, action_string, temp_channel):

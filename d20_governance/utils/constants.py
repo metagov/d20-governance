@@ -88,6 +88,7 @@ CIRCLE_EMOJIS = [
     "🟤",
     "⚫",
     "⚪",
+    "⭕️",
 ]
 
 # Module Construction
@@ -114,15 +115,15 @@ ACCESS_CONTROL_SETTINGS = {
 
 # MISC
 COMMAND_VISIBILITY = {}
+# Stores the number of messages sent by each user
+user_message_count = {}
 
 # CULTURE COMMANDS
 active_culture_modes = []
 
-# Stores the number of messages sent by each user
-user_message_count = {}
+
 
 # JOSH GAME # todo: move this out to game-specific file
-players_to_nicknames = {}
 nicknames = [
     "Jigsaw Joshy",
     "Josh-a-mania",
@@ -137,7 +138,7 @@ nicknames = [
     "Jetset Josh",
     "Java Junkie Josh",
     "Juicy Josh",
-    "Jigsaw Juggler Josh",
+    "Juggler Josh",
     "Joyful Jester Josh",
     "Jackpot Josh",
     "Jeopardy Josh",
@@ -146,4 +147,4 @@ nicknames = [
     "Jingle Bell Josh",
 ]
 
-nicknames_to_speeches = {}
+
