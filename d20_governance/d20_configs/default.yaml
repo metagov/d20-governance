@@ -7,56 +7,60 @@ game:
       - stage: "Writes Speechs"
         message: "All Joshes have 2 minutes to submit their speech. Use `/speech [message]`."
         action: ["countdown"]
-          # would be nice to move to the next section if all speeches are submitted before this time        
+          # FIXME: countdown sometimes fails to execute
+          # TODO: would be nice to move to the next section if all speeches are submitted before this time        
         timeout_secs: 90
 
       - stage: "Submission Period"
         message: "A silence sweeps over Joshs. You have 30 seconds to submit any remaining speeches or forever hold your peace."
-        action: ["change_cmd_acl allowed_roles none speech", "is_quiet", "countdown", "change_cmd_acl allowed_roles @everyone none"]
+        action: ["change_cmd_acl allowed_roles none speech", "countdown", "change_cmd_acl allowed_roles @everyone none"]
+        # FIXME: messages deleted by /is_quiet pose a problem for /execute_action and how it establishes ctx
+        # Possibly remove untill a solution is found
         timeout_secs: 30
       
       - stage: "Deliberation"
         message: "A clamor of claims erupts. It is time to decide who amongst us is the real Josh. discuss and build consensus.\n\n
         If consensus is not reached only two will move forward. You have 2 minutes to deliberate"
-          # what about ties? 
-        action: ["is_not_quiet", "post_speeches", "countdown"]
+          # TODO: what about ties?
+        action: ["post_speeches", "countdown"]
         timeout_secs: 120
       
       - stage: "Voting"
         message: "The Joshes have spoken. It is time to vote for the real Josh!.\n\n
         You have 20 seconds to vote."
-        action: ["is_quiet", 'vote_speeches "Who is the real Josh?"', "countdown"]
+        action: ["vote_speeches 'Who is the real Josh?' majority", "countdown"]
+          # Is there a way of having vote_speeches and countdown running in parallel? 
+          # Right now, countdown happens after vote_speeches
         timeout_secs: 20
 
       - stage: "Failed Consensus Obscurity"
         message: "The real Josh is still obscured from us. We need another round of speeches, deliberation, and voting to uncover the real Josh.\n\n
         Meanwhile, a blanket of obscurity bests our Joshs.\n\n
         The reamining candidates have 2 minutes to write and submit their speeches."
-        action: ["is_not_quiet", "clear_speeches", "obscurity", "countdown"]
-          # /speech is only available to reamining candidates 
+        action: ["obscurity", "countdown"]
+          # TODO: /speech is only available to reamining candidates 
           # maybe use /change_cmd_acl excluded_roles not_josh
         timeout_secs: 90
 
       - stage: "Submission Period [Obscurity]"
         message: "A silence sweeps over Joshs. You have 30 seconds to submit any remaining speeches."
-        action: ["change_cmd_acl allowed_roles none speech", "is_quiet", "countdown", "change_cmd_acl allowed_roles @everyone none"]
+        action: ["change_cmd_acl allowed_roles none speech", "countdown", "change_cmd_acl allowed_roles @everyone none"]
         timeout_secs: 30
 
       - stage: "Deliberation [Obscurity]"
         message: "It's time to deliberate once more. Beware of impersonators trying to throw us off course.\n\n
         Work towards building consensus. This is necessary for the final decision.\n\n
         You have 2 minute to deliberate"
-        action: ["is_not_quiet", "post_speeches", "countdown"]
+        action: ["post_speeches", "countdown"]
         timeout_secs: 120
 
       - stage: "Vote [Obscurity]"
         message: "It's time to vote! A stillness sets in while we cast our votes. The fate of Josh rests in our collective hands.\n\n
         You have 20 seconds to vote."
-        action: ["is_quiet", 'vote_speeches "Who is the real Josh?"', "countdown"]
-          # enforce consensus
+        action: ["vote_speeches 'Who is the real Josh?' consensus", "countdown"]
         timeout_secs: 20
       
       - stage: "End"
         message: "And just like that, we return to the agora, a new Josh perhaps identified amongst the many."
-        action: ["is_not_quiet", "clear_speeches", "end"]
+        action: ["end"]
         timeout_secs: 0

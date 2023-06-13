@@ -4,13 +4,13 @@ import os
 import asyncio
 import datetime
 import logging
+import ast
 from discord.ext import commands
-from typing import Set
-from interactions import is_owner
+from typing import Set, List
+from interactions import Greedy
+from requests import options
 from ruamel.yaml import YAML
 from collections import OrderedDict
-
-from sqlalchemy import Select
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
@@ -29,6 +29,44 @@ intents.messages = True
 intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
+bot.remove_command("help")
+
+
+@bot.command()
+async def help(ctx, command: str = None):
+    prefix = bot.command_prefix
+    if command:
+        # Display help for a specific command
+        cmd = bot.get_command(command)
+        if not cmd:
+            await ctx.send(f"Sorry, I couldn't find command **{command}**.")
+            return
+        cmd_help = cmd.help or "No help available."
+        help_embed = discord.Embed(
+            title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
+        )
+        await ctx.send(embed=help_embed)
+    else:
+        # Display a list of available commands
+        cmds = [c.name for c in bot.commands if not c.hidden]
+        cmds.sort()
+        embed = discord.Embed(
+            title="Commands List",
+            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.",
+            color=0x00FF00,
+        )
+        for cmd in cmds:
+            command = bot.get_command(cmd)
+            # if cmd == None:
+            #     continue
+            description = command.brief or command.short_doc
+            embed.add_field(
+                name=f"{prefix}{cmd}",
+                value=description or "No description available.",
+                inline=False,
+            )
+        await ctx.send(embed=embed)
+
 
 logging.basicConfig(
     filename="logs/bot.log",
@@ -268,6 +306,48 @@ class JoinLeaveView(discord.ui.View):
             await interaction.response.send_message(
                 "You can only leave a quest if you have signaled you would join it",
                 ephemeral=True,
+            )
+
+
+class VoteView(discord.ui.View):
+    def __init__(self, ctx, timeout):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.votes = {}
+
+    async def on_timeout(self):
+        self.stop()
+
+    def add_option(self, label, value, emoji=None):
+        option = discord.SelectOption(label=label, value=value, emoji=emoji)
+        if not self.children:
+            self.add_item(
+                discord.ui.Select(
+                    options=[option],
+                    placeholder="Vote on the available options.",
+                    min_values=1,
+                    max_values=1,
+                    custom_id="vote_select",
+                )
+            )
+        else:
+            self.children[0].options.append(option)
+
+    @discord.ui.select(custom_id="vote_select")
+    async def on_vote_select(
+        self, interaction: discord.Interaction, select: discord.ui.Select
+    ):
+        if interaction.user not in self.votes or (
+            interaction.user in self.votes
+            and self.votes[interaction.user] != interaction.data.get("values")
+        ):
+            self.votes[interaction.user] = interaction.data.get("values")
+            await interaction.response.send_message(
+                "Your vote has been recorded.", ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "You've already voted.", ephemeral=True
             )
 
 
@@ -913,13 +993,9 @@ async def secret_message(ctx):
 
 
 # DECISION COMMANDS
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def vote(ctx, question: str, *options: str):
-    """
-    Trigger a vote
-    """
+async def set_decision_module():
     # Set starting decision module if necessary
+    global DECISION_MODULE
     current_modules = get_current_governance_stack()["modules"]
     decision_module = next(
         (module for module in current_modules if module["type"] == "decision"), None
@@ -927,84 +1003,239 @@ async def vote(ctx, question: str, *options: str):
     if decision_module is None:
         await set_starting_decision_module()
 
-    # if len(options) <= 1: # UNCOMMENT AFTER TESTIN
-    #     await ctx.send("Error: A poll must have at least two options.")
+    DECISION_MODULE = decision_module
+
+    return decision_module
+
+
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def start_vote(
+    ctx,
+    decision_module: str = "majority",
+    timeout: int = 60,
+    question: str = None,
+    *options: str,
+    vote_triggers: int = 0,
+):
+    """
+    Trigger a vote
+    """
+    print(f"A vote has been triggered. The decision module is: {decision_module}")
+
+    # if options.startswith("[") and options.endswith("]"):
+    #     # Parse the options string as a list
+    #     options = tuple(ast.literial_eval(options))
+    # else:
+    #     # Split the options string into strings
+    #     options = options.split()
+
+    # Init
+    tie = False
+    winning_votes = []
+
+    # Check number of options
+    # if len(options) <= 1:
+    #     await ctx.send("Error: A poll must have at least two options.")  # maybe we can add a if statement if in /solo mode
     #     return
     if len(options) > 10:
         await ctx.send("Error: A poll cannot have more than 10 options.")
         return
 
-    emoji_list = [chr(0x1F1E6 + i) for i in range(26)]  # A-Z
+    # Track how many votes have been triggered
+    while vote_triggers <= MAX_VOTE_TRIGGERS:
+        if vote_triggers == MAX_VOTE_TRIGGERS:
+            await ctx.send(
+                f"the Maximum number of times thie vote can be repeated has been reached"
+            )
+            return
 
-    options_text = ""
-    for i, option in enumerate(options):
-        options_text += f"{emoji_list[i]} {option}\n"
+        # Define embed
+        embed = discord.Embed(
+            title=f"Vote: {question}",
+            description=f"Decision module: {decision_module}",
+            color=discord.Color.dark_gold(),
+        )
 
-    embed = discord.Embed(
-        title=question, description=options_text, color=discord.Color.dark_gold()
-    )
-    vote_message = await ctx.send(embed=embed)
+        # Create list of options with emojis
+        assigned_emojis = random.sample(CIRCLE_EMOJIS, len(options))
 
-    for i in range(len(options)):
-        await vote_message.add_reaction(emoji_list[i])
+        options_text = ""
+        for i, option in enumerate(options):
+            options_text += f"{assigned_emojis[i]} {option}\n"
 
-    # Initialize the set of voters and store the poll message
-    bot.voters = set()
-    bot.vote_message = vote_message
+        # Create vote view UI
+        vote_view = VoteView(ctx, timeout)
 
-    await asyncio.sleep(VOTE_DURATION_SECONDS)  # wait for votes to be cast
+        # Add options to the view dropdown select menu
+        for i, option in enumerate(options):
+            vote_view.add_option(label=option, value=str(i), emoji=assigned_emojis[i])
 
-    vote_message = await ctx.channel.fetch_message(
-        vote_message.id
-    )  # Refresh message to get updated reactions
-    reactions = vote_message.reactions
+        # Send embed message and view
+        await ctx.send(embed=embed, view=vote_view)
+        await vote_view.wait()
+
+        # Calculate total votes per member interaction
+        results, total_votes, message = await get_vote_results(
+            ctx,
+            vote_view,
+            options,
+            question,
+            decision_module,
+            timeout,
+            vote_triggers,
+        )
+
+        if decision_module == "consensus":
+            message, winning_votes = await determine_winning_vote_consensus(
+                ctx,
+                message,
+                total_votes,
+                results,
+                question,
+                decision_module,
+                timeout,
+                options,
+                vote_triggers,
+            )
+
+        elif decision_module == "majority":
+            message, winning_votes = await determine_winning_vote_majority(
+                ctx,
+                message,
+                total_votes,
+                results,
+                question,
+                decision_module,
+                timeout,
+                options,
+                vote_triggers,
+            )
+
+        # Calculate results
+        embed = discord.Embed(
+            title=f"Results for: `{question}`:",
+            description=message,
+            color=discord.Color.dark_gold(),
+        )
+
+        await ctx.send(embed=embed)
+
+        return winning_votes[0]
+
+
+async def get_vote_results(
+    ctx, vote_view, options, question, decision_module, timeout, vote_triggers
+):
+    print("Getting vote results")
     results = {}
     total_votes = 0
+    # for each member return results of vote
+    for member, vote in vote_view.votes.items():
+        index = int(vote[0])
+        option = options[index]
+        results[option] = results.get(option, 0) + 1
+        total_votes += 1
 
-    for i, reaction in enumerate(reactions):
-        if reaction.emoji in emoji_list:
-            results[options[i]] = reaction.count - 1  # remove 1 to account for bot
-            total_votes += results[options[i]]
+    if total_votes == 0:
+        await ctx.send("No votes recieved. Re-vote")
+        # Vote retry
+        # await asyncio.sleep(1)
+        # options_str = " ".join(
+        #     options
+        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
+        # await start_vote(
+        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
+        # )
+        return
 
-    # Calculate results
-    results_text = f"Total votes: {total_votes}\n\n"
+    message = f"Total votes: {total_votes}\n\n"
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
-        results_text += f"{option}: {votes} votes ({percentage:.2f}%)\n"
+        message += f"Option `{option}` recieved `{votes}` votes ({percentage:.2f}%)\n\n"
 
-    winning_vote_count = 0
-    tie = False
+    return results, total_votes, message
+
+
+async def determine_winning_vote_consensus(
+    ctx,
+    message,
+    total_votes,
+    results,
+    question,
+    decision_module,
+    timeout,
+    options,
+    vote_triggers,
+):
+    print("Determining winning vote based on consensus")
     winning_votes = []
-    for option, votes in results.items():
-        if votes > winning_vote_count:
-            winning_vote_count = votes
-            winning_votes = [option]
-        elif votes == winning_vote_count:
-            winning_votes.append(option)
 
+    # Set the threshold for consensus decision
+    if len(results) == total_votes:
+        winning_votes = list(results.keys())
+    else:
+        message = "Not everyboy voted. Consensus is required. Re-vote."
+        # Vote retry
+        # options_str = " ".join(
+        #     options
+        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
+        # await asyncio.sleep(1)
+        # await start_vote(
+        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
+        # )  # TODO: pass back original options
+    if winning_votes:
+        message += f"Consensus was achieved. `{winning_votes[0]}` was selected."
+    else:
+        message += "Consensus was not achieved"
+
+    return message, winning_votes
+
+
+async def determine_winning_vote_majority(
+    ctx,
+    message,
+    total_votes,
+    results,
+    question,
+    decision_module,
+    timeout,
+    options,
+    vote_triggers,
+):
+    print("Determining winning vote based on majority")
+    winning_votes = []
+
+    # Define tie condition
     tie = len(winning_votes) > 1
 
-    # Remove the bot's reactions
-    bot_member = discord.utils.find(lambda m: m.id == bot.user.id, ctx.guild.members)
-    for i in range(len(options)):
-        await vote_message.remove_reaction(emoji_list[i], bot_member)
-
-    embed = discord.Embed(
-        title=f"{question} - Results",
-        description=results_text,
-        color=discord.Color.dark_gold(),
-    )
-    await ctx.send(embed=embed)
-
-    if not tie:
-        await ctx.send(
-            f"The winning vote is: **{winning_votes[0]}** with {winning_vote_count} votes."
-        )
+    # Calculate majority condition
+    for option, votes in results.items():
+        if votes > total_votes / 2:
+            winning_votes = [option]
+    if tie:
+        message += "The vote resulted in a tie. Vote again."
+        # Vote retry
+        # options_str = " ".join(
+        #     options
+        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
+        # await asyncio.sleep(1)
+        # await start_vote(
+        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
+        # )
+    elif winning_votes:
+        message += f"The winning vote is `{winning_votes[0]}`."
     else:
-        await ctx.send("No winning vote.")
-        return None
-
-    return winning_votes[0]
+        message += "No option reached majority. Vote again."
+        # Vote retry
+        # options_str = " ".join(
+        #     options
+        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
+        # await asyncio.sleep(1)
+        # await start_vote(
+        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
+        # )
+    return message, winning_votes
 
 
 @bot.command(hidden=True)
@@ -1016,7 +1247,11 @@ async def vote_governance(ctx, governance_type: str):
     modules = get_modules_for_type(governance_type)
     module_names = [module["name"] for module in modules]
     question = f"Which {governance_type} should we select?"
-    winning_module_name = await vote(ctx, question, *module_names)
+    decision_module = await set_decision_module()
+    timeout = 60
+    winning_module_name = await start_vote(
+        ctx, question, decision_module, timeout, *module_names
+    )
     # TODO: if no winning_module, hold retry logic or decide what to do
     if winning_module_name:
         winning_module = modules[module_names.index(winning_module_name)]
@@ -1176,26 +1411,34 @@ async def speech(ctx, *, text: str):
 @commands.check(lambda ctx: False)
 async def post_speeches(ctx):
     speeches = []
-    speeches.append("The following are the nominees' speeches: \n")
+    title = "The following are the nominees' speeches"
 
     # Go through all nicknames and their speeches
     for nickname, speech in nicknames_to_speeches.items():
         # Append a string formatted with the nickname and their speech
-        speeches.append(f"**{nickname}**: {speech}")
+        speeches.append(f"📜**{nickname}**:\n\n   🗣️{speech}")
 
     # Join all speeches together with a newline in between each one
-    formatted_speeches = "\n\n".join(speeches)
+    formatted_speeches = "\n\n\n".join(speeches)
+
+    embed = discord.Embed(
+        title=title, description=formatted_speeches, color=discord.Color.dark_teal()
+    )
 
     # Send the formatted speeches to the context
-    await ctx.send(formatted_speeches)
+    await ctx.send(embed=embed)
 
 
 @bot.command(hidden=True)
-@commands.check(lambda ctx: False)
-async def vote_speeches(ctx, question: str):
+# @commands.check(lambda ctx: False)
+async def vote_speeches(ctx, question: str, decision_module=None, timeout=20):
     # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
-    nicknames = list(nicknames_to_speeches.keys())
-    await vote(ctx, question, *nicknames)
+    print(timeout)
+    speeches = list(nicknames_to_speeches.keys())
+    print(speeches)
+    if decision_module == None:
+        decision_module = await set_decision_module()
+    await start_vote(ctx, decision_module, timeout, question, *speeches)
 
 
 # CLEANING COMMANDS
@@ -1265,7 +1508,7 @@ async def solo(ctx, *args, quest_mode="default", num_players=1):
             quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
             if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
                 for stage in quest_mode_data["game"]["stages"]:
-                    stage["timeout_secs"] = 15
+                    stage["timeout_secs"] = 10
         QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
 
     player: Set[str] = set()
@@ -1381,46 +1624,6 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
 
 
 # ON MESSAGE
-
-bot.remove_command("help")
-
-
-@bot.command()
-async def help(ctx, command: str = None):
-    prefix = bot.command_prefix
-    if command:
-        # Display help for a specific command
-        cmd = bot.get_command(command)
-        if not cmd:
-            await ctx.send(f"Sorry, I couldn't find command **{command}**.")
-            return
-        cmd_help = cmd.help or "No help available."
-        help_embed = discord.Embed(
-            title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
-        )
-        await ctx.send(embed=help_embed)
-    else:
-        # Display a list of available commands
-        cmds = [c.name for c in bot.commands if not c.hidden]
-        cmds.sort()
-        embed = discord.Embed(
-            title="Commands List",
-            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.",
-            color=0x00FF00,
-        )
-        for cmd in cmds:
-            command = bot.get_command(cmd)
-            # if cmd == None:
-            #     continue
-            description = command.brief or command.short_doc
-            embed.add_field(
-                name=f"{prefix}{cmd}",
-                value=description or "No description available.",
-                inline=False,
-            )
-        await ctx.send(embed=embed)
-
-
 @bot.event
 async def on_command(ctx):
     print(f"Command invoked: {ctx.command.name}")
@@ -1527,37 +1730,6 @@ async def check_cmd_channel(ctx, channel_name):
         return False
     else:
         return True
-
-    # Check is "d20-agora" channel exists on server
-    # agora_channel = discord.utils.get(ctx.guild.channels, name="d20-agora")
-    # if agora_channel is None:
-    #     embed = discord.Embed(
-    #         title="Error - This command cannot be run in this channel.",
-    #         color=discord.Color.red(),
-    #     )
-    #     embed.add_field(
-    #         name=f"Missing channel: {agora_channel.name}",
-    #         value=f"This command can only be run in the `{agora_channel.name}` channel.\n\n"
-    #         f"The `{agora_channel.name}` channel was not found on this server.\n\n"
-    #         f"To create it, click the Add Channel button in the Channels section on the left-hand side of the screen.\n\n"
-    #         f"If you cannot add channels, ask a sever administrator to add this channel.\n\n"
-    #         f"**Note:** The channel name must be exactly `{agora_channel.name}`.",
-    #     )
-    #     await ctx.send(embed=embed)
-    #     return False
-    # if not agora_channel:
-    #     embed = discord.Embed(
-    #         title="Error - This command cannot be run in this channel.",
-    #         color=discord.Color.red(),
-    #     )
-    #     embed.add_field(
-    #         name=f"Wrong Channel: run in {agora_channel.name}",
-    #         value=f"This command can only be run in the `{agora_channel.name}` channel.",
-    #     )
-    #     await ctx.send(embed=embed)
-    #     return False
-    # else:
-    #     return True
 
 
 # REPO DIRECTORY CHECKS
