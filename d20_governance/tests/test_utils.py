@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, AsyncMock, call
 import asyncio
 import shlex
 
-from d20_governance.utils.utils import execute_action, parse_action  # replace with actual import
+from d20_governance.utils.utils import execute_action  # replace with actual import
 
 class TestExecuteAction(unittest.IsolatedAsyncioTestCase):
     async def test_execute_action(self):

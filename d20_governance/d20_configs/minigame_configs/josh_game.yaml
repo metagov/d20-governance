@@ -13,14 +13,14 @@ stages:
       actions: ["change_cmd_acl allowed_roles none speech", "countdown 30", "change_cmd_acl allowed_roles @everyone none"]
       # FIXME: messages deleted by /is_quiet pose a problem for /execute_action and how it establishes ctx
       # Possibly remove untill a solution is found
-      progress_conditions: []
+      progress_conditions: ["all_speeches_submitted"]
     
     - stage: "Deliberation"
       message: "A clamor of claims erupts. It is time to decide who amongst us is the real Josh. discuss and build consensus.\n\n
       If consensus is not reached only two will move forward. You have 2 minutes to deliberate."
         # TODO: what about ties?
       actions: ["post_speeches", "countdown 120"]
-      progress_conditions: ["all_speeches_submitted"]
+      progress_conditions: []
     
     - stage: "Voting"
       message: "The Joshes have spoken. It is time to vote for the real Josh!.\n\n
@@ -28,7 +28,7 @@ stages:
       actions: ["vote_speeches 'Who is the real Josh?' majority", "countdown 20"]
         # Is there a way of having vote_speeches and countdown running in parallel? 
         # Right now, countdown happens after vote_speeches
-      progress_conditions: ["all_speeches_submitted"]
+      progress_conditions: []
 
     - stage: "Failed Consensus Obscurity"
       message: "The real Josh is still obscured from us. We need another round of speeches, deliberation, and voting to uncover the real Josh.\n\n
