@@ -94,13 +94,12 @@ async def start_quest(quest: Quest):
 
     else: # yaml mode
         for stage in quest.stages:
-              stage = Stage(name=stage[QUEST_STAGE_NAME], 
-                  message=stage[QUEST_STAGE_MESSAGE], 
-                  actions=stage[QUEST_STAGE_ACTION], 
-                  timeout_secs=stage[QUEST_STAGE_TIMEOUT])
+              stage = Stage(name=stage[QUEST_NAME_KEY], 
+                  message=stage[QUEST_MESSAGE_KEY], 
+                  actions=stage[QUEST_ACTIONS_KEY], 
+                  progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY])
               
-              print(f"Processing stage {stage.name} for {stage.timeout_secs} seconds"
-                )
+              print(f"Processing stage {stage.name}")
 
               await process_stage(stage, quest)
 
@@ -108,7 +107,6 @@ async def process_stage(stage: Stage, quest: Quest):
     """
     Run stages from yaml config
     """
-
     if quest.gen_audio:
         loop = asyncio.get_event_loop()
         audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage.name}.mp3"
@@ -155,25 +153,38 @@ async def process_stage(stage: Stage, quest: Quest):
     else:
         await stream_message(quest.game_channel, stage.message, embed)
 
-    # Call the command corresponding to the event
+    # Call actions and poll for progress conditions simultaneously
     actions = stage.actions
-    action_outcome = await execute_action(bot, actions, quest.game_channel, stage)
-    if action_outcome is not None:
-        await execute_action(bot, action_outcome, quest.game_channel, stage)
+    progress_conditions = stage.progress_conditions
 
-    # TODO blue: change this as part of moving to a more generic "next-stage" system
-    # Check for countdown
-    skip_sleep = False
-    for action in actions:
-        if "countdown" in action:
-            skip_sleep = True
-            break
+    async def action_runner():
+        tasks = [execute_action(bot, action, quest.game_channel, ) for action in actions]
+        await asyncio.gather(*tasks)  # wait for all actions to complete
 
-    # If countdown action defer to countdown await
-    if skip_sleep:
-        pass
+    async def progress_checker():
+        while True:
+            tasks = []
+            for condition in progress_conditions:
+                tokens = shlex.split(condition)
+                func_name, *args = tokens
+                func = globals()[func_name]
+                tasks.append(func(*args))
+            for future in asyncio.as_completed(tasks):
+                condition_result = await future
+                if condition_result:
+                    return True
+            await asyncio.sleep(1)  # sleep before checking again to avoid busy looping
+
+    # Run simultaneously and wait for both the action_runner and progress_checker to complete
+    # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
+    await asyncio.gather(action_runner(), progress_checker())
+
+async def time_elapsed():
+    rand = random.randint(0, 10)
+    if rand < 5:
+        return False
     else:
-        await asyncio.sleep(stage.timeout_secs)
+        return True
 
 async def end(ctx, quest: Quest):
     """

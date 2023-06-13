@@ -53,11 +53,10 @@ QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
 QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
 MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
 QUEST_MODE_LLM = "llm"
-QUEST_STAGE_MESSAGE = "message"
-QUEST_STAGE_NAME = "stage"
-QUEST_STAGE_ACTION = "actions"
-QUEST_STAGE_TIMEOUT = "timeout_secs"
-
+QUEST_MESSAGE_KEY = "message"
+QUEST_NAME_KEY = "stage"
+QUEST_ACTIONS_KEY = "actions"
+QUEST_PROGRESS_CONDITIONS_KEY = "progress_conditions"
 
 # GOVERNANCE CONFIGS
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"

@@ -27,11 +27,11 @@ from langchain.chat_models import ChatOpenAI
 
 
 class Stage:
-    def __init__(self, name, message, actions, timeout_secs):
+    def __init__(self, name, message, actions, progress_conditions):
         self.name = name
         self.message = message
         self.actions = actions
-        self.timeout_secs = timeout_secs
+        self.progress_conditions = progress_conditions
 
 
 class Quest:
@@ -172,8 +172,8 @@ async def setup_server(guild):
 
 
 # Yaml command callback and parsing
-async def execute_action(bot, actions, temp_channel, stage):
-    command_strings = parse_actions(actions)
+async def execute_action(bot, action, temp_channel):
+    command_strings = parse_action(action)
     for command_string in command_strings:
         tokens = shlex.split(command_string.lower())
         command_name, *args = tokens
@@ -189,19 +189,25 @@ async def execute_action(bot, actions, temp_channel, stage):
         # Create a context object for the message
         ctx = await bot.get_context(message_obj)
 
-        # TODO blue: fix this
-        if command_name == "countdown":
-            await command.callback(ctx, stage.get("timeout_secs"))
-        else:
-            await command.callback(ctx, *args)
+        await command.callback(ctx, *args)
 
+# Yaml command callback and parsing
+async def execute_action(bot, action_string, temp_channel):
+    tokens = shlex.split(action_string.lower())
+    command_name, *args = tokens
+    command = bot.get_command(command_name)
+    if command is None:
+        return
 
-def parse_actions(action_string):
-    if isinstance(action_string, list):
-        return action_string
-    else:
-        return [action_string]
+    print(f"Executing {command}")
 
+    # Get the last message object from the channel to set context
+    message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+
+    # Create a context object for the message
+    ctx = await bot.get_context(message_obj)
+
+    await command.callback(ctx, *args)
 
 # Module Management
 def get_modules_for_type(governance_type):
@@ -862,9 +868,9 @@ async def generate_stage_llm(llm_agent, quest: Quest):
     if not stage:
         raise ValueError("yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS))
     
-    stage = Stage(name=stage[QUEST_STAGE_NAME], 
-                  message=stage[QUEST_STAGE_MESSAGE], 
-                  actions=stage[QUEST_STAGE_ACTION], 
-                  timeout_secs=stage[QUEST_STAGE_TIMEOUT])
+    stage = Stage(name=stage[QUEST_NAME_KEY], 
+                  message=stage[QUEST_MESSAGE_KEY], 
+                  actions=stage[QUEST_ACTIONS_KEY], 
+                  progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY])
     return stage
 
