@@ -102,6 +102,9 @@ class Quest:
     def reset_speeches(self):
         self.nicknames_to_speeches = {}
 
+    def get_nickname(self, player_name):
+        return self.players_to_nicknames.get(player_name)
+
 # Decorator for access control management
 def access_control():
     async def predicate(ctx):

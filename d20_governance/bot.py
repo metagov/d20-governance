@@ -987,6 +987,7 @@ async def speech(ctx, *, text: str):
     # delete the user's message
     await ctx.message.delete()
     bot.quest.add_speech(ctx, text)
+    nickname = bot.quest.get_nickname(ctx.author.name)
     await ctx.send(f"Added {nickname}'s speech to the list!")
 
 
