@@ -15,9 +15,7 @@ from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
-from langchain.memory import ConversationBufferMemory
-from langchain import OpenAI, LLMChain, PromptTemplate
-from langchain.chat_models import ChatOpenAI
+from d20_governance.utils.voting import vote
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -75,6 +73,149 @@ logging.basicConfig(
 )
 print("Logging to logs/bot.log")
 
+# QUEST FLOW
+
+def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
+    quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
+    bot.quest = quest
+    return quest
+
+async def start_quest(quest: Quest):
+    """
+    Sets up a new quest 
+    """
+
+    if quest.mode == QUEST_MODE_LLM:
+        llm_agent = get_llm_agent()
+        num_stages = random.randint(5, 10)  # Adjust range as needed
+        for _ in range(num_stages):
+            print("Generating stage with llm..")
+            stage = await generate_stage_llm(llm_agent)
+            await process_stage(stage, quest)
+
+    else: # yaml mode
+        for stage in quest.stages:
+              stage = Stage(name=stage[QUEST_NAME_KEY], 
+                  message=stage[QUEST_MESSAGE_KEY], 
+                  actions=stage[QUEST_ACTIONS_KEY], 
+                  progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY])
+              
+              print(f"Processing stage {stage.name}")
+
+              await process_stage(stage, quest)
+
+async def process_stage(stage: Stage, quest: Quest):
+    """
+    Run stages from yaml config
+    """
+
+    if quest.gen_audio:
+        loop = asyncio.get_event_loop()
+        audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage.name}.mp3"
+        future = loop.run_in_executor(None, tts, stage.message, audio_filename)
+        await future
+
+    if quest.gen_images:
+        # Generate intro image and send to temporary channel
+        image = generate_image(stage.message)
+    else:
+        # Create an empty image representing the void
+        size = (256, 256)
+        border = 10
+        image = Image.new("RGB", size, (255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(
+            [(border, border), (size[0] - border, size[1] - border)],
+            fill=(20, 20, 20),
+        )
+
+    image.save("generated_image.png")  # Save the image to a file
+
+    # Post the image to the Discord channel
+    await quest.game_channel.send(file=discord.File("generated_image.png"))
+    os.remove("generated_image.png")  # Clean up the image file
+
+    if quest.gen_audio:
+        # Post audio file
+        with open(audio_filename, "rb") as f:
+            audio = discord.File(f)
+            await quest.game_channel.send(file=audio)
+        os.remove(audio_filename)
+
+    embed = discord.Embed(
+        title=stage.name,
+        description=stage.message,
+        color=discord.Color.dark_orange(),
+    )
+
+    # Stream message
+    if quest.fast_mode:
+        # embed
+        await quest.game_channel.send(embed=embed)
+    else:
+        await stream_message(quest.game_channel, stage.message, embed)
+
+    # Call actions and poll for progress conditions simultaneously
+    actions = stage.actions
+    progress_conditions = stage.progress_conditions
+
+    async def action_runner():
+        tasks = [execute_action(bot, action, quest.game_channel, ) for action in actions]
+        await asyncio.gather(*tasks)  # wait for all actions to complete
+
+    async def progress_checker():
+        if progress_conditions == None or len(progress_conditions) == 0:
+            return
+        while True:
+            tasks = []
+            for condition in progress_conditions:
+                tokens = shlex.split(condition)
+                func_name, *args = tokens
+                func = globals()[func_name]
+                tasks.append(func(*args))
+            for future in asyncio.as_completed(tasks):
+                condition_result = await future
+                if condition_result:
+                    return True
+            await asyncio.sleep(1)  # sleep before checking again to avoid busy looping
+
+    # Run simultaneously and wait for both the action_runner and progress_checker to complete
+    # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
+    await asyncio.gather(action_runner(), progress_checker())
+
+async def all_speeches_submitted():
+    players_to_nicknames = bot.quest.players_to_nicknames
+    nicknames_to_speeches = bot.quest.nicknames_to_speeches
+    if players_to_nicknames and nicknames_to_speeches and len(players_to_nicknames) == len(nicknames_to_speeches):
+        print("All speeches submitted.")
+        return True
+    print("Waiting for all speeches to be submitted.")
+    return False
+
+async def end(ctx, quest: Quest):
+    """
+    Archive the quest and channel
+    """
+    print("Archiving...")
+    # Archive temporary channel
+    archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
+    if quest.game_channel is not None:
+        await quest.game_channel.send(f"**The game is over. This channel is now archived.**")
+        await quest.game_channel.edit(category=archive_category)
+        overwrites = {
+            ctx.guild.default_role: discord.PermissionOverwrite(
+                read_messages=True, send_messages=False
+            ),
+            ctx.guild.me: discord.PermissionOverwrite(
+                read_messages=True, send_messages=False
+            ),
+        }
+        await quest.game_channel.edit(overwrites=overwrites)
+    print("Archived...")
+    return
+    # TODO: Prevent bot from being able to send messages to arcvhived channels
+
+# VIEWS
 
 class QuestBuilder(discord.ui.Select):
     def __init__(self, placeholder, options):
@@ -124,7 +265,7 @@ class QuestBuilderView(discord.ui.View):
                     label="QUEST: ???",
                     emoji="🤔",
                     description="A random game of d20 governance",
-                    value=QUEST_LLM,
+                    value=QUEST_MODE_LLM,
                 ),
                 discord.SelectOption(
                     label="MINIGAME: JOSH GAME",
@@ -202,7 +343,7 @@ class QuestBuilderView(discord.ui.View):
             return (
                 self.select1.selected_value,
                 int(self.select2.selected_value),
-                bool(self.select3.selected_value),
+                self.select3.selected_value == "True", # this is how you convert string to bool
             )
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -223,20 +364,22 @@ class JoinLeaveView(discord.ui.View):
     def __init__(
         self,
         ctx: commands.Context,
-        quest_mode,
+        quest: Quest,
         num_players,
-        img_flag,
-        audio_flag,
-        fast_flag,
     ):
         super().__init__(timeout=None)
         self.ctx = ctx
-        self.quest_mode = quest_mode
         self.num_players = num_players
-        self.img_flag = img_flag
-        self.audio_flag = audio_flag
-        self.fast_flag = fast_flag
-        self.joined_players: Set[str] = set()
+        self.quest = quest
+
+    async def update_embed(self, interaction):
+        needed_players = self.num_players - len(self.quest.joined_players)
+        embed = interaction.message.embeds[0]
+        embed.set_field_at(0, name="**Current Players:**", value=', '.join(self.quest.joined_players), inline=False)
+        embed.set_field_at(1, name="**Players needed to start:**", value=str(needed_players), inline=False)
+
+        await interaction.message.edit(embed=embed, view=self)
+
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="Join", custom_id="join_button"
@@ -244,36 +387,27 @@ class JoinLeaveView(discord.ui.View):
     async def join_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
+        quest = self.quest
         player_name = interaction.user.name
-        if player_name not in self.joined_players:
-            self.joined_players.add(player_name)
+        if player_name not in quest.joined_players:
+            quest.add_player(player_name)
             await interaction.response.send_message(
                 f"{player_name} has joined the quest!"
             )
+            await self.update_embed(interaction)
 
-            if QUEST_MODE == MINIGAME_JOSH:
-                await assign_nickname(player_name)
-
-            needed_players = self.num_players - len(self.joined_players)
-
-            embed = discord.Embed(
-                title=f"{self.ctx.author.display_name} has proposed a game of {self.quest_mode} for {self.num_players} players: Join or Leave",
-                description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
-            )  # Note: Not possible to mention author in embeds
-            await interaction.message.edit(embed=embed, view=self)
-
-            if len(self.joined_players) == self.num_players:
+            if len(quest.joined_players) == self.num_players:
                 # remove join and leave buttons
                 await interaction.message.edit(view=None)
-                # return variables from setup()
-                TEMP_CHANNEL = await make_temp_channel(self.ctx, self.joined_players)
+                # create channel for game
+                await make_game_channel(self.ctx, quest)
                 embed = discord.Embed(
-                    title=f"{self.ctx.author.display_name}'s proposal to play {self.quest_mode} has enough players, and is ready to play",
-                    description=f"**Quest:** {TEMP_CHANNEL.mention}\n\n**Players:** {', '.join(self.joined_players)}",
+                    title=f"{self.ctx.author.display_name}'s proposal to play has enough players, and is ready to play",
+                    description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
                 await start_quest(
-                    self.ctx, self.img_flag, self.audio_flag, self.fast_flag
+                    self.quest
                 )
 
         else:
@@ -289,66 +423,22 @@ class JoinLeaveView(discord.ui.View):
     async def leave_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
+        quest = self.quest
         player_name = interaction.user.name
-        if player_name in self.joined_players:
+        if player_name in quest.joined_players:
             # if players is in the list of joined players remove them from the list
-            self.joined_players.remove(player_name)
+            quest.joined_players.remove(player_name)
             await interaction.response.send_message(
                 f"{player_name} has abandoned the quest before it even began!"
             )
-            needed_players = self.num_players - len(self.joined_players)
-            embed = discord.Embed(
-                title=f"{self.ctx.author.display_name} has proposed a game of {self.quest_mode} for {self.num_players} players: Join or Leave",
-                description=f"**Current Players:** {', '.join(self.joined_players)}\n\n**Players needed to start:** {needed_players}",
-            )
-            await interaction.message.edit(embed=embed, view=self)
+            await self.update_embed(interaction)
+        
         else:
             await interaction.response.send_message(
-                "You can only leave a quest if you have signaled you would join it",
+                "You can only leave a quest if you have already joined",
                 ephemeral=True,
             )
 
-
-class VoteView(discord.ui.View):
-    def __init__(self, ctx, timeout):
-        super().__init__(timeout=timeout)
-        self.ctx = ctx
-        self.votes = {}
-
-    async def on_timeout(self):
-        self.stop()
-
-    def add_option(self, label, value, emoji=None):
-        option = discord.SelectOption(label=label, value=value, emoji=emoji)
-        if not self.children:
-            self.add_item(
-                discord.ui.Select(
-                    options=[option],
-                    placeholder="Vote on the available options.",
-                    min_values=1,
-                    max_values=1,
-                    custom_id="vote_select",
-                )
-            )
-        else:
-            self.children[0].options.append(option)
-
-    @discord.ui.select(custom_id="vote_select")
-    async def on_vote_select(
-        self, interaction: discord.Interaction, select: discord.ui.Select
-    ):
-        if interaction.user not in self.votes or (
-            interaction.user in self.votes
-            and self.votes[interaction.user] != interaction.data.get("values")
-        ):
-            self.votes[interaction.user] = interaction.data.get("values")
-            await interaction.response.send_message(
-                "Your vote has been recorded.", ephemeral=True
-            )
-        else:
-            await interaction.response.send_message(
-                "You've already voted.", ephemeral=True
-            )
 
 
 # EVENTS
@@ -397,11 +487,11 @@ async def embark(ctx, *args):
     """
     # Parse argument flags
     parser = argparse.ArgumentParser()
-    parser.add_argument("-a", "--audio", action="store_true", help="Generate TTS audio")
+    parser.add_argument("-a", "--audio", action="store_true", help="Generate text-to-speech audio")
     parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
     args = parser.parse_args(args)
-    audio_flag = args.audio
-    fast_flag = args.fast
+    gen_audio = args.audio
+    fast_mode = args.fast
 
     # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
@@ -410,40 +500,34 @@ async def embark(ctx, *args):
     if selected_values is None:
         await ctx.send("The quest proposal timed out.", ephemeral=True)
         return
-    quest_mode, num_players, img_flag = selected_values
-    if not 1 <= num_players <= 20:
-        await ctx.send("The game requires at least 1 and at most 20 players")
+    quest_mode, num_players, gen_images = selected_values
+
+    if not 2 <= num_players <= 20:
+        await ctx.send("The game requires at least 2 and at most 20 players")
         return
 
-    # Set values for global yaml variables
-    global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
-    QUEST_MODE = quest_mode
-    if QUEST_MODE == QUEST_LLM:
-        pass
-    else:
-        with open(quest_mode, "r") as f:
-            quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
-            if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
-                for stage in quest_mode_data["game"]["stages"]:
-                    stage["timeout_secs"] = 15
-        QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
+    # Quest setup
+    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=False)
 
     # Create Join View
     join_leave_view = JoinLeaveView(
-        ctx, quest_mode, num_players, img_flag, audio_flag, fast_flag
+        ctx, quest, num_players
     )
     embed = discord.Embed(
-        title=f"{ctx.author.display_name} has proposed a game of {quest_mode} for {num_players} players: Join or Leave"
+        title=f"{ctx.author.display_name} has proposed a game for {num_players} players: Join or Leave"
     )
+    embed.add_field(name="**Current Players:**", value="", inline=False)  # Empty initial value.
+    embed.add_field(name="**Players needed to start:**", value=str(num_players), inline=False)  # Empty initial value.
+
     await ctx.send(embed=embed, view=join_leave_view)
     print("Waiting for players to join...")
 
 
-async def make_temp_channel(ctx, joined_players):
+async def make_game_channel(ctx, quest: Quest):
     """
     Game State: Setup the config and create unique quest channel
     """
-    print("Making temporary channel...")
+    print("Making temporary game channel...")
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
@@ -453,7 +537,7 @@ async def make_temp_channel(ctx, joined_players):
         ctx.guild.get_member_named(player): discord.PermissionOverwrite(
             read_messages=True, manage_messages=False
         )
-        for player in joined_players
+        for player in quest.joined_players
     }
     # Create a temporary channel in the d20-quests category
     overwrites = {
@@ -464,248 +548,21 @@ async def make_temp_channel(ctx, joined_players):
         **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
-    global TEMP_CHANNEL
 
     # create and name the channel with the quest_name from the yaml file
     # and add a number do distinguish channels
-    TEMP_CHANNEL = await quests_category.create_text_channel(
-        name=f"d20-{QUEST_TITLE}-{len(quests_category.channels) + 1}",
+    quest.game_channel = await quests_category.create_text_channel(
+        name=f"d20-{quest.title}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    return TEMP_CHANNEL
-
-
-def get_llm_chain():
-    template = """You are a chatbot generating the narrative and actions for a governance game.
-    Your output must be of the following format:
-    - stage: <stage_name>
-    message: <exciting narrative message for the current stage of the game>
-    action: "vote_governance <culture or decision>"
-    timeout_mins: 1
-
-    For the action field, you must select either "vote_governance culture" or "vote_governance decision". 
-    For the message field, make sure you are crafting an interesting and fun story that ties in with the overall game narrative so far. 
-    Also make sure that the message ties in with the action you have selected. 
-    Your output MUST be valid yaml.
-
-    {chat_history}
-    Human: {human_input}
-    Chatbot:"""
-
-    prompt = PromptTemplate(
-        input_variables=["chat_history", "human_input"], template=template
-    )
-    memory = ConversationBufferMemory(memory_key="chat_history")
-    llm_chain = LLMChain(
-        llm=ChatOpenAI(temperature=0, model_name="gpt-4"),
-        prompt=prompt,
-        verbose=True,
-        memory=memory,
-    )
-    return llm_chain
-
-
-async def start_quest(ctx, img_flag, audio_flag, fast_flag):
-    """
-    Start a quest and create a new channel
-    """
-    global QUEST_INTRO
-    global QUEST_TITLE
-    title = QUEST_TITLE
-    intro = QUEST_INTRO
-    if audio_flag:
-        print("Generating audio file...")
-        loop = asyncio.get_event_loop()
-        audio_filename = f"{AUDIO_MESSAGES_PATH}/intro.mp3"
-        future = loop.run_in_executor(None, tts, intro, audio_filename)
-        await future
-        print("Generated audio file...")
-    else:
-        pass
-
-    if img_flag == True:
-        # Generate intro image and send to temporary channel
-        image = generate_image(QUEST_INTRO)
-    else:
-        # Create an empty image representing the void
-        size = (256, 256)
-        border = 10
-        image = Image.new("RGB", size, (255, 255, 255))
-        draw = ImageDraw.Draw(image)
-        draw.rectangle(
-            [(border, border), (size[0] - border, size[1] - border)],
-            fill=(20, 20, 20),
-        )
-
-    llm_chain = None
-    if QUEST_MODE == QUEST_LLM:
-        await TEMP_CHANNEL.send("generating next narrative step with llm..")
-        llm_chain = get_llm_chain()
-        yaml_string = llm_chain.predict(
-            human_input="generate me an intro for my governance game"
-        )
-        print(yaml_string)
-        yaml_data = ru_yaml.load(yaml_string)
-        if isinstance(yaml_data, list) and len(yaml_data) > 0:
-            QUEST_INTRO = yaml_data[0]["message"]
-        elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
-            QUEST_INTRO = ru_yaml.load(yaml_string)["message"]
-        else:
-            raise ValueError("yaml output in wrong format")
-
-    image.save("generated_image.png")  # Save the image to a file
-    # Post the image to the Discord channel
-    intro_image_message = await TEMP_CHANNEL.send(
-        file=discord.File("generated_image.png")
-    )
-    os.remove("generated_image.png")  # Clean up the image file
-
-    # Send audio file
-    if audio_flag:
-        with open(audio_filename, "rb") as f:
-            audio = discord.File(f)
-            await TEMP_CHANNEL.send(file=audio)
-        os.remove(audio_filename)
-    else:
-        pass
-
-    embed = discord.Embed(
-        title=title,
-        description=intro,
-        color=discord.Color.dark_orange(),
-    )
-
-    # Stream message
-    if fast_flag:
-        await TEMP_CHANNEL.send(embed=embed)
-    else:
-        await stream_message(TEMP_CHANNEL, intro, embed)
-
-    for stage in QUEST_STAGES:
-        timeout_seconds = stage[QUEST_STAGE_TIMEOUT]
-        if QUEST_MODE == QUEST_LLM:
-            MAX_ATTEMPTS = 5
-            attempt = 0
-            stage = None
-
-            while attempt < MAX_ATTEMPTS and not stage:
-                try:
-                    attempt += 1
-                    await TEMP_CHANNEL.send("generating next narrative step with llm..")
-                    yaml_string = llm_chain.predict(
-                        human_input="generate the next stage"
-                    )
-                    print(yaml_string)
-                    yaml_data = ru_yaml.load(yaml_string)
-
-                    if isinstance(yaml_data, list) and len(yaml_data) > 0:
-                        stage = yaml_data[0]
-                    elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
-                        stage = yaml_data
-                except:
-                    await TEMP_CHANNEL.send("encountered error, retrying..")
-
-            if not stage:
-                raise ValueError(
-                    "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
-                )
-
-        print(
-            f"Processing stage {stage[QUEST_STAGE_NAME]} for {timeout_seconds} seconds"
-        )
-        result = await process_stage(
-            ctx, stage, img_flag, audio_flag, fast_flag, timeout_seconds
-        )
-        if not result:
-            await ctx.send(f"Error processing stage {stage[QUEST_STAGE_NAME]}")
-            break
-
-
-async def process_stage(ctx, stage, img_flag, audio_flag, fast_flag, timeout_seconds):
-    """
-    Run stages from yaml config
-    """
-    message = stage[QUEST_STAGE_MESSAGE]
-    stage_name = stage[QUEST_STAGE_NAME]
-
-    if audio_flag:
-        loop = asyncio.get_event_loop()
-        audio_filename = f"{AUDIO_MESSAGES_PATH}/{stage_name}.mp3"
-        future = loop.run_in_executor(None, tts, message, audio_filename)
-        await future
-    else:
-        pass
-
-    if img_flag == True:
-        # Generate intro image and send to temporary channel
-        image = generate_image(message)
-    else:
-        # Create an empty image representing the void
-        size = (256, 256)
-        border = 10
-        image = Image.new("RGB", size, (255, 255, 255))
-        draw = ImageDraw.Draw(image)
-        draw.rectangle(
-            [(border, border), (size[0] - border, size[1] - border)],
-            fill=(20, 20, 20),
-        )
-
-    image.save("generated_image.png")  # Save the image to a file
-
-    # Post the image to the Discord channel
-    await TEMP_CHANNEL.send(file=discord.File("generated_image.png"))
-    os.remove("generated_image.png")  # Clean up the image file
-
-    if audio_flag:
-        # Post audio file
-        with open(audio_filename, "rb") as f:
-            audio = discord.File(f)
-            await TEMP_CHANNEL.send(file=audio)
-        os.remove(audio_filename)
-    else:
-        pass
-
-    embed = discord.Embed(
-        title=stage_name,
-        description=message,
-        color=discord.Color.dark_orange(),
-    )
-
-    # Stream message
-    if fast_flag:
-        # embed
-        await TEMP_CHANNEL.send(embed=embed)
-    else:
-        await stream_message(TEMP_CHANNEL, message, embed)
-
-    # Call the command corresponding to the event
-    action_string = stage[QUEST_STAGE_ACTION]
-    action_outcome = await execute_action(bot, action_string, TEMP_CHANNEL, stage)
-    if action_outcome is not None:
-        await execute_action(bot, action_outcome, TEMP_CHANNEL, stage)
-    else:
-        pass  # pass if no value assigned to action key
-
-    # Check for countdown
-    skip_sleep = False
-    for action in action_string:
-        if "countdown" in action:
-            skip_sleep = True
-            break
-
-    # If countdown action defer to countdown await
-    if skip_sleep:
-        pass
-    else:
-        await asyncio.sleep(timeout_seconds)
-
-    return True
-
 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
-    print("Counting down...")
+    if bot.quest.fast_mode:
+        await asyncio.sleep(7)
+        return
+    
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
 
@@ -723,34 +580,6 @@ async def countdown(ctx, timeout_seconds):
 
     await message.edit(content="⏲️ Counting down finished.")
     print("Countdown finished.")
-
-
-async def end(ctx):
-    """
-    Archive the quest and channel
-    """
-    print("Archiving...")
-    # Archive temporary channel
-    archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
-    if TEMP_CHANNEL is not None:
-        await TEMP_CHANNEL.send(f"**The game is over. This channel is now archived.**")
-        await TEMP_CHANNEL.edit(category=archive_category)
-        overwrites = {
-            ctx.guild.default_role: discord.PermissionOverwrite(
-                read_messages=True, send_messages=False
-            ),
-            ctx.guild.me: discord.PermissionOverwrite(
-                read_messages=True, send_messages=False
-            ),
-        }
-        await TEMP_CHANNEL.edit(overwrites=overwrites)
-    print("Archived...")
-    return
-    # TODO: Prevent bot from being able to send messages to arcvhived channels
-
-
-# CULTURE COMMANDS
-active_culture_modes = []
 
 
 @bot.command()
@@ -989,7 +818,7 @@ async def secret_message(ctx):
     Secrecy: Randomly Send Messages to DMs
     """
     print("Secret message command triggered.")
-    await send_msg_to_random_player(TEMP_CHANNEL)
+    await send_msg_to_random_player(bot.quest.game_channel)
 
 
 # DECISION COMMANDS
@@ -1007,237 +836,6 @@ async def set_decision_module():
 
     return decision_module
 
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def start_vote(
-    ctx,
-    decision_module: str = "majority",
-    timeout: int = 60,
-    question: str = None,
-    *options: str,
-    vote_triggers: int = 0,
-):
-    """
-    Trigger a vote
-    """
-    print(f"A vote has been triggered. The decision module is: {decision_module}")
-
-    # if options.startswith("[") and options.endswith("]"):
-    #     # Parse the options string as a list
-    #     options = tuple(ast.literial_eval(options))
-    # else:
-    #     # Split the options string into strings
-    #     options = options.split()
-
-    # Init
-    tie = False
-    winning_votes = []
-
-    # Check number of options
-    # if len(options) <= 1:
-    #     await ctx.send("Error: A poll must have at least two options.")  # maybe we can add a if statement if in /solo mode
-    #     return
-    if len(options) > 10:
-        await ctx.send("Error: A poll cannot have more than 10 options.")
-        return
-
-    # Track how many votes have been triggered
-    while vote_triggers <= MAX_VOTE_TRIGGERS:
-        if vote_triggers == MAX_VOTE_TRIGGERS:
-            await ctx.send(
-                f"the Maximum number of times thie vote can be repeated has been reached"
-            )
-            return
-
-        # Define embed
-        embed = discord.Embed(
-            title=f"Vote: {question}",
-            description=f"Decision module: {decision_module}",
-            color=discord.Color.dark_gold(),
-        )
-
-        # Create list of options with emojis
-        assigned_emojis = random.sample(CIRCLE_EMOJIS, len(options))
-
-        options_text = ""
-        for i, option in enumerate(options):
-            options_text += f"{assigned_emojis[i]} {option}\n"
-
-        # Create vote view UI
-        vote_view = VoteView(ctx, timeout)
-
-        # Add options to the view dropdown select menu
-        for i, option in enumerate(options):
-            vote_view.add_option(label=option, value=str(i), emoji=assigned_emojis[i])
-
-        # Send embed message and view
-        await ctx.send(embed=embed, view=vote_view)
-        await vote_view.wait()
-
-        # Calculate total votes per member interaction
-        results, total_votes, message = await get_vote_results(
-            ctx,
-            vote_view,
-            options,
-            question,
-            decision_module,
-            timeout,
-            vote_triggers,
-        )
-
-        if decision_module == "consensus":
-            message, winning_votes = await determine_winning_vote_consensus(
-                ctx,
-                message,
-                total_votes,
-                results,
-                question,
-                decision_module,
-                timeout,
-                options,
-                vote_triggers,
-            )
-
-        elif decision_module == "majority":
-            message, winning_votes = await determine_winning_vote_majority(
-                ctx,
-                message,
-                total_votes,
-                results,
-                question,
-                decision_module,
-                timeout,
-                options,
-                vote_triggers,
-            )
-
-        # Calculate results
-        embed = discord.Embed(
-            title=f"Results for: `{question}`:",
-            description=message,
-            color=discord.Color.dark_gold(),
-        )
-
-        await ctx.send(embed=embed)
-
-        return winning_votes[0]
-
-
-async def get_vote_results(
-    ctx, vote_view, options, question, decision_module, timeout, vote_triggers
-):
-    print("Getting vote results")
-    results = {}
-    total_votes = 0
-    # for each member return results of vote
-    for member, vote in vote_view.votes.items():
-        index = int(vote[0])
-        option = options[index]
-        results[option] = results.get(option, 0) + 1
-        total_votes += 1
-
-    if total_votes == 0:
-        await ctx.send("No votes recieved. Re-vote")
-        # Vote retry
-        # await asyncio.sleep(1)
-        # options_str = " ".join(
-        #     options
-        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
-        # await start_vote(
-        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
-        # )
-        return
-
-    message = f"Total votes: {total_votes}\n\n"
-    for option, votes in results.items():
-        percentage = (votes / total_votes) * 100 if total_votes else 0
-        message += f"Option `{option}` recieved `{votes}` votes ({percentage:.2f}%)\n\n"
-
-    return results, total_votes, message
-
-
-async def determine_winning_vote_consensus(
-    ctx,
-    message,
-    total_votes,
-    results,
-    question,
-    decision_module,
-    timeout,
-    options,
-    vote_triggers,
-):
-    print("Determining winning vote based on consensus")
-    winning_votes = []
-
-    # Set the threshold for consensus decision
-    if len(results) == total_votes:
-        winning_votes = list(results.keys())
-    else:
-        message = "Not everyboy voted. Consensus is required. Re-vote."
-        # Vote retry
-        # options_str = " ".join(
-        #     options
-        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
-        # await asyncio.sleep(1)
-        # await start_vote(
-        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
-        # )  # TODO: pass back original options
-    if winning_votes:
-        message += f"Consensus was achieved. `{winning_votes[0]}` was selected."
-    else:
-        message += "Consensus was not achieved"
-
-    return message, winning_votes
-
-
-async def determine_winning_vote_majority(
-    ctx,
-    message,
-    total_votes,
-    results,
-    question,
-    decision_module,
-    timeout,
-    options,
-    vote_triggers,
-):
-    print("Determining winning vote based on majority")
-    winning_votes = []
-
-    # Define tie condition
-    tie = len(winning_votes) > 1
-
-    # Calculate majority condition
-    for option, votes in results.items():
-        if votes > total_votes / 2:
-            winning_votes = [option]
-    if tie:
-        message += "The vote resulted in a tie. Vote again."
-        # Vote retry
-        # options_str = " ".join(
-        #     options
-        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
-        # await asyncio.sleep(1)
-        # await start_vote(
-        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
-        # )
-    elif winning_votes:
-        message += f"The winning vote is `{winning_votes[0]}`."
-    else:
-        message += "No option reached majority. Vote again."
-        # Vote retry
-        # options_str = " ".join(
-        #     options
-        # )  # FIXME: This works for a set of strings, but not for a list when using /vote_speeches
-        # await asyncio.sleep(1)
-        # await start_vote(
-        #     ctx, question, options_str, decision_module, timeout, vote_triggers + 1
-        # )
-    return message, winning_votes
-
-
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def vote_governance(ctx, governance_type: str):
@@ -1249,7 +847,7 @@ async def vote_governance(ctx, governance_type: str):
     question = f"Which {governance_type} should we select?"
     decision_module = await set_decision_module()
     timeout = 60
-    winning_module_name = await start_vote(
+    winning_module_name = await vote(
         ctx, question, decision_module, timeout, *module_names
     )
     # TODO: if no winning_module, hold retry logic or decide what to do
@@ -1298,7 +896,7 @@ async def info(
 @bot.command()
 async def nickname(ctx):
     player_name = ctx.author.name
-    nickname = players_to_nicknames.get(player_name)
+    nickname = bot.quest.players_to_nicknames.get(player_name)
     if nickname is not None:
         # Make a link back to the original context
         original_context_link = discord.utils.escape_markdown(ctx.channel.mention)
@@ -1307,7 +905,6 @@ async def nickname(ctx):
         )
     else:
         await ctx.author.send("You haven't been assigned a nickname yet")
-
 
 @bot.command()
 @access_control()
@@ -1389,21 +986,8 @@ async def is_not_quiet(ctx):
 async def speech(ctx, *, text: str):
     # delete the user's message
     await ctx.message.delete()
-
-    # get the player name
-    player_name = ctx.author.display_name
-
-    # check if this player has a nickname
-    if player_name not in players_to_nicknames:
-        await ctx.send(f"Error: No nickname found for player!")
-        return
-
-    # get the nickname of the user invoking the command
-    nickname = players_to_nicknames[player_name]
-
-    # add the speech to the list associated with the nickname
-    nicknames_to_speeches[nickname] = text
-
+    bot.quest.add_speech(ctx, text)
+    nickname = bot.quest.get_nickname(ctx.author.name)
     await ctx.send(f"Added {nickname}'s speech to the list!")
 
 
@@ -1411,12 +995,13 @@ async def speech(ctx, *, text: str):
 @commands.check(lambda ctx: False)
 async def post_speeches(ctx):
     speeches = []
+    nicknames_to_speeches = bot.quest.nicknames_to_speeches
     title = "The following are the nominees' speeches"
 
     # Go through all nicknames and their speeches
     for nickname, speech in nicknames_to_speeches.items():
         # Append a string formatted with the nickname and their speech
-        speeches.append(f"📜**{nickname}**:\n\n   🗣️{speech}")
+        speeches.append(f"📜**{nickname}**:\n\n   🗣️ {speech}")
 
     # Join all speeches together with a newline in between each one
     formatted_speeches = "\n\n\n".join(speeches)
@@ -1428,18 +1013,17 @@ async def post_speeches(ctx):
     # Send the formatted speeches to the context
     await ctx.send(embed=embed)
 
-
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
 async def vote_speeches(ctx, question: str, decision_module=None, timeout=20):
     # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
-    print(timeout)
-    speeches = list(nicknames_to_speeches.keys())
-    print(speeches)
+    contenders = list(bot.quest.nicknames_to_speeches.keys())
     if decision_module == None:
         decision_module = await set_decision_module()
-    await start_vote(ctx, decision_module, timeout, question, *speeches)
-
+    quest = bot.quest
+    await vote(ctx, quest, question, contenders, decision_module, timeout)
+     # Reset the nicknames_to_speeches dictionary for the next round
+    bot.quest.reset_speeches()
 
 # CLEANING COMMANDS
 @bot.command()
@@ -1450,10 +1034,9 @@ async def clean(ctx):
     """
     clean_temp_files()
 
-
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def clean_cat_chans(ctx, category_name="d20-quests"):
+async def clean_category_channels(ctx, category_name="d20-quests"):
     """
     Clean category channels
     """
@@ -1468,23 +1051,16 @@ async def clean_cat_chans(ctx, category_name="d20-quests"):
 
     await ctx.send(f'All channels in category "{category_name}" have been deleted.')
 
-
 # TEST COMMANDS
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def solo(ctx, *args, quest_mode="default", num_players=1):
+async def solo(ctx, *args, quest_mode=MINIGAME_JOSH):
     """
-    Solo quest mode
+    Solo quest 
     """
 
-    if quest_mode == "llm":
-        quest_mode = QUEST_LLM
-    if quest_mode == "default":
-        quest_mode = QUEST_DEFAULT
-    else:
-        await ctx.send(
-            "Quest mode is invalid. Valid quest modes are `llm` or `default`"
-        )
+    global QUEST_MODE
+    QUEST_MODE = quest_mode
 
     # Parse argument flags
     parser = argparse.ArgumentParser()
@@ -1494,39 +1070,21 @@ async def solo(ctx, *args, quest_mode="default", num_players=1):
         "-i", "--image", action="store_true", help="Turn on image generation"
     )
     args = parser.parse_args(args)
-    audio_flag = args.audio
-    fast_flag = args.fast
-    img_flag = args.image
+    gen_audio = args.audio
+    fast_mode = args.fast
+    gen_images = args.image
 
-    # Set values for global yaml variables
-    global QUEST_MODE, QUEST_TITLE, QUEST_INTRO, QUEST_STAGES
-    QUEST_MODE = quest_mode
-    if QUEST_MODE == QUEST_LLM:
-        pass
-    else:
-        with open(quest_mode, "r") as f:
-            quest_mode_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
-            if fast_flag and isinstance(quest_mode_data["game"]["stages"], list):
-                for stage in quest_mode_data["game"]["stages"]:
-                    stage["timeout_secs"] = 10
-        QUEST_TITLE, QUEST_INTRO, QUEST_STAGES = set_quest_vars(quest_mode_data)
+    # Set up quest
+    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=True)
+    quest.add_player(ctx.author.name)
 
-    player: Set[str] = set()
-    player_name = ctx.author.name
-    player.add(player_name)
-
-    if recurively_search_yaml(quest_mode_data, "/nickname"):
-        await assign_nickname(player_name)
-
-    global TEMP_CHANNEL
-    # store name os command executor in joined_players
-    TEMP_CHANNEL = await make_temp_channel(ctx, player)
+    await make_game_channel(ctx, quest)
     embed = discord.Embed(
         title="Solo game ready to play",
-        description=f"Play here: {TEMP_CHANNEL.mention}",
+        description=f"Play here: {quest.game_channel.mention}",
     )
     await ctx.send(embed=embed)
-    await start_quest(ctx, img_flag, audio_flag, fast_flag)
+    await start_quest(quest)
 
 
 @bot.command()
@@ -1631,12 +1189,10 @@ async def on_command(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
-    print(f"Error invoking command: {ctx.command.name} - {error}")
-
+    print(f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}")
 
 @bot.event
 async def on_message(message):
-    global IS_QUIET
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
             return
@@ -1688,13 +1244,13 @@ async def on_message(message):
                     )
                     await processing_message.delete()
                     await bot_message.edit(
-                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                        content=f"{message.author.mention}: {filtered_message}"
                     )
                 if mode == "OBSCURITY":
                     obscurity_function = globals()[OBSCURITY_MODE]
                     filtered_message = obscurity_function(filtered_message)
                     await bot_message.edit(
-                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                        content=f"{message.author.mention}: {filtered_message}"
                     )
                 if mode == "ELOQUENCE":
                     processing_message = await message.channel.send(
@@ -1703,7 +1259,7 @@ async def on_message(message):
                     filtered_message = await filter_eloquence(filtered_message)
                     await processing_message.delete()
                     await bot_message.edit(
-                        content=f"{message.author.mention}'s post has passed through a culture of {mode.lower()}: {filtered_message}"
+                        content=f"{message.author.mention}: {filtered_message}"
                     )
 
     except Exception as e:
@@ -1749,11 +1305,12 @@ def check_dirs():
             print(f"Creates {LOG_FILE_NAME} file")
 
 
-try:
-    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
-        f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
-    bot.run(token=DISCORD_TOKEN)
-finally:
-    clean_temp_files()
-    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
-        f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")
+if __name__ == "__main__":
+    try:
+        with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+            f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
+        bot.run(token=DISCORD_TOKEN)
+    finally:
+        clean_temp_files()
+        with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+            f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")

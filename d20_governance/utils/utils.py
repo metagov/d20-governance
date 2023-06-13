@@ -1,6 +1,7 @@
 from click import command
 import discord
 from discord.ext import commands
+from langchain import PromptTemplate
 from pytest import param
 import requests
 import random
@@ -20,6 +21,89 @@ import shlex
 from io import BytesIO
 import os
 
+from langchain.memory import ConversationBufferMemory
+from langchain import OpenAI, LLMChain, PromptTemplate
+from langchain.chat_models import ChatOpenAI
+
+
+class Stage:
+    def __init__(self, name, message, actions, progress_conditions):
+        self.name = name
+        self.message = message
+        self.actions = actions
+        self.progress_conditions = progress_conditions
+
+
+class Quest:
+    def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
+        self.quest_data = None
+        self.mode = quest_mode
+        self.title = None
+        self.stages = None
+        self.joined_players = set()
+
+        # meta game vars
+        self.gen_audio = gen_audio
+        self.gen_images = gen_images
+        self.fast_mode = fast_mode
+        self.game_channel = None
+        self.solo_mode = solo_mode
+
+        # josh game specific # TODO: find a more general solution
+        self.nicknames_to_speeches = {}
+        self.players_to_nicknames = {}
+
+        self.update_vars()
+
+    def update_vars(self):
+        # LLM mode does not have yaml 
+        if self.mode is not QUEST_MODE_LLM:
+            with open(self.mode, "r") as f:
+                quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
+                self.quest_data = quest_data
+
+        if self.quest_data is not None:
+            self.title = self.quest_data.get("title")
+            self.stages = self.quest_data.get("stages")
+        elif self.mode: # LLM mode has no quest data
+            self.title = self.mode
+
+    def set_quest_vars(self, quest_data, quest_mode):
+        self.quest_data = quest_data
+        self.mode = quest_mode
+        self.update_vars()
+    
+    def add_player(self, player_name):
+        # If player has already joined, this is a no-op
+        self.joined_players.add(player_name)
+        # TODO: figure out how to avoid this game-specific check here
+        if self.mode == MINIGAME_JOSH:
+             # Randomly select a nickname
+            nickname = random.choice(nicknames)
+
+            # Assign the nickname to the player
+            self.players_to_nicknames[player_name] = nickname
+
+            # Remove the nickname from the list so it can't be used again
+            nicknames.remove(nickname)
+
+    def add_speech(self, ctx, text):
+        # get the name of the user invoking the command
+        player_name = str(ctx.message.author.name)
+        # get the nickname of the user invoking the command
+        nickname = self.players_to_nicknames.get(player_name)
+        if nickname is None:
+            print(f"No nickname found for player:  {player_name}")
+            return
+        
+        # add the speech to the list associated with the nickname
+        self.nicknames_to_speeches[nickname] = text
+
+    def reset_speeches(self):
+        self.nicknames_to_speeches = {}
+
+    def get_nickname(self, player_name):
+        return self.players_to_nicknames.get(player_name)
 
 # Decorator for access control management
 def access_control():
@@ -40,7 +124,6 @@ def access_control():
 
         # Check if the user has an allowed role
         for role in ctx.author.roles:
-            print(role)
             if role.name in ACCESS_CONTROL_SETTINGS["allowed_roles"]:
                 return True
 
@@ -108,73 +191,22 @@ async def setup_server(guild):
 
 
 # Yaml command callback and parsing
-async def execute_action(bot, action_string, temp_channel, stage):
-    command_strings = parse_action_string(action_string)
-    for command_string in command_strings:
-        tokens = shlex.split(command_string.lower())
-        command_name, *args = tokens
-        command = bot.get_command(command_name)
-        if command is None:
-            continue
+async def execute_action(bot, action_string, temp_channel):
+    tokens = shlex.split(action_string.lower())
+    command_name, *args = tokens
+    command = bot.get_command(command_name)
+    if command is None:
+        return
 
-        print(f"Executing {command}")
+    print(f"Executing {command}")
 
-        # Get the last message object from the channel to set context
-        message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+    # Get the last message object from the channel to set context
+    message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
 
-        # Create a context object for the message
-        ctx = await bot.get_context(message_obj)
+    # Create a context object for the message
+    ctx = await bot.get_context(message_obj)
 
-        if command_name == "countdown":
-            await command.callback(ctx, stage.get("timeout_secs"))
-        else:
-            await command.callback(ctx, *args)
-
-
-def parse_action_string(action_string):
-    if isinstance(action_string, list):
-        return action_string
-    else:
-        return [action_string]
-
-
-def recurively_search_yaml(data, search_string):
-    """
-    Recurively search a YAML data structure for a given string
-    """
-    if isinstance(data, str):
-        return search_string in data
-    elif isinstance(data, dict):
-        for key, value in data.items():
-            if recurively_search_yaml(value, search_string):
-                return True
-    elif isinstance(data, list):
-        for item in data:
-            if recurively_search_yaml(item, search_string):
-                return True
-    return False
-
-
-# Name Functions
-async def assign_nickname(player_name):
-    """
-    Assign player nickname
-    """
-    # Make sure there are still nicknames available
-    if len(nicknames) == 0:
-        raise Exception("No more nicknames available.")
-
-    # Randomly select a nickname
-    nickname = random.choice(nicknames)
-
-    # Assign the nickname to the player
-    players_to_nicknames[player_name] = nickname
-
-    # Remove the nickname from the list so it can't be used again
-    nicknames.remove(nickname)
-
-    print(f"Assigned nickname '{nickname}' to player '{player_name}'.")
-
+    await command.callback(ctx, *args)
 
 # Module Management
 def get_modules_for_type(governance_type):
@@ -702,6 +734,45 @@ async def post_governance(ctx):
             print(f"{os.path.basename(latest_snapshot)}")
 
 
+
+# BOT CHANNEL CHECKS
+async def check_cmd_channel(ctx, channel_name):
+    """
+    Check that the test_game and start_game commands are run in the `d20-agora` channel
+    """
+    # Check if the command being run is /help and allow it to bypass checks
+    channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+    if ctx.command.name == "help":
+        return True
+    elif ctx.channel.name != channel.name:
+        embed = discord.Embed(
+            title="Error: This command cannot be run in this channel.",
+            description=f"Run this command in <#{channel.id}>",
+            color=discord.Color.red(),
+        )
+        await ctx.send(embed=embed)
+        return False
+    else:
+        return True
+
+
+# REPO DIRECTORY CHECKS
+def check_dirs():
+    if not os.path.exists(AUDIO_MESSAGES_PATH):
+        os.makedirs(AUDIO_MESSAGES_PATH)
+        print(f"Created {AUDIO_MESSAGES_PATH} directory")
+    if not os.path.exists(GOVERNANCE_STACK_SNAPSHOTS_PATH):
+        os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH)
+        print(f"Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory")
+    if not os.path.exists(LOGGING_PATH):
+        os.makedirs(LOGGING_PATH)
+        print(f"Created {LOGGING_PATH} directory")
+    if not os.path.exists(LOG_FILE_NAME):
+        with open(LOG_FILE_NAME, "w") as f:
+            f.write("This is a new log file.")
+            print(f"Creates {LOG_FILE_NAME} file")
+
+
 # Cleanup
 def clean_temp_files():
     """
@@ -739,3 +810,66 @@ def clean_temp_files():
             age_in_days = (today - modified_time).days
             if age_in_days >= days_to_keep:
                 os.remove(filename)
+
+# LLM HELPERS
+
+def get_llm_agent():
+    template = """You are a chatbot generating the narrative and actions for a governance game.
+    Your output must be of the following format:
+    - stage: <stage_name>
+    message: <exciting narrative message for the current stage of the game>
+    action: "vote_governance <culture or decision>"
+    timeout_mins: 1
+
+    For the action field, you must select either "vote_governance culture" or "vote_governance decision". 
+    For the message field, make sure you are crafting an interesting and fun story that ties in with the overall game narrative so far. 
+    Also make sure that the message ties in with the action you have selected. 
+    Your output MUST be valid yaml.
+
+    {chat_history}
+    Human: {human_input}
+    Chatbot:"""
+
+    prompt = PromptTemplate(
+        input_variables=["chat_history", "human_input"], template=template
+    )
+    memory = ConversationBufferMemory(memory_key="chat_history")
+    llm_chain = LLMChain(
+        llm=ChatOpenAI(temperature=0, model_name="gpt-4"),
+        prompt=prompt,
+        verbose=True,
+        memory=memory,
+    )
+    return llm_chain
+
+async def generate_stage_llm(llm_agent, quest: Quest):
+    await quest.game_channel.send("generating next narrative step with llm..")
+    MAX_ATTEMPTS = 5
+    attempt = 0
+    stage = None
+    while attempt < MAX_ATTEMPTS and not stage:
+        try:
+            attempt += 1
+            await quest.game_channel.send("generating next narrative step with llm..")
+            yaml_string = llm_agent.predict(
+                human_input="generate the next stage"
+            )
+            print(yaml_string)
+            yaml_data = ru_yaml.load(yaml_string)
+
+            if isinstance(yaml_data, list) and len(yaml_data) > 0:
+                stage = yaml_data[0]
+            elif isinstance(yaml_data, dict) and len(yaml_data) > 0:
+                stage = yaml_data
+        except:
+            await quest.game_channel.send("encountered error, retrying..")
+
+    if not stage:
+        raise ValueError("yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS))
+    
+    stage = Stage(name=stage[QUEST_NAME_KEY], 
+                  message=stage[QUEST_MESSAGE_KEY], 
+                  actions=stage[QUEST_ACTIONS_KEY], 
+                  progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY])
+    return stage
+
