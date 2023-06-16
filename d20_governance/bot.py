@@ -1305,20 +1305,17 @@ def check_dirs():
             print(f"Creates {LOG_FILE_NAME} file")
 
 async def main():
-    try:
+    try: 
         with open(f"{LOGGING_PATH}/bot.log", "a") as f:
             f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
         await bot.start(token=DISCORD_TOKEN)
     finally:
+        loop = asyncio.get_event_loop()
+        loop.create_task(bot.close())
         clean_temp_files()
         with open(f"{LOGGING_PATH}/bot.log", "a") as f:
             f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")
 
-
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(main())
-    finally:
-        loop.close()
+    asyncio.run(main())
 
