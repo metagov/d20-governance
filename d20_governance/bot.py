@@ -75,14 +75,16 @@ print("Logging to logs/bot.log")
 
 # QUEST FLOW
 
+
 def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
     return quest
 
+
 async def start_quest(quest: Quest):
     """
-    Sets up a new quest 
+    Sets up a new quest
     """
 
     if quest.mode == QUEST_MODE_LLM:
@@ -93,16 +95,19 @@ async def start_quest(quest: Quest):
             stage = await generate_stage_llm(llm_agent)
             await process_stage(stage, quest)
 
-    else: # yaml mode
+    else:  # yaml mode
         for stage in quest.stages:
-              stage = Stage(name=stage[QUEST_NAME_KEY], 
-                  message=stage[QUEST_MESSAGE_KEY], 
-                  actions=stage[QUEST_ACTIONS_KEY], 
-                  progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY])
-              
-              print(f"Processing stage {stage.name}")
+            stage = Stage(
+                name=stage[QUEST_NAME_KEY],
+                message=stage[QUEST_MESSAGE_KEY],
+                actions=stage[QUEST_ACTIONS_KEY],
+                progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
+            )
 
-              await process_stage(stage, quest)
+            print(f"Processing stage {stage.name}")
+
+            await process_stage(stage, quest)
+
 
 async def process_stage(stage: Stage, quest: Quest):
     """
@@ -160,7 +165,14 @@ async def process_stage(stage: Stage, quest: Quest):
     progress_conditions = stage.progress_conditions
 
     async def action_runner():
-        tasks = [execute_action(bot, action, quest.game_channel, ) for action in actions]
+        tasks = [
+            execute_action(
+                bot,
+                action,
+                quest.game_channel,
+            )
+            for action in actions
+        ]
         await asyncio.gather(*tasks)  # wait for all actions to complete
 
     async def progress_checker():
@@ -183,14 +195,20 @@ async def process_stage(stage: Stage, quest: Quest):
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
     await asyncio.gather(action_runner(), progress_checker())
 
-async def all_speeches_submitted():
+
+async def all_submissions_submitted():
     players_to_nicknames = bot.quest.players_to_nicknames
-    nicknames_to_speeches = bot.quest.nicknames_to_speeches
-    if players_to_nicknames and nicknames_to_speeches and len(players_to_nicknames) == len(nicknames_to_speeches):
-        print("All speeches submitted.")
+    players_to_submissions = bot.quest.players_to_submissions
+    if (
+        players_to_nicknames
+        and players_to_submissions
+        and len(players_to_nicknames) == len(players_to_submissions)
+    ):
+        print("All submissions submitted.")
         return True
-    print("Waiting for all speeches to be submitted.")
+    print("Waiting for all submissions to be submitted.")
     return False
+
 
 async def end(ctx, quest: Quest):
     """
@@ -200,7 +218,9 @@ async def end(ctx, quest: Quest):
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
     if quest.game_channel is not None:
-        await quest.game_channel.send(f"**The game is over. This channel is now archived.**")
+        await quest.game_channel.send(
+            f"**The game is over. This channel is now archived.**"
+        )
         await quest.game_channel.edit(category=archive_category)
         overwrites = {
             ctx.guild.default_role: discord.PermissionOverwrite(
@@ -215,7 +235,9 @@ async def end(ctx, quest: Quest):
     return
     # TODO: Prevent bot from being able to send messages to arcvhived channels
 
+
 # VIEWS
+
 
 class QuestBuilder(discord.ui.Select):
     def __init__(self, placeholder, options):
@@ -272,6 +294,12 @@ class QuestBuilderView(discord.ui.View):
                     emoji="🙅",
                     description="Decide the real Josh",
                     value=MINIGAME_JOSH,
+                ),
+                discord.SelectOption(
+                    label="TUTORIAL: BUILD A COMMUNITY",
+                    emoji="🎪",
+                    description="Build a community",
+                    value=TUTORIAL_BUILD_COMMUNITY,
                 ),
             ],
         )
@@ -343,7 +371,8 @@ class QuestBuilderView(discord.ui.View):
             return (
                 self.select1.selected_value,
                 int(self.select2.selected_value),
-                self.select3.selected_value == "True", # this is how you convert string to bool
+                self.select3.selected_value
+                == "True",  # this is how you convert string to bool
             )
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -375,11 +404,20 @@ class JoinLeaveView(discord.ui.View):
     async def update_embed(self, interaction):
         needed_players = self.num_players - len(self.quest.joined_players)
         embed = interaction.message.embeds[0]
-        embed.set_field_at(0, name="**Current Players:**", value=', '.join(self.quest.joined_players), inline=False)
-        embed.set_field_at(1, name="**Players needed to start:**", value=str(needed_players), inline=False)
+        embed.set_field_at(
+            0,
+            name="**Current Players:**",
+            value=", ".join(self.quest.joined_players),
+            inline=False,
+        )
+        embed.set_field_at(
+            1,
+            name="**Players needed to start:**",
+            value=str(needed_players),
+            inline=False,
+        )
 
         await interaction.message.edit(embed=embed, view=self)
-
 
     @discord.ui.button(
         style=discord.ButtonStyle.green, label="Join", custom_id="join_button"
@@ -406,9 +444,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(
-                    self.quest
-                )
+                await start_quest(self.quest)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -432,13 +468,12 @@ class JoinLeaveView(discord.ui.View):
                 f"{player_name} has abandoned the quest before it even began!"
             )
             await self.update_embed(interaction)
-        
+
         else:
             await interaction.response.send_message(
                 "You can only leave a quest if you have already joined",
                 ephemeral=True,
             )
-
 
 
 # EVENTS
@@ -487,7 +522,9 @@ async def embark(ctx, *args):
     """
     # Parse argument flags
     parser = argparse.ArgumentParser()
-    parser.add_argument("-a", "--audio", action="store_true", help="Generate text-to-speech audio")
+    parser.add_argument(
+        "-a", "--audio", action="store_true", help="Generate text-to-speech audio"
+    )
     parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
     args = parser.parse_args(args)
     gen_audio = args.audio
@@ -510,14 +547,16 @@ async def embark(ctx, *args):
     quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=False)
 
     # Create Join View
-    join_leave_view = JoinLeaveView(
-        ctx, quest, num_players
-    )
+    join_leave_view = JoinLeaveView(ctx, quest, num_players)
     embed = discord.Embed(
         title=f"{ctx.author.display_name} has proposed a game for {num_players} players: Join or Leave"
     )
-    embed.add_field(name="**Current Players:**", value="", inline=False)  # Empty initial value.
-    embed.add_field(name="**Players needed to start:**", value=str(num_players), inline=False)  # Empty initial value.
+    embed.add_field(
+        name="**Current Players:**", value="", inline=False
+    )  # Empty initial value.
+    embed.add_field(
+        name="**Players needed to start:**", value=str(num_players), inline=False
+    )  # Empty initial value.
 
     await ctx.send(embed=embed, view=join_leave_view)
     print("Waiting for players to join...")
@@ -556,13 +595,14 @@ async def make_game_channel(ctx, quest: Quest):
         overwrites=overwrites,
     )
 
+
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
     if bot.quest.fast_mode:
         await asyncio.sleep(7)
         return
-    
+
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
 
@@ -836,6 +876,7 @@ async def set_decision_module():
 
     return decision_module
 
+
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def vote_governance(ctx, governance_type: str):
@@ -905,6 +946,7 @@ async def nickname(ctx):
         )
     else:
         await ctx.author.send("You haven't been assigned a nickname yet")
+
 
 @bot.command()
 @access_control()
@@ -983,47 +1025,53 @@ async def is_not_quiet(ctx):
 # MISC COMMANDS
 @bot.command()
 @access_control()
-async def speech(ctx, *, text: str):
+async def submit(ctx, *, text: str):
     # delete the user's message
     await ctx.message.delete()
-    bot.quest.add_speech(ctx, text)
-    nickname = bot.quest.get_nickname(ctx.author.name)
-    await ctx.send(f"Added {nickname}'s speech to the list!")
+    bot.quest.add_submission(ctx, text)
+    if bot.quest.mode != MINIGAME_JOSH:
+        await ctx.send(f"Added {ctx.author.name}'s submission to the list!")
+        return
+    else:
+        nickname = bot.quest.get_nickname(ctx.author.name)
+        await ctx.send(f"Added {nickname}'s submission to the list!")
 
 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
-async def post_speeches(ctx):
-    speeches = []
-    nicknames_to_speeches = bot.quest.nicknames_to_speeches
-    title = "The following are the nominees' speeches"
+async def post_submissions(ctx):
+    submissions = []
+    players_to_submissions = bot.quest.players_to_submissions
+    title = "Submissions:"
 
-    # Go through all nicknames and their speeches
-    for nickname, speech in nicknames_to_speeches.items():
-        # Append a string formatted with the nickname and their speech
-        speeches.append(f"📜**{nickname}**:\n\n   🗣️ {speech}")
+    # Go through all nicknames and their submissions
+    for player_name, submission in players_to_submissions.items():
+        # Append a string formatted with the nickname and their submission
+        submissions.append(f"📜**{player_name}**:\n\n   🗣️ {submission}")
 
-    # Join all speeches together with a newline in between each one
-    formatted_speeches = "\n\n\n".join(speeches)
+    # Join all submissions together with a newline in between each one
+    formatted_submissions = "\n\n\n".join(submissions)
 
     embed = discord.Embed(
-        title=title, description=formatted_speeches, color=discord.Color.dark_teal()
+        title=title, description=formatted_submissions, color=discord.Color.dark_teal()
     )
 
-    # Send the formatted speeches to the context
+    # Send the formatted submissions to the context
     await ctx.send(embed=embed)
+
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
-async def vote_speeches(ctx, question: str, decision_module=None, timeout=20):
-    # Get all keys (nicknames) from the nicknames_to_speeches dictionary and convert it to a list
-    contenders = list(bot.quest.nicknames_to_speeches.keys())
+async def vote_submissions(ctx, question: str, decision_module=None, timeout=20):
+    # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
+    contenders = list(bot.quest.players_to_submissions.keys())
     if decision_module == None:
         decision_module = await set_decision_module()
     quest = bot.quest
     await vote(ctx, quest, question, contenders, decision_module, timeout)
-     # Reset the nicknames_to_speeches dictionary for the next round
-    bot.quest.reset_speeches()
+    # Reset the players_to_submissions dictionary for the next round
+    bot.quest.reset_submissions()
+
 
 # CLEANING COMMANDS
 @bot.command()
@@ -1033,6 +1081,7 @@ async def clean(ctx):
     Clean the temporary files
     """
     clean_temp_files()
+
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
@@ -1051,12 +1100,13 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
 
     await ctx.send(f'All channels in category "{category_name}" have been deleted.')
 
+
 # TEST COMMANDS
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def solo(ctx, *args, quest_mode=MINIGAME_JOSH):
+async def solo(ctx, *args, quest_mode=TUTORIAL_BUILD_COMMUNITY):
     """
-    Solo quest 
+    Solo quest
     """
 
     global QUEST_MODE
@@ -1189,7 +1239,10 @@ async def on_command(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
-    print(f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}")
+    print(
+        f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}"
+    )
+
 
 @bot.event
 async def on_message(message):
@@ -1223,44 +1276,30 @@ async def on_message(message):
                 bot_message = await message.channel.send(
                     f"{message.author.mention} posted: {filtered_message}"
                 )
-            for mode in active_culture_modes:
-                if mode == "RITUAL":
-                    # Get the most recently posted message in the channel that isn't from a bot
-                    async for msg in message.channel.history(limit=100):
-                        if msg.id == message.id:
-                            continue
-                        if msg.author.bot:
-                            continue
-                        if msg.content.startswith("/"):
-                            continue
-                        previous_message = msg.content
-                        break
-
-                    processing_message = await message.channel.send(
-                        f"Bringing {message.author.mention}'s message:\n`{filtered_message}`\n\n into alignment with {msg.author.mention}'s previous message:\n`{previous_message}`"
-                    )
-                    filtered_message = initialize_ritual_agreement(
-                        previous_message, filtered_message
-                    )
-                    await processing_message.delete()
-                    await bot_message.edit(
-                        content=f"{message.author.mention}: {filtered_message}"
-                    )
-                if mode == "OBSCURITY":
-                    obscurity_function = globals()[OBSCURITY_MODE]
-                    filtered_message = obscurity_function(filtered_message)
-                    await bot_message.edit(
-                        content=f"{message.author.mention}: {filtered_message}"
-                    )
-                if mode == "ELOQUENCE":
-                    processing_message = await message.channel.send(
-                        f"Making {message.author.mention}'s post eloquent"
-                    )
-                    filtered_message = await filter_eloquence(filtered_message)
-                    await processing_message.delete()
-                    await bot_message.edit(
-                        content=f"{message.author.mention}: {filtered_message}"
-                    )
+                for mode in active_culture_modes:
+                    if mode == "RITUAL":
+                        # Get the most recently posted message in the channel that isn't from a bot
+                        async for msg in message.channel.history(limit=100):
+                            if msg.id == message.id:
+                                continue
+                            if msg.author.bot:
+                                continue
+                            if msg.content.startswith("/"):
+                                continue
+                            previous_message = msg.content
+                            break
+                        filtered_message = initialize_ritual_agreement(
+                            previous_message, filtered_message
+                        )
+                    if mode == "OBSCURITY":
+                        obscurity_function = globals()[OBSCURITY_MODE]
+                        filtered_message = obscurity_function(filtered_message)
+                    if mode == "ELOQUENCE":
+                        filtered_message = await filter_eloquence(filtered_message)
+                await bot_message.delete()
+                await message.channel.send(
+                    f"{message.author.mention} posted: {filtered_message}"
+                )
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")

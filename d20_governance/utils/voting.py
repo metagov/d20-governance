@@ -5,10 +5,19 @@ from d20_governance.utils.constants import CIRCLE_EMOJIS
 from d20_governance.utils.utils import Quest
 
 # Voting functions
-majority = lambda results: max(results, key=results.get) if max(results.values()) > sum(results.values()) / 2 else None
-consensus = lambda results: max(results, key=results.get) if max(results.values()) == sum(results.values()) else None
+majority = (
+    lambda results: max(results, key=results.get)
+    if max(results.values()) > sum(results.values()) / 2
+    else None
+)
+consensus = (
+    lambda results: max(results, key=results.get)
+    if max(results.values()) == sum(results.values())
+    else None
+)
 
 VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
+
 
 class VoteView(discord.ui.View):
     def __init__(self, ctx, timeout):
@@ -24,7 +33,7 @@ class VoteView(discord.ui.View):
         if not self.children:
             self.add_item(
                 discord.ui.Select(
-                    options=[option],
+                    options=f"{[option]} Submission",
                     placeholder="Vote on the available options.",
                     min_values=1,
                     max_values=1,
@@ -38,8 +47,10 @@ class VoteView(discord.ui.View):
     async def on_vote_select(
         self, interaction: discord.Interaction, select: discord.ui.Select
     ):
-        vote = interaction.data.get("values")[0] # We enforce above that only one option can be selected
-        player = interaction.user 
+        vote = interaction.data.get("values")[
+            0
+        ]  # We enforce above that only one option can be selected
+        player = interaction.user
         if player not in self.votes or self.votes[player] != vote:
             self.votes[player] = vote
             await interaction.response.send_message(
@@ -87,18 +98,18 @@ async def vote(
 
     # Add options to the view dropdown select menu
     for i, option in enumerate(options):
-        vote_view.add_option(label=option, value=str(i), emoji=assigned_emojis[i])
+        vote_view.add_option(
+            label=option,
+            value=str(i),
+            emoji=assigned_emojis[i],
+        )
 
     # Send embed message and view
     await ctx.send(embed=embed, view=vote_view)
     await vote_view.wait()
 
     # Calculate total votes per member interaction
-    results = await get_vote_results(
-        ctx,
-        vote_view.votes,
-        options
-    )
+    results = await get_vote_results(ctx, vote_view.votes, options)
 
     message = get_results_message(results)
     if results:
@@ -117,9 +128,7 @@ async def vote(
     return winning_option
 
 
-async def get_vote_results(
-    results, votes, options
-):
+async def get_vote_results(results, votes, options):
     print("Getting vote results")
     results = {}
     # for each member return results of vote
@@ -130,6 +139,7 @@ async def get_vote_results(
 
     return results
 
+
 def get_results_message(results):
     total_votes = sum(results.values())
     message = f"Total votes: {total_votes}\n\n"
@@ -138,4 +148,3 @@ def get_results_message(results):
         message += f"Option `{option}` recieved `{votes}` votes ({percentage:.2f}%)\n\n"
 
     return message
-
