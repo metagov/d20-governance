@@ -6,6 +6,7 @@ import datetime
 import logging
 import ast
 from discord.ext import commands
+from discord import Webhook
 from typing import Set, List
 from interactions import Greedy
 from requests import options
@@ -1231,7 +1232,7 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
 
 
-# ON MESSAGE
+# COMMAND TRACKING
 @bot.event
 async def on_command(ctx):
     print(f"Command invoked: {ctx.command.name}")
@@ -1244,6 +1245,81 @@ async def on_command_error(ctx, error):
     )
 
 
+# MESSAGE PROCESSING
+async def create_webhook(channel):
+    global webhooks
+    webhook = None
+    for wh in webhooks:
+        if wh.channel.id == channel.id:
+            webhook = wh
+
+    if not webhook:
+        webhook = await channel.create_webhook(name="InternalWebhook")
+        webhooks.append(webhook)
+
+    return webhook
+
+
+async def send_webhook_message(webhook, message, filtered_message):
+    payload = {
+        "content": f"※{filtered_message}",
+        "username": message.author.name,
+        "avatar_url": message.author.avatar.url,
+    }
+    await webhook.send(**payload)
+
+
+async def process_message(message):
+    # Increment message count for the user (for /diversity)
+    user_id = message.author.id
+    if user_id not in user_message_count:
+        user_message_count[user_id] = 0
+    user_message_count[user_id] += 1
+
+    if IS_QUIET and not message.author.bot:
+        await message.delete()
+    else:
+        # Assign message content to be filtered
+        filtered_message = message.content
+
+        # Check if any modes are active deleted the original message
+        if active_culture_modes:
+            await message.delete()
+            # bot_message = await message.channel.send(
+            #     f"**[pending deletion:]** {message.author.mention} posted: {filtered_message}"
+            # )
+            filtered_message = await apply_culture_modes(
+                active_culture_modes, message, filtered_message
+            )
+            webhook = await create_webhook(message.channel)
+            await send_webhook_message(webhook, message, filtered_message)
+
+
+async def apply_culture_modes(modes, message, filtered_message):
+    for mode in modes:
+        if mode == "RITUAL":
+            # Get the most recently posted message in the channel that isn't from a bot
+            async for msg in message.channel.history(limit=100):
+                if msg.id == message.id:
+                    continue
+                if msg.author.bot:
+                    continue
+                if msg.content.startswith("/"):
+                    continue
+                previous_message = msg.content
+                break
+            filtered_message = await initialize_ritual_agreement(
+                previous_message, filtered_message
+            )
+        if mode == "OBSCURITY":
+            obscurity_function = globals()[OBSCURITY_MODE]
+            filtered_message = obscurity_function(filtered_message)
+        if mode == "ELOQUENCE":
+            filtered_message = await filter_eloquence(filtered_message)
+    return filtered_message
+
+
+# ON MESSAGE
 @bot.event
 async def on_message(message):
     try:
@@ -1260,46 +1336,11 @@ async def on_message(message):
             await bot.process_commands(message)
             return
 
-        # Increment message count for the user
-        user_id = message.author.id
-        if user_id not in user_message_count:
-            user_message_count[user_id] = 0
-        user_message_count[user_id] += 1
+        # FIXME: This is a hack to ensure webhook messages don't loop
+        if message.content.startswith("※"):
+            return
 
-        if IS_QUIET and not message.author.bot:
-            await message.delete()
-        else:
-            # Check if any modes are active and apply filters in list order
-            filtered_message = message.content
-            if active_culture_modes:
-                await message.delete()
-                bot_message = await message.channel.send(
-                    f"{message.author.mention} posted: {filtered_message}"
-                )
-                for mode in active_culture_modes:
-                    if mode == "RITUAL":
-                        # Get the most recently posted message in the channel that isn't from a bot
-                        async for msg in message.channel.history(limit=100):
-                            if msg.id == message.id:
-                                continue
-                            if msg.author.bot:
-                                continue
-                            if msg.content.startswith("/"):
-                                continue
-                            previous_message = msg.content
-                            break
-                        filtered_message = initialize_ritual_agreement(
-                            previous_message, filtered_message
-                        )
-                    if mode == "OBSCURITY":
-                        obscurity_function = globals()[OBSCURITY_MODE]
-                        filtered_message = obscurity_function(filtered_message)
-                    if mode == "ELOQUENCE":
-                        filtered_message = await filter_eloquence(filtered_message)
-                await bot_message.delete()
-                await message.channel.send(
-                    f"{message.author.mention} posted: {filtered_message}"
-                )
+        await process_message(message)
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
@@ -1325,6 +1366,20 @@ async def check_cmd_channel(ctx, channel_name):
         return False
     else:
         return True
+
+
+@bot.command()
+async def delete_all_webhooks(ctx):
+    # Fetch a list of all webhooks owned by the bot
+    guilds = bot.guilds
+
+    for guild in guilds:
+        webhooks = await guild.webhooks()
+
+        # Delete each webhook
+        for webhook in webhooks:
+            await webhook.delete()
+            print("Webhooks from all guilds deleted")
 
 
 # REPO DIRECTORY CHECKS
