@@ -1263,7 +1263,9 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
 # COMMAND TRACKING
 @bot.event
 async def on_command(ctx):
-    print(f"Command invoked: {ctx.command.name}")
+    print(
+        f"Command Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+    )
 
 
 @bot.event
@@ -1348,7 +1350,6 @@ async def apply_culture_modes(modes, message, filtered_message):
             if OBSCURITY_MODE == "camel_case":
                 filtered_message = obscure_function.camel_case()
         if mode == "ELOQUENCE":
-            print("hitting ELO")
             filtered_message = await filter_eloquence(filtered_message)
     return filtered_message
 
