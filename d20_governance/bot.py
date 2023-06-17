@@ -1369,16 +1369,6 @@ async def check_cmd_channel(ctx, channel_name):
         return True
 
 
-async def delete_all_webhooks(guild):
-    webhooks = await guild.webhooks()
-
-    # Delete each webhook
-    for webhook in webhooks:
-        print(webhook)
-        await webhook.delete()
-        print("Webhooks from all guilds deleted")
-
-
 # REPO DIRECTORY CHECKS
 def check_dirs():
     if not os.path.exists(AUDIO_MESSAGES_PATH):
