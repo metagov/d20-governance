@@ -128,7 +128,7 @@ user_message_count = {}
 webhooks = []
 
 # CULTURE COMMANDS
-active_culture_modes = []
+active_culture_modes = {}
 
 # JOSH GAME # todo: move this out to game-specific file
 nicknames = [
