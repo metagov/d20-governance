@@ -50,13 +50,13 @@ class Quest:
         self.solo_mode = solo_mode
 
         # josh game specific # TODO: find a more general solution
-        self.nicknames_to_speeches = {}
+        self.players_to_submissions = {}
         self.players_to_nicknames = {}
 
         self.update_vars()
 
     def update_vars(self):
-        # LLM mode does not have yaml 
+        # LLM mode does not have yaml
         if self.mode is not QUEST_MODE_LLM:
             with open(self.mode, "r") as f:
                 quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
@@ -65,20 +65,20 @@ class Quest:
         if self.quest_data is not None:
             self.title = self.quest_data.get("title")
             self.stages = self.quest_data.get("stages")
-        elif self.mode: # LLM mode has no quest data
+        elif self.mode:  # LLM mode has no quest data
             self.title = self.mode
 
     def set_quest_vars(self, quest_data, quest_mode):
         self.quest_data = quest_data
         self.mode = quest_mode
         self.update_vars()
-    
+
     def add_player(self, player_name):
         # If player has already joined, this is a no-op
         self.joined_players.add(player_name)
         # TODO: figure out how to avoid this game-specific check here
         if self.mode == MINIGAME_JOSH:
-             # Randomly select a nickname
+            # Randomly select a nickname
             nickname = random.choice(nicknames)
 
             # Assign the nickname to the player
@@ -87,23 +87,22 @@ class Quest:
             # Remove the nickname from the list so it can't be used again
             nicknames.remove(nickname)
 
-    def add_speech(self, ctx, text):
+    def add_submission(self, ctx, text):
         # get the name of the user invoking the command
         player_name = str(ctx.message.author.name)
         # get the nickname of the user invoking the command
-        nickname = self.players_to_nicknames.get(player_name)
-        if nickname is None:
-            print(f"No nickname found for player:  {player_name}")
-            return
-        
-        # add the speech to the list associated with the nickname
-        self.nicknames_to_speeches[nickname] = text
+        if self.mode == MINIGAME_JOSH:
+            player_name = self.players_to_nicknames.get(player_name)
+            self.players_to_submissions[player_name] = text
+        else:
+            self.players_to_submissions[player_name] = text
 
-    def reset_speeches(self):
-        self.nicknames_to_speeches = {}
+    def reset_submissions(self):
+        self.players_to_submissions = {}
 
     def get_nickname(self, player_name):
         return self.players_to_nicknames.get(player_name)
+
 
 # Decorator for access control management
 def access_control():
@@ -208,6 +207,7 @@ async def execute_action(bot, action_string, temp_channel):
 
     await command.callback(ctx, *args)
 
+
 # Module Management
 def get_modules_for_type(governance_type):
     """
@@ -311,8 +311,10 @@ def chunk_text(text):
     words = text.split()
     chunks = []
     i = 0
+    min = 10
+    max = 14
     while i < len(words):
-        chunk_size = 14 if random.random() < 0.6 else 16
+        chunk_size = min if random.random() < 0.6 else max
         chunk = " ".join(words[i : i + chunk_size])
         chunks.append(chunk)
         i += chunk_size
@@ -734,7 +736,6 @@ async def post_governance(ctx):
             print(f"{os.path.basename(latest_snapshot)}")
 
 
-
 # BOT CHANNEL CHECKS
 async def check_cmd_channel(ctx, channel_name):
     """
@@ -811,7 +812,9 @@ def clean_temp_files():
             if age_in_days >= days_to_keep:
                 os.remove(filename)
 
+
 # LLM HELPERS
+
 
 def get_llm_agent():
     template = """You are a chatbot generating the narrative and actions for a governance game.
@@ -842,6 +845,7 @@ def get_llm_agent():
     )
     return llm_chain
 
+
 async def generate_stage_llm(llm_agent, quest: Quest):
     await quest.game_channel.send("generating next narrative step with llm..")
     MAX_ATTEMPTS = 5
@@ -851,9 +855,7 @@ async def generate_stage_llm(llm_agent, quest: Quest):
         try:
             attempt += 1
             await quest.game_channel.send("generating next narrative step with llm..")
-            yaml_string = llm_agent.predict(
-                human_input="generate the next stage"
-            )
+            yaml_string = llm_agent.predict(human_input="generate the next stage")
             print(yaml_string)
             yaml_data = ru_yaml.load(yaml_string)
 
@@ -865,11 +867,14 @@ async def generate_stage_llm(llm_agent, quest: Quest):
             await quest.game_channel.send("encountered error, retrying..")
 
     if not stage:
-        raise ValueError("yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS))
-    
-    stage = Stage(name=stage[QUEST_NAME_KEY], 
-                  message=stage[QUEST_MESSAGE_KEY], 
-                  actions=stage[QUEST_ACTIONS_KEY], 
-                  progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY])
-    return stage
+        raise ValueError(
+            "yaml output in wrong format after {} attempts".format(MAX_ATTEMPTS)
+        )
 
+    stage = Stage(
+        name=stage[QUEST_NAME_KEY],
+        message=stage[QUEST_MESSAGE_KEY],
+        actions=stage[QUEST_ACTIONS_KEY],
+        progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
+    )
+    return stage

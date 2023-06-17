@@ -3,6 +3,7 @@ import yaml as py_yaml
 from dotenv import load_dotenv
 from ruamel.yaml import YAML
 
+
 def read_config(file_path):
     """
     Function for reading a yaml file
@@ -10,6 +11,7 @@ def read_config(file_path):
     with open(file_path, "r") as f:
         config = py_yaml.safe_load(f)
     return config
+
 
 ru_yaml = YAML()
 ru_yaml.indent(mapping=2, sequence=4, offset=2)
@@ -51,8 +53,15 @@ BOT_ICON = "assets/imgs/game_icons/d20-gov-icon.png"
 QUEST_WHIMSY = "d20_governance/d20_configs/quest_configs/whimsy.yaml"
 QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
 QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
-MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
 QUEST_MODE_LLM = "llm"
+
+# MINIGAM CONFIGS
+MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
+TUTORIAL_BUILD_COMMUNITY = (
+    "d20_governance/d20_configs/minigame_configs/build_community_game.yaml"
+)
+
+# QUEST KEYS
 QUEST_MESSAGE_KEY = "message"
 QUEST_NAME_KEY = "stage"
 QUEST_ACTIONS_KEY = "actions"
@@ -88,7 +97,6 @@ CIRCLE_EMOJIS = [
     "🟤",
     "⚫",
     "⚪",
-    "⭕️",
 ]
 
 # Module Construction
@@ -106,7 +114,7 @@ COMMAND_VISIBILITY = {}
 DECISION_MODULE = None
 MAX_VOTE_TRIGGERS = 3
 
-# INTERNAL ACCESS CONTROL SETTINGS 
+# INTERNAL ACCESS CONTROL SETTINGS
 ACCESS_CONTROL_SETTINGS = {
     "allowed_roles": ["@everyone"],
     "excluded_roles": [],
@@ -120,7 +128,6 @@ user_message_count = {}
 
 # CULTURE COMMANDS
 active_culture_modes = []
-
 
 
 # JOSH GAME # todo: move this out to game-specific file
@@ -146,5 +153,3 @@ nicknames = [
     "Jurassic Josh",
     "Jingle Bell Josh",
 ]
-
-
