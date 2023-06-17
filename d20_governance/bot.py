@@ -486,6 +486,7 @@ async def on_ready():
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
+        await delete_all_webhooks(guild)
     check_dirs()
 
 
@@ -1368,18 +1369,14 @@ async def check_cmd_channel(ctx, channel_name):
         return True
 
 
-@bot.command()
-async def delete_all_webhooks(ctx):
-    # Fetch a list of all webhooks owned by the bot
-    guilds = bot.guilds
+async def delete_all_webhooks(guild):
+    webhooks = await guild.webhooks()
 
-    for guild in guilds:
-        webhooks = await guild.webhooks()
-
-        # Delete each webhook
-        for webhook in webhooks:
-            await webhook.delete()
-            print("Webhooks from all guilds deleted")
+    # Delete each webhook
+    for webhook in webhooks:
+        print(webhook)
+        await webhook.delete()
+        print("Webhooks from all guilds deleted")
 
 
 # REPO DIRECTORY CHECKS
