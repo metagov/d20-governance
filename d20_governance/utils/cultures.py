@@ -6,6 +6,46 @@ from langchain.chains import LLMChain
 
 
 # Culture Utils
+class Obscurity:
+    def __init__(self, string):
+        self.string = string
+
+    def scramble(self):
+        print(self.string)
+        words = self.string.split()
+        scrambled_words = [scramble_word(word) for word in words]
+        return " ".join(scrambled_words)
+
+    def replace_vowels(self):
+        vowels = "aeiou"
+        message_content = self.string.lower()
+        return "".join([" " if c in vowels else c for c in message_content])
+
+    def pig_latin_word(self):
+        if self.string[0] in "aeiouAEIOU":
+            return self.string + "yay"
+        else:
+            first_consonant_cluster = ""
+            rest_of_word = self.string
+            for letter in self.string:
+                if letter not in "aeiouAEIOU":
+                    first_consonant_cluster += letter
+                    rest_of_word = rest_of_word[1:]
+                else:
+                    break
+            return rest_of_word + first_consonant_cluster + "ay"
+
+    def pig_latin(self):
+        words = self.string.split()
+        pig_latin_words = [pig_latin_word(word) for word in words]
+        return " ".join(pig_latin_words)
+
+    def camel_case(self):
+        words = self.string.split()
+        camel_case_words = [word.capitalize() for word in words]
+        return "".join(camel_case_words)
+
+
 def scramble_word(word):
     if len(word) <= 3:
         return word
@@ -13,18 +53,6 @@ def scramble_word(word):
         middle = list(word[1:-1])
         random.shuffle(middle)
         return word[0] + "".join(middle) + word[-1]
-
-
-def scramble(text):
-    words = text.split()
-    scrambled_words = [scramble_word(word) for word in words]
-    return " ".join(scrambled_words)
-
-
-def replace_vowels(text):
-    vowels = "aeiou"
-    message_content = text.lower()
-    return "".join([" " if c in vowels else c for c in message_content])
 
 
 def pig_latin_word(word):
@@ -42,18 +70,6 @@ def pig_latin_word(word):
         return rest_of_word + first_consonant_cluster + "ay"
 
 
-def pig_latin(text):
-    words = text.split()
-    pig_latin_words = [pig_latin_word(word) for word in words]
-    return " ".join(pig_latin_words)
-
-
-def camel_case(text):
-    words = text.split()
-    camel_case_words = [word.capitalize() for word in words]
-    return "".join(camel_case_words)
-
-
 async def filter_eloquence(text):
     """
     A LLM filter for messages during the /eloquence command/function
@@ -67,9 +83,9 @@ async def filter_eloquence(text):
     return chain.run(text)
 
 
-async def send_msg_to_random_player():
+async def send_msg_to_random_player(game_channel):
     print("Sending random DM...")
-    players = [member for member in GAME_CHANNEL.members if not member.bot]
+    players = [member for member in game_channel.members if not member.bot]
     random_player = random.choice(players)
     dm_channel = await random_player.create_dm()
     await dm_channel.send(

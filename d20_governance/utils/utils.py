@@ -813,6 +813,15 @@ def clean_temp_files():
                 os.remove(filename)
 
 
+async def delete_all_webhooks(guild):
+    webhooks = await guild.webhooks()
+
+    # Delete each webhook
+    for webhook in webhooks:
+        await webhook.delete()
+        print("Webhooks from all guilds deleted")
+
+
 # LLM HELPERS
 
 

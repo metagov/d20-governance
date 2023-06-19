@@ -6,6 +6,7 @@ import datetime
 import logging
 import ast
 from discord.ext import commands
+from discord import Webhook
 from typing import Set, List
 from interactions import Greedy
 from requests import options
@@ -485,6 +486,7 @@ async def on_ready():
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
         await setup_server(guild)
+        await delete_all_webhooks(guild)
     check_dirs()
 
 
@@ -672,62 +674,82 @@ async def obscurity(ctx, mode: str = None):
     """
     global OBSCURITY
     global OBSCURITY_MODE
+    print(OBSCURITY_MODE)
 
     # A list of available obscurity modes
     available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
-    embed = None
+
+    channel_culture_modes = active_culture_modes.get(ctx.channel, [])
+
     if mode is None:
-        OBSCURITY = not OBSCURITY
-        embed = discord.Embed(
-            title=f"Culture: Obscurity {'activated!' if OBSCURITY else 'deactivated!'}",
-            color=discord.Color.dark_gold(),
-        )
-        if OBSCURITY:
-            if "OBSCURITY" not in active_culture_modes:
-                active_culture_modes.append("OBSCURITY")
-                embed.add_field(
-                    name="Mode:",
-                    value=f"{OBSCURITY_MODE}",
-                    inline=False,
-                )
-                embed.add_field(
-                    name="ACTIVE CULTURE MODES:",
-                    value=f"{', '.join(active_culture_modes)}",
-                    inline=False,
-                )
+        if "OBSCURITY" not in channel_culture_modes:
+            OBSCURITY = True
+            channel_culture_modes.append("OBSCURITY")
+            embed = discord.Embed(
+                title=f"Culture: OBSCURITY",
+                color=discord.Color.dark_gold(),
+            )
+            embed.add_field(
+                name="ACTIVATED",
+                value="Messages will be distored based on mode of obscurity.",
+                inline=False,
+            )
+            embed.add_field(
+                name="Mode:",
+                value=f"{OBSCURITY_MODE}",
+                inline=False,
+            )
+            embed.add_field(
+                name="ACTIVE CULTURE MODES:",
+                value=f"{', '.join(channel_culture_modes)}",
+                inline=False,
+            )
         else:
-            if "OBSCURITY" in active_culture_modes:
-                active_culture_modes.remove("OBSCURITY")
-                embed.add_field(
-                    name="ACTIVE CULTURE MODES:",
-                    value=f"{', '.join(active_culture_modes)}",
-                    inline=False,
-                )
+            OBSCURITY = False
+            channel_culture_modes.remove("OBSCURITY")
+            embed = discord.Embed(
+                title=f"Culture: OBSCURITY",
+                color=discord.Color.dark_gold(),
+            )
+            embed.add_field(
+                name="DEACTIVATED",
+                value="Messages will no longer be distored by obscurity.",
+                inline=False,
+            )
+            embed.add_field(
+                name="ACTIVE CULTURE MODES:",
+                value=f"{', '.join(active_culture_modes)}",
+                inline=False,
+            )
     elif mode not in available_modes:
         embed = discord.Embed(
             title=f"Error - The mode '{mode}' is not available.",
             color=discord.Color.red(),
         )
     else:
+        print(OBSCURITY_MODE)
         OBSCURITY_MODE = mode
-        OBSCURITY = True
+        if "OBSCURITY" not in channel_culture_modes:
+            channel_culture_modes.append("OBSCURITY")
+
         embed = discord.Embed(
             title="Culture: Obscurity On!", color=discord.Color.dark_gold()
         )
         embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
-        if "OBSCURITY" not in active_culture_modes:
-            active_culture_modes.append("OBSCURITY")
         embed.add_field(
             name="ACTIVE CULTURE MODES:",
-            value=f"{', '.join(active_culture_modes)}",
+            value=f"{', '.join(channel_culture_modes)}",
             inline=False,
         )
 
     embed.set_thumbnail(
         url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
     )
+    active_culture_modes[ctx.channel] = channel_culture_modes
     await ctx.send(embed=embed)
-    print(f"Obscurity: {'on' if OBSCURITY else 'off'}, Mode: {OBSCURITY_MODE}")
+    print(
+        f"Obscurity: {'on' if 'OBSCURITY' in channel_culture_modes else 'off'}, Mode: {OBSCURITY_MODE}"
+    )
 
 
 @bot.command()
@@ -737,34 +759,41 @@ async def eloquence(ctx):
     Toggle eloquence module
     """
     global ELOQUENCE
-    ELOQUENCE = not ELOQUENCE
-    if ELOQUENCE:
-        if "ELOQUENCE" not in active_culture_modes:
-            active_culture_modes.append("ELOQUENCE")
-            embed = discord.Embed(
-                title="Culture: Eloquence", color=discord.Color.dark_gold()
-            )
-            embed.set_thumbnail(
-                url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-            )
-            embed.add_field(
-                name="ACTIVATED:",
-                value="Messages will now be process through an LLM.",
-                inline=False,
-            )
-            embed.add_field(
-                name="ACTIVE CULTURE MODES:",
-                value=f"{', '.join(active_culture_modes)}",
-                inline=False,
-            )
-            embed.add_field(
-                name="LLM Prompt:",
-                value="You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]",
-                inline=False,
-            )
-            await ctx.send(embed=embed)
+
+    channel_culture_modes = active_culture_modes.get(ctx.channel, [])
+
+    if "ELOQUENCE" not in channel_culture_modes:
+        ELOQUENCE = True
+        channel_culture_modes.append("ELOQUENCE")
+        active_culture_modes[ctx.channel] = channel_culture_modes
+
+        embed = discord.Embed(
+            title="Culture: Eloquence", color=discord.Color.dark_gold()
+        )
+        embed.set_thumbnail(
+            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+        )
+        embed.add_field(
+            name="ACTIVATED:",
+            value="Messages will now be process through an LLM.",
+            inline=False,
+        )
+        embed.add_field(
+            name="ACTIVE CULTURE MODES:",
+            value=f"{', '.join(channel_culture_modes)}",
+            inline=False,
+        )
+        embed.add_field(
+            name="LLM Prompt:",
+            value="`You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]`",
+            inline=False,
+        )
+        await ctx.send(embed=embed)
     else:
-        active_culture_modes.remove("ELOQUENCE")
+        ELOQUENCE = False
+        channel_culture_modes.remove("ELOQUENCE")
+        active_culture_modes[ctx.channel] = channel_culture_modes
+
         embed = discord.Embed(
             title="Culture: Eloquence", color=discord.Color.dark_gold()
         )
@@ -778,7 +807,7 @@ async def eloquence(ctx):
         )
         embed.add_field(
             name="ACTIVE CULTURE MODES:",
-            value=f"{', '.join(active_culture_modes)}",
+            value=f"{', '.join(channel_culture_modes)}",
             inline=False,
         )
         await ctx.send(embed=embed)
@@ -1231,10 +1260,12 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
 
 
-# ON MESSAGE
+# COMMAND TRACKING
 @bot.event
 async def on_command(ctx):
-    print(f"Command invoked: {ctx.command.name}")
+    print(
+        f"Command Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+    )
 
 
 @bot.event
@@ -1244,6 +1275,86 @@ async def on_command_error(ctx, error):
     )
 
 
+# MESSAGE PROCESSING
+async def create_webhook(channel):
+    global webhooks
+    webhook = None
+    for wh in webhooks:
+        if wh.channel.id == channel.id:
+            webhook = wh
+
+    if not webhook:
+        webhook = await channel.create_webhook(name="InternalWebhook")
+        webhooks.append(webhook)
+
+    return webhook
+
+
+async def send_webhook_message(webhook, message, filtered_message):
+    payload = {
+        "content": f"※{filtered_message}",
+        "username": message.author.name,
+        "avatar_url": message.author.avatar.url,
+    }
+    await webhook.send(**payload)
+
+
+async def process_message(message):
+    # Increment message count for the user (for /diversity)
+    user_id = message.author.id
+    if user_id not in user_message_count:
+        user_message_count[user_id] = 0
+    user_message_count[user_id] += 1
+
+    if IS_QUIET and not message.author.bot:
+        await message.delete()
+    else:
+        # Assign message content to be filtered
+        filtered_message = message.content
+
+        # Check if any modes are active deleted the original message
+        channel_culture_modes = active_culture_modes.get(message.channel, [])
+        if channel_culture_modes:
+            await message.delete()
+            filtered_message = await apply_culture_modes(
+                channel_culture_modes, message, filtered_message
+            )
+            webhook = await create_webhook(message.channel)
+            await send_webhook_message(webhook, message, filtered_message)
+
+
+async def apply_culture_modes(modes, message, filtered_message):
+    for mode in modes:
+        if mode == "RITUAL":
+            # Get the most recently posted message in the channel that isn't from a bot
+            async for msg in message.channel.history(limit=100):
+                if msg.id == message.id:
+                    continue
+                if msg.author.bot:
+                    continue
+                if msg.content.startswith("/"):
+                    continue
+                previous_message = msg.content
+                break
+            filtered_message = await initialize_ritual_agreement(
+                previous_message, filtered_message
+            )
+        if mode == "OBSCURITY":
+            obscure_function = Obscurity(filtered_message)
+            if OBSCURITY_MODE == "scramble":
+                filtered_message = obscure_function.scramble()
+            if OBSCURITY_MODE == "replace_vowels":
+                filtered_message = obscure_function.replace_vowels()
+            if OBSCURITY_MODE == "pig_latin":
+                filtered_message = obscure_function.pig_latin()
+            if OBSCURITY_MODE == "camel_case":
+                filtered_message = obscure_function.camel_case()
+        if mode == "ELOQUENCE":
+            filtered_message = await filter_eloquence(filtered_message)
+    return filtered_message
+
+
+# ON MESSAGE
 @bot.event
 async def on_message(message):
     try:
@@ -1260,46 +1371,11 @@ async def on_message(message):
             await bot.process_commands(message)
             return
 
-        # Increment message count for the user
-        user_id = message.author.id
-        if user_id not in user_message_count:
-            user_message_count[user_id] = 0
-        user_message_count[user_id] += 1
+        # FIXME: This is a hack to ensure webhook messages don't loop
+        if message.content.startswith("※"):
+            return
 
-        if IS_QUIET and not message.author.bot:
-            await message.delete()
-        else:
-            # Check if any modes are active and apply filters in list order
-            filtered_message = message.content
-            if active_culture_modes:
-                await message.delete()
-                bot_message = await message.channel.send(
-                    f"{message.author.mention} posted: {filtered_message}"
-                )
-                for mode in active_culture_modes:
-                    if mode == "RITUAL":
-                        # Get the most recently posted message in the channel that isn't from a bot
-                        async for msg in message.channel.history(limit=100):
-                            if msg.id == message.id:
-                                continue
-                            if msg.author.bot:
-                                continue
-                            if msg.content.startswith("/"):
-                                continue
-                            previous_message = msg.content
-                            break
-                        filtered_message = initialize_ritual_agreement(
-                            previous_message, filtered_message
-                        )
-                    if mode == "OBSCURITY":
-                        obscurity_function = globals()[OBSCURITY_MODE]
-                        filtered_message = obscurity_function(filtered_message)
-                    if mode == "ELOQUENCE":
-                        filtered_message = await filter_eloquence(filtered_message)
-                await bot_message.delete()
-                await message.channel.send(
-                    f"{message.author.mention} posted: {filtered_message}"
-                )
+        await process_message(message)
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")

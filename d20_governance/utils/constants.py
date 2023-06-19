@@ -16,8 +16,7 @@ def read_config(file_path):
 ru_yaml = YAML()
 ru_yaml.indent(mapping=2, sequence=4, offset=2)
 
-# API Keys and Info
-
+# API KEY AND INFO
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 if DISCORD_TOKEN is None:
@@ -32,7 +31,7 @@ STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 
 
-# Timeouts
+# TIMEOUTS
 START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
 GAME_TIMEOUT = (
     86400  # The game will auto-archive if there is no game play within 24 hours
@@ -99,7 +98,7 @@ CIRCLE_EMOJIS = [
     "⚪",
 ]
 
-# Module Construction
+# MODULE CONSTRUCTION
 FILE_COUNT = 0  # Global variable to store the count of created files
 MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
@@ -125,10 +124,11 @@ ACCESS_CONTROL_SETTINGS = {
 COMMAND_VISIBILITY = {}
 # Stores the number of messages sent by each user
 user_message_count = {}
+# stores webhooks
+webhooks = []
 
 # CULTURE COMMANDS
-active_culture_modes = []
-
+active_culture_modes = {}
 
 # JOSH GAME # todo: move this out to game-specific file
 nicknames = [
