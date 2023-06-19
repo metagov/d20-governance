@@ -1,3 +1,4 @@
+from typing import List
 from click import command
 import discord
 from discord.ext import commands
@@ -25,6 +26,21 @@ from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
+class Action:
+    def __init__(self, action: str, args: str, retries: int, retry_message: str, failure_message: str):
+        self.action = action
+        self.retries = retries
+        self.retry_message = retry_message
+        self.failure_message = failure_message
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            action=data.get('action', ''),
+            retries=data.get('retries', 0),
+            retry_message=data.get('retry_message', ''),
+            failure_message=data.get('failure_message', '')
+        )
 
 class Stage:
     def __init__(self, name, message, actions, progress_conditions):
@@ -32,7 +48,6 @@ class Stage:
         self.message = message
         self.actions = actions
         self.progress_conditions = progress_conditions
-
 
 class Quest:
     def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):

@@ -61,7 +61,6 @@ class VoteView(discord.ui.View):
                 "You've already voted.", ephemeral=True
             )
 
-
 async def vote(
     ctx,
     quest: Quest,
@@ -111,18 +110,20 @@ async def vote(
     # Calculate total votes per member interaction
     results = await get_vote_results(ctx, vote_view.votes, options)
 
-    message = get_results_message(results)
-    if results:
-        winning_option = VOTING_FUNCTIONS[decision_module](results)
-    else:
-        winning_option = None
+    # Calculate winning option if exists
+    winning_option = VOTING_FUNCTIONS[decision_module](results) if results else None
+    results_message = get_results_message(results, winning_option)
 
     # Display results
     embed = discord.Embed(
         title=f"Results for: `{question}`:",
-        description=message,
+        description=results_message,
         color=discord.Color.dark_gold(),
     )
+
+    # If retries are configured, voting will be repeated 
+    if winning_option is None:
+        raise Exception("No winner was found.")
 
     await ctx.send(embed=embed)
     return winning_option
@@ -139,12 +140,16 @@ async def get_vote_results(results, votes, options):
 
     return results
 
-
-def get_results_message(results):
+def get_results_message(results, winning_option):
     total_votes = sum(results.values())
     message = f"Total votes: {total_votes}\n\n"
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
-        message += f"Option `{option}` recieved `{votes}` votes ({percentage:.2f}%)\n\n"
-
+        message += f"Option `{option}` received `{votes}` votes ({percentage:.2f}%)\n\n"
+    
+    if winning_option:
+        message += f"The winner is `{winning_option}`.\n\n"
+    else:
+        message += "No winner was found.\n\n"
+        
     return message

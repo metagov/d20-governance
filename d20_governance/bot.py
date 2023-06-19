@@ -98,17 +98,17 @@ async def start_quest(quest: Quest):
 
     else:  # yaml mode
         for stage in quest.stages:
+            actions = [Action.from_dict(action_dict) for action_dict in stage[QUEST_ACTIONS_KEY]]
             stage = Stage(
                 name=stage[QUEST_NAME_KEY],
                 message=stage[QUEST_MESSAGE_KEY],
-                actions=stage[QUEST_ACTIONS_KEY],
-                progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
+                actions=actions,
+                progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY]
             )
 
             print(f"Processing stage {stage.name}")
 
             await process_stage(stage, quest)
-
 
 async def process_stage(stage: Stage, quest: Quest):
     """
@@ -166,15 +166,21 @@ async def process_stage(stage: Stage, quest: Quest):
     progress_conditions = stage.progress_conditions
 
     async def action_runner():
-        tasks = [
-            execute_action(
-                bot,
-                action,
-                quest.game_channel,
-            )
-            for action in actions
-        ]
-        await asyncio.gather(*tasks)  # wait for all actions to complete
+            for action in actions:
+                retries = action.retries if hasattr(action, 'retries') else 0
+                while retries >= 0:
+                    try:
+                        await execute_action(bot, action, quest.game_channel)
+                        break
+                    except Exception as e:
+                        if retries > 0:
+                            if hasattr(action, 'retry_message') and action.retry_message:
+                                await quest.game_channel.send(action.retry_message)
+                            retries -= 1
+                        else:
+                            if hasattr(action, 'failure_message') and action.failure_message:
+                                await quest.game_channel.send(action.failure_message)
+                            raise e
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -200,16 +206,11 @@ async def process_stage(stage: Stage, quest: Quest):
 async def all_submissions_submitted():
     players_to_nicknames = bot.quest.players_to_nicknames
     players_to_submissions = bot.quest.players_to_submissions
-    if (
-        players_to_nicknames
-        and players_to_submissions
-        and len(players_to_nicknames) == len(players_to_submissions)
-    ):
+    if len(players_to_nicknames) == len(players_to_submissions):
         print("All submissions submitted.")
         return True
     print("Waiting for all submissions to be submitted.")
     return False
-
 
 async def end(ctx, quest: Quest):
     """
