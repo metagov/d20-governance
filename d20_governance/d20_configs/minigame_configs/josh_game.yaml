@@ -19,7 +19,7 @@ stages:
         - action: "change_cmd_acl allowed_roles none speech"
         - action: "countdown 30"
         - action: "change_cmd_acl allowed_roles @everyone none"
-      progress_conditions: ["all_speeches_submitted"]
+      progress_conditions: ["all_submissions_submitted"]
     
     - stage: "Deliberation"
       message: "A clamor of claims erupts. It is time to decide who amongst us is the real Josh. Discuss and build consensus. If consensus is not reached only two will move forward. You have 2 minutes to deliberate."

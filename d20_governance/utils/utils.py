@@ -27,7 +27,7 @@ from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
 class Action:
-    def __init__(self, action: str, args: str, retries: int, retry_message: str, failure_message: str):
+    def __init__(self, action: str, retries: int, retry_message: str, failure_message: str):
         self.action = action
         self.retries = retries
         self.retry_message = retry_message

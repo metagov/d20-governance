@@ -30,7 +30,6 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 bot.remove_command("help")
 
-
 @bot.command()
 async def help(ctx, command: str = None):
     prefix = bot.command_prefix
@@ -76,12 +75,10 @@ print("Logging to logs/bot.log")
 
 # QUEST FLOW
 
-
 def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
     return quest
-
 
 async def start_quest(quest: Quest):
     """
