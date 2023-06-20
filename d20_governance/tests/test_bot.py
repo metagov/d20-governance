@@ -27,6 +27,40 @@ class TestQuestMockActions(unittest.IsolatedAsyncioTestCase):
 
         quest.game_channel.send.assert_called()
 
+from unittest.mock import patch, MagicMock, call
+from d20_governance.bot import Stage, Quest
+
+class TestRetryAction(unittest.IsolatedAsyncioTestCase):
+    @patch('d20_governance.bot.bot', new_callable=MagicMock)
+    @patch('d20_governance.bot.execute_action', new_callable=AsyncMock)
+    @patch('d20_governance.bot.stream_message', new_callable=AsyncMock)
+    async def test_retry_action(self, mock_stream_message, mock_execute_action, mock_bot):
+        # Set up stage and quest objects
+        action = MagicMock()
+        action.retries = 3
+        action.retry_message = 'Retry message'
+        action.failure_message = 'Failure message'
+        stage = Stage(name='Test Stage', message='Test message', actions=[action], progress_conditions=[])
+        quest = create_quest()
+        quest.stages = [stage]
+
+        # Make execute_action raise an exception
+        mock_execute_action.side_effect = Exception('Test exception')
+
+        # Run the function
+        with self.assertRaises(Exception):
+            await process_stage(stage, quest)
+
+        # Check that the retry message was sent the correct number of times
+        calls = [call.send(action.retry_message) for _ in range(action.retries)]
+        quest.game_channel.assert_has_calls(calls)
+
+        # Check that the failure message was sent once
+        quest.game_channel.send.assert_called_with(action.failure_message)
+
+        # Clean up mocks
+        mock_stream_message.reset_mock()
+        mock_execute_action.reset_mock()
 
 if __name__ == '__main__':
     unittest.main()

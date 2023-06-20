@@ -177,7 +177,7 @@ async def process_stage(stage: Stage, quest: Quest):
                         else:
                             if hasattr(action, 'failure_message') and action.failure_message:
                                 await quest.game_channel.send(action.failure_message)
-                            raise e
+                            raise Exception(f"Failed to execute action {action.name}; too many failed retries {e}")
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
