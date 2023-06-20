@@ -9,6 +9,7 @@ def create_quest():
 
     # Create a mock for the game_channel
     mock_game_channel = MagicMock()
+    mock_game_channel.fetch_message = AsyncMock()  # mock the fetch_message method
     mock_game_channel.send = AsyncMock()  # mock the send method
 
     # Assign the mock game_channel to the Quest

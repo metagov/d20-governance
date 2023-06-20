@@ -26,17 +26,24 @@ from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
+import shlex
+
 class Action:
-    def __init__(self, action: str, retries: int, retry_message: str, failure_message: str):
+    def __init__(self, action: str, arguments: list, retries: int, retry_message: str, failure_message: str):
         self.action = action
+        self.arguments = arguments
         self.retries = retries
         self.retry_message = retry_message
         self.failure_message = failure_message
 
     @classmethod
     def from_dict(cls, data: dict):
+        action_string = data.get('action', '')
+        tokens = shlex.split(action_string)
+        action, *arguments = tokens
         return cls(
-            action=data.get('action', ''),
+            action=action,
+            arguments=arguments,
             retries=data.get('retries', 0),
             retry_message=data.get('retry_message', ''),
             failure_message=data.get('failure_message', '')
@@ -205,12 +212,12 @@ async def setup_server(guild):
 
 
 # Yaml command callback and parsing
-async def execute_action(bot, action_string, temp_channel):
-    tokens = shlex.split(action_string.lower())
-    command_name, *args = tokens
+async def execute_action(bot, action, temp_channel):
+    command_name = action.action
+    args = action.arguments
     command = bot.get_command(command_name)
     if command is None:
-        return
+        raise Exception(f"Command {command_name} not found.")
 
     print(f"Executing {command}")
 
@@ -220,8 +227,8 @@ async def execute_action(bot, action_string, temp_channel):
     # Create a context object for the message
     ctx = await bot.get_context(message_obj)
 
+    # Pass the arguments to the command's callback function
     await command.callback(ctx, *args)
-
 
 # Module Management
 def get_modules_for_type(governance_type):
