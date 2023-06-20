@@ -1,158 +1,165 @@
-title: "Governance Game: Build a Community"
-
+title: 'Governance Game: Build a Community'
 stages:
-  - stage: "Introduction"
-    message: "Welcome to the Build a Community Governance Simulator!\n\n
-    
-    You are tasked with building a new community from scratch and have three questions to collectively answer. However, this simulation takes place in the future, after a 🤔 **new confusion** 🤔 has set in. Deliberation on the internet is now randomly subjected to communication collapses 😱.\n\n
-    
-    While things may at first appear normal, over time you will experience new challenges in making decisions. Be prepared to adapt or risk remaining in the new confusion for forever!"
+  - stage: Introduction
+    message: "Welcome to the Build a Community Governance Simulator!\n\n You are tasked with building a new community from scratch and have three questions to collectively answer. However, this simulation takes place in the future, after a \U0001F914 **new confusion** \U0001F914 has set in. Deliberation on the internet is now randomly subjected to communication collapses \U0001F631.\n\n While things may at first appear normal, over time you will experience new challenges in making decisions. Be prepared to adapt or risk remaining in the new confusion for forever!"
+    actions: []
+    progress_conditions:
+      - timeout 30
+  - stage: Community Name
+    message: >-
+      The first step in building a community and making sense of our situation
+      is to give it a name. What should we call ourselves?
     actions: []
     progress_conditions: []
+  - stage: 'Submit Answers: Community Name'
+    message: >-
+      Take a moment to submit a proposal to the question: `What should we call
+      ourselves?`.
 
-  - stage: "Community Name"
-    message: "The first step in building a community and making sense of our situation is to give it a name. What should we call ourselves?"
+       You have 2 minutes to submit an answer.
+
+       Type `/submit [message]`
+    actions:
+      - action: countdown 120
+    progress_conditions: []
+  - stage: 'Proposals: Community Name'
+    message: >-
+      This nascent community has spoken. Here are the proposed names for our
+      community.
+    actions:
+      - action: post_submissions
+    progress_conditions: []
+  - stage: 'Deliberation: Community Name'
+    message: >-
+      Review the answers and deliberate amongst yourselves. Which name do we
+      most prefer.
+
+       There will be a majority based vote in 2 minutes
+    actions:
+      - action: countdown 120
+    progress_conditions: []
+  - stage: 'Vote: Community Name'
+    message: |-
+      Deliberation ends and votes are cast.
+
+       We have 30 seconds to vote on our community name.
+    actions:
+      - action: post_submissions
+      - action: vote_submissions 'What should we call ourselves?' majority
+      - action: countdown 30
+    progress_conditions: []
+  - stage: Community Goal
+    message: >-
+      Now that we have a name, we need to decide on our community's goal. What
+      is our animating purpose?
     actions: []
     progress_conditions: []
-  
-  - stage: "Submit Answers: Community Name"
-    message: "Take a moment to submit a proposal to the question: `What should we call ourselves?`.\n\n
-    
-    You have 2 minutes to submit an answer.\n\n
-    
-    Type `/submit [message]`"
-    actions: ["countdown 120"]
-    progress_conditions: []
-  
-  - stage: "Proposals: Community Name"
-    message: "This nascent community has spoken. Here are the proposed names for our community."
-    actions: ["post_submissions"]
-    progress_conditions: []
-  
-  - stage: "Deliberation: Community Name"
-    message: "Review the answers and deliberate amongst yourselves. Which name do we most prefer.\n\n
-    
-    There will be a majority based vote in 2 minutes"
-    actions: ["countdown 120"]
-    progress_conditions: []
-  
-  - stage: "Vote: Community Name"
-    message: "Deliberation ends and votes are cast.\n\n
-    
-    We have 30 seconds to vote on our community name."
-    actions: ["post_submissions", "vote_submissions 'What should we call ourselves?' majority", "countdown 30"]
-    progress_conditions: []
+  - stage: 'Submit Answers: Community Goal'
+    message: >-
+      Take a moment to submit a proposal to the question: `What should the goal
+      of our community be?`.
 
-  - stage: "Community Goal"
-    message: "Now that we have a name, we need to decide on our community's goal. What is our animating purpose?"
+
+      You have 2 minutes to submit an answer
+
+
+      Type `/submit [message]`
+    actions:
+      - action: countdown 120
+    progress_conditions: []
+  - stage: 'Proposals: Community Goal'
+    message: >-
+      This developing community has spoken. Here are the proposed goals for our
+      community.
+    actions:
+      - action: post_submissions
+    progress_conditions: []
+  - stage: Simulation Interference
+    message: "\U0001F47ESIMULATION INTERFERENCE: ELOQUENCE\U0001F47E\n\nOut of no where, the simulator has imposed a culture of eloquence upon this community. Everything you type will be transformed in accord with a culture of eloquence and rhetorical speech.\n\nDespire this interuption, deliberation must now commence."
+    actions:
+      - action: eloquence
+    progress_conditions: []
+  - stage: 'Deliberation: Community Goal'
+    message: >-
+      Review the answers and deliberate amongst yourselves which goal this
+      community should persure. What will animate your activities?
+
+
+      There will be a majority based vote in 2 minutes.
+    actions:
+      - action: countdown 120
+    progress_conditions: []
+  - stage: 'Vote: Community Goal'
+    message: |-
+      Deliberation ends and votes are cast.
+
+      We have 30 seconds to vote on our community goal.
+    actions:
+      - action: post_submissions
+      - action: vote_submissions 'What should be the goal of our community?' majority
+      - action: countdown 30
+    progress_conditions: []
+  - stage: Simulation Reset
+    message: "\U0001F47ESIMULATION RESET\U0001F47E\n\nA decision has been made.\n\nA semblance of normalcy returns."
+    actions:
+      - action: eloquence
+    progress_conditions: []
+  - stage: First Action
+    message: >-
+      Now that we have a goal, what should our first action be in this strange
+      new world?
     actions: []
     progress_conditions: []
+  - stage: 'Submit Answers: First Action'
+    message: "Take a moment to submit a proposal to the question: `What should our first action be?`.\n\n\U0001F3AF Be mindful that **consensus** will need to be achieved among the community for an action to be approved.\n\nYou have 2 minutes to submit an answer"
+    actions:
+      - action: countdown 120
+    progress_conditions: []
+  - stage: 'Proposals: First Action'
+    message: The community has spoken. Here are a list of proposed first actions.
+    actions:
+      - action: post_submissions
+    progress_conditions: []
+  - stage: Simulation Interference
+    message: "\U0001F47ESIMULATION INTERFERENCE: ELOQUENCE + OBSCURITY\U0001F47E\n\nThe simulator has returned to interfer with the deliberation process. This time, a culture of obscurity is layered on top of a culture of eloquence.\n\n It seems as though the simulator is responsive to the challenges of consensus, and is making communication more challenging than before.\n\n Deliberation must now commence. Good luck reaching consensus."
+    actions:
+      - action: eloquence
+      - action: obscurity
+    progress_conditions: []
+  - stage: 'Deliberation: First Action'
+    message: >-
+      Review the answers and deliberate amongst yourselves what the first goal
+      of this community will be.
 
-  - stage: "Submit Answers: Community Goal"
-    message: "Take a moment to submit a proposal to the question: `What should the goal of our community be?`.\n\n
-    
-    You have 2 minutes to submit an answer\n\n
-    
-    Type `/submit [message]`"
-    actions: ["countdown 120"]
+       There will be a **consensus** based vote in 2 minutes
+    actions:
+      - action: countdown 120
     progress_conditions: []
-  
-  - stage: "Proposals: Community Goal"
-    message: "This developing community has spoken. Here are the proposed goals for our community."
-    actions: ["post_submissions"]
-    progress_conditions: []
-  
-  - stage: "Simulation Interference"
-    message: "👾SIMULATION INTERFERENCE: ELOQUENCE👾\n\n
-    
-    Out of no where, the simulator has imposed a culture of eloquence upon this community. Everything you type will be transformed in accord with a culture of eloquence and rhetorical speech.\n\n
-    
-    Despire this interuption, deliberation must now commence."
-    actions: ["eloquence"]
-    progress_conditions: []
+  - stage: 'Vote: First Action'
+    message: |-
+      Deliberation ends and votes are cast.
 
-  - stage: "Deliberation: Community Goal"
-    message: "Review the answers and deliberate amongst yourselves which goal this community should persure. What will animate your activities?\n\n
-    
-    There will be a majority based vote in 2 minutes."
-    actions: ["countdown 120"]
+       We have 30 seconds to vote.
+    actions:
+      - action: post_submissions
+      - action: vote_submissions 'What should our first action be??' consensus
+      - action: countdown 30
     progress_conditions: []
-  
-  - stage: "Vote: Community Goal"
-    message: "Deliberation ends and votes are cast.\n\n
-    
-    We have 30 seconds to vote on our community goal."
-    actions: ["post_submissions", "vote_submissions 'What should be the goal of our community?' majority", "countdown 30"]
+  - stage: Simulation Reset
+    message: "\U0001F47ESIMULATION RESET\U0001F47E\n\n A decision has been made. A semblance of normalcy returns."
+    actions:
+      - action: eloquence
+      - action: obscurity
     progress_conditions: []
+  - stage: End
+    message: >-
+      Congratulations on completing this first experience in online governance
+      in this new world.
 
-  - stage: "Simulation Reset"
-    message: "👾SIMULATION RESET👾\n\n
-    
-    A decision has been made.\n\n
-    
-    A semblance of normalcy returns."
-    actions: ["eloquence"]
-    progress_conditions: []
+       This simulation was  meant to demonstrate the types of ways communication might be affected in this game, how those distortions impact the baility to deliberate, and how decisions might be made.
 
-  - stage: "First Action"
-    message: "Now that we have a goal, what should our first action be in this strange new world?"
+       In future simulations or complete quests, you will explore how to self-govern by changing how you make decisions, the processes you follow when deliberating decisions, and how to deal with failed proposals.
+
+       Thanks for playing.
     actions: []
-    progress_conditions: []
-  
-  - stage: "Submit Answers: First Action"
-    message: "Take a moment to submit a proposal to the question: `What should our first action be?`.\n\n
-
-    🎯 Be mindful that **consensus** will need to be achieved among the community for an action to be approved.\n\n
-    
-    You have 2 minutes to submit an answer"
-    actions: ["countdown 120"]
-    progress_conditions: []
-  
-  - stage: "Proposals: First Action"
-    message: "The community has spoken. Here are a list of proposed first actions."
-    actions: ["post_submissions"]
-    progress_conditions: []
-
-  - stage: "Simulation Interference"
-    message: "👾SIMULATION INTERFERENCE: ELOQUENCE + OBSCURITY👾\n\n
-    
-    The simulator has returned to interfer with the deliberation process. This time, a culture of obscurity is layered on top of a culture of eloquence.\n\n
-    
-    It seems as though the simulator is responsive to the challenges of consensus, and is making communication more challenging than before.\n\n
-    
-    Deliberation must now commence. Good luck reaching consensus."
-    actions: ["eloquence", "obscurity"]
-    progress_conditions: []
-
-  - stage: "Deliberation: First Action"
-    message: "Review the answers and deliberate amongst yourselves what the first goal of this community will be.\n\n 
-    
-    There will be a **consensus** based vote in 2 minutes"
-    actions: ["countdown 120"]
-    progress_conditions: []
-  
-  - stage: "Vote: First Action"
-    message: "Deliberation ends and votes are cast.\n\n
-    
-    We have 30 seconds to vote."
-    actions: ["post_submissions", "vote_submissions 'What should our first action be??' consensus", "countdown 30"]
-    progress_conditions: []
-
-  - stage: "Simulation Reset"
-    message: "👾SIMULATION RESET👾\n\n
-    
-    A decision has been made. A semblance of normalcy returns."
-    actions: ["eloquence", "obscurity"]
-    progress_conditions: []
-
-  - stage: "End"
-    message: "Congratulations on completing this first experience in online governance in this new world.\n\n
-    
-    This simulation was  meant to demonstrate the types of ways communication might be affected in this game, how those distortions impact the baility to deliberate, and how decisions might be made.\n\n
-
-    In future simulations or complete quests, you will explore how to self-govern by changing how you make decisions, the processes you follow when deliberating decisions, and how to deal with failed proposals.\n\n
-    
-    Thanks for playing."
-    actions: []
-    # maybe: add prinout of document and governance transition
     progress_conditions: []

@@ -55,8 +55,6 @@ async def help(ctx, command: str = None):
         )
         for cmd in cmds:
             command = bot.get_command(cmd)
-            # if cmd == None:
-            #     continue
             description = command.brief or command.short_doc
             embed.add_field(
                 name=f"{prefix}{cmd}",
@@ -177,7 +175,7 @@ async def process_stage(stage: Stage, quest: Quest):
                         else:
                             if hasattr(action, 'failure_message') and action.failure_message:
                                 await quest.game_channel.send(action.failure_message)
-                            raise Exception(f"Failed to execute action {action.name}; too many failed retries {e}")
+                            raise Exception(f"Failed to execute action {action.action}; too many failed retries {e}")
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -199,7 +197,6 @@ async def process_stage(stage: Stage, quest: Quest):
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
     await asyncio.gather(action_runner(), progress_checker())
 
-
 async def all_submissions_submitted():
     players_to_nicknames = bot.quest.players_to_nicknames
     players_to_submissions = bot.quest.players_to_submissions
@@ -208,6 +205,13 @@ async def all_submissions_submitted():
         return True
     print("Waiting for all submissions to be submitted.")
     return False
+
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def timeout(seconds: str):
+    if not bot.quest.fast_mode:
+        print(f"Sleeping for {seconds} seconds...")
+    await asyncio.sleep(int(seconds))
 
 async def end(ctx, quest: Quest):
     """
@@ -1265,12 +1269,11 @@ async def on_command(ctx):
         f"Command Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
     )
 
-
 @bot.event
 async def on_command_error(ctx, error):
-    print(
-        f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}"
-    )
+    import traceback
+    error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}"
+    print(error_message)
 
 
 # MESSAGE PROCESSING
