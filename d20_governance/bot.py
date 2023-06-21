@@ -1363,6 +1363,7 @@ async def apply_culture_modes(modes, message, filtered_message):
                 filtered_message = obscure_function.camel_case()
         if mode == "ELOQUENCE":
             filtered_message = await filter_eloquence(filtered_message)
+    print(filtered_message)
     return filtered_message
 
 

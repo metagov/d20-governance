@@ -100,8 +100,10 @@ async def vote(
 
     # Add options to the view dropdown select menu
     for i, option in enumerate(options):
+        truncated_option = option[:97]
+        truncated_option += "..."  # truncate the option if it's longer than 100 characters
         vote_view.add_option(
-            label=option,
+            label=truncated_option,
             value=str(i),
             emoji=assigned_emojis[i],
         )

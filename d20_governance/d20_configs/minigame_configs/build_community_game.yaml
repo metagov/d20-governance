@@ -138,9 +138,8 @@ stages:
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
   - stage: Simulation Interference
-    message: "\U0001F47ESIMULATION INTERFERENCE: ELOQUENCE + OBSCURITY\U0001F47E\n\nThe simulator has returned to interfere with the deliberation process. This time, a culture of obscurity is layered on top of a culture of eloquence.\n\n It seems as though the simulator is responsive to the challenges of consensus, and is making communication more challenging than before.\n\n Deliberation must now commence. Good luck reaching consensus."
+    message: "\U0001F47ESIMULATION INTERFERENCE: OBSCURITY\U0001F47E\n\nThe simulator has returned to interfere with the deliberation process. This time, a culture of obscurity is in place.\n\n It seems as though the simulator is responsive to the challenges of consensus, and is making communication more challenging than before.\n\n Deliberation must now commence. **Remember, you must all vote for the same option, otherwise you will fail the game!** Good luck reaching consensus!"
     actions:
-      - action: eloquence
       - action: obscurity
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/interference.png"

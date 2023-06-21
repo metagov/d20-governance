@@ -157,5 +157,36 @@ class TestVote(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncioTestCase
                 await vote(mock_ctx, quest, "question", options, "consensus")
                 self.assertEqual(str(cm.exception), "No winner was found.")
 
+
+    @patch("d20_governance.bot.bot", new_callable=MagicMock)
+    async def test_truncated_option(self, mock_bot):
+        # Prepare the function call
+        mock_ctx = MagicMock(spec=commands.Context)
+        quest = create_quest()
+        mock_bot.quest = quest
+
+        long_option = "a" * 101  # Create an option longer than 100 characters
+        short_option = "b" * 99  # Create an option shorter than 100 characters
+        options = [long_option, short_option]
+
+        # Create a mock vote_view
+        vote_view = MagicMock()
+        vote_view.wait = AsyncMock()
+
+         # Setup mock votes
+        vote_view.votes = {
+            "voter1": 1,
+            "voter2": 1,
+            "voter3": 0,
+            "voter4": 0,
+            "voter5": 0,
+        }
+
+            # Patch the VoteView class to always return our mocked vote_view
+        with patch("d20_governance.utils.voting.VoteView", return_value=vote_view):
+            # Call the function
+            result = await vote(mock_ctx, quest, "question", options, "majority")
+            self.assertEqual(result, long_option)
+
 if __name__ == "__main__":
     unittest.main()
