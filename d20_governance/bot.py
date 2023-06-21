@@ -316,7 +316,7 @@ class QuestBuilderView(discord.ui.View):
                     emoji="#️⃣",
                     value=str(n),
                 )
-                for n in range(1, 20)
+                for n in range(2, 20)
             ],
         )
         self.select3 = QuestBuilder(
@@ -1192,11 +1192,10 @@ async def test_png_creation(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_img_generation(ctx):
+async def test_img_generation(ctx, text="Obscurity"):
     """
     Test stability image generation
     """
-    text = "Obscurity"
     image = generate_image(text)
 
     # Save the image to a file

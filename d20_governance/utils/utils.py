@@ -211,7 +211,6 @@ async def setup_server(guild):
         logging.info("Some necessary channels or categories are missing.")
 
 
-# Yaml command callback and parsing
 async def execute_action(ctx, bot, action, temp_channel):
     command_name = action.action
     args = action.arguments
@@ -220,6 +219,28 @@ async def execute_action(ctx, bot, action, temp_channel):
         raise Exception(f"Command {command_name} not found.")
 
     print(f"Executing {command}")
+
+    # Unfortunately we need to do this as a workaround for the fact that we can't easily get the context for the current channel. 
+    message_obj = None
+    attempts = 0
+    max_attempts = 3  # Number of attempts to fetch the message
+    while message_obj is None and attempts < max_attempts:
+        try:
+            # Get the last message object from the channel to set context
+            message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+        except discord.NotFound:
+            attempts += 1
+            await asyncio.sleep(1)  # Delay before next attempt
+
+    if message_obj is None:
+        # If message_obj is still None, all attempts failed
+        error_message = f"Failed to fetch last message from channel {temp_channel.id} after {max_attempts} attempts."
+        print(error_message)
+        logging.error(error_message)
+        raise Exception("Failed to fetch last message from channel.")
+
+    # Create a context object for the message
+    ctx = await bot.get_context(message_obj)
 
     # Pass the arguments to the command's callback function
     await command.callback(ctx, *args)
@@ -394,7 +415,8 @@ def tts(text, filename):
 
 # Image Utils
 # Generate Quest Images
-def generate_image(prompt):
+def generate_image(message):
+    prompt = f"generate a fun image with no words that matches this message: {message}"
     response = requests.post(
         f"{STABILITY_API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
         headers={

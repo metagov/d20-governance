@@ -74,6 +74,9 @@ async def vote(
     """
     print(f"A vote has been triggered. The decision module is: {decision_module}")
 
+    if not options:
+        raise Exception("No options were provided for voting.")
+
     if len(options) > 10 or (not quest.solo_mode and len(options) < 2):
         await ctx.send("Error: A poll must have between 2 and 10 options.")
         return
