@@ -99,7 +99,8 @@ async def start_quest(ctx, quest: Quest):
                 name=stage[QUEST_NAME_KEY],
                 message=stage[QUEST_MESSAGE_KEY],
                 actions=actions,
-                progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY]
+                progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
+                image_path = stage.get(QUEST_IMAGE_PATH_KEY)
             )
 
             print(f"Processing stage {stage.name}")
@@ -118,8 +119,11 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
         await future
 
     if quest.gen_images:
-        # Generate intro image and send to temporary channel
-        image = generate_image(stage.message)
+        if hasattr(stage, 'image_path') and stage.image_path:  # Check if stage has an image_path
+            image = Image.open(stage.image_path)  # Open the image
+        else:
+            # Generate intro image and send to temporary channel
+            image = generate_image(stage.message)
     else:
         # Create an empty image representing the void
         size = (256, 256)

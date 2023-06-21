@@ -50,11 +50,12 @@ class Action:
         )
 
 class Stage:
-    def __init__(self, name, message, actions, progress_conditions):
+    def __init__(self, name, message, actions, progress_conditions, image_path=None):
         self.name = name
         self.message = message
         self.actions = actions
         self.progress_conditions = progress_conditions
+        self.image_path = image_path
 
 class Quest:
     def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
