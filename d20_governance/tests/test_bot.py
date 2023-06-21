@@ -23,7 +23,7 @@ class TestQuestMockActions(unittest.IsolatedAsyncioTestCase):
         mock_command.callback = AsyncMock()  # add callback coroutine to the mock command
         
         mock_bot.get_command.return_value = mock_command  # make get_command return the mock command
-        await start_quest(quest)
+        await start_quest(mock_ctx, quest)
 
         quest.game_channel.send.assert_called()
 
@@ -47,9 +47,11 @@ class TestRetryAction(unittest.IsolatedAsyncioTestCase):
         # Make execute_action raise an exception
         mock_execute_action.side_effect = Exception('Test exception')
 
+        mock_ctx = unittest.mock.Mock(spec=commands.Context)
+
         # Run the function
         with self.assertRaises(Exception):
-            await process_stage(stage, quest)
+            await process_stage(mock_ctx, stage, quest)
 
         # Check that the retry message was sent the correct number of times
         calls = [call.send(action.retry_message) for _ in range(action.retries)]

@@ -4,7 +4,6 @@ import os
 import asyncio
 import datetime
 import logging
-import ast
 from discord.ext import commands
 from discord import Webhook
 from typing import Set, List
@@ -17,6 +16,8 @@ from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote
+import traceback
+import sys
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -78,7 +79,7 @@ def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     bot.quest = quest
     return quest
 
-async def start_quest(quest: Quest):
+async def start_quest(ctx, quest: Quest):
     """
     Sets up a new quest
     """
@@ -89,7 +90,7 @@ async def start_quest(quest: Quest):
         for _ in range(num_stages):
             print("Generating stage with llm..")
             stage = await generate_stage_llm(llm_agent)
-            await process_stage(stage, quest)
+            await process_stage(ctx, stage, quest)
 
     else:  # yaml mode
         for stage in quest.stages:
@@ -103,9 +104,9 @@ async def start_quest(quest: Quest):
 
             print(f"Processing stage {stage.name}")
 
-            await process_stage(stage, quest)
+            await process_stage(ctx, stage, quest)
 
-async def process_stage(stage: Stage, quest: Quest):
+async def process_stage(ctx, stage: Stage, quest: Quest):
     """
     Run stages from yaml config
     """
@@ -165,7 +166,7 @@ async def process_stage(stage: Stage, quest: Quest):
                 retries = action.retries if hasattr(action, 'retries') else 0
                 while retries >= 0:
                     try:
-                        await execute_action(bot, action, quest.game_channel)
+                        await execute_action(ctx, bot, action, quest.game_channel)
                         break
                     except Exception as e:
                         if retries > 0:
@@ -175,7 +176,7 @@ async def process_stage(stage: Stage, quest: Quest):
                         else:
                             if hasattr(action, 'failure_message') and action.failure_message:
                                 await quest.game_channel.send(action.failure_message)
-                            raise Exception(f"Failed to execute action {action.action}; too many failed retries {e}")
+                            raise Exception(f"Failed to execute action {action.action}: {e}")
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -211,7 +212,8 @@ async def all_submissions_submitted():
 async def timeout(seconds: str):
     if not bot.quest.fast_mode:
         print(f"Sleeping for {seconds} seconds...")
-    await asyncio.sleep(int(seconds))
+        await asyncio.sleep(int(seconds))
+    return True
 
 async def end(ctx, quest: Quest):
     """
@@ -447,7 +449,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.quest)
+                await start_quest(self.ctx, self.quest)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -720,7 +722,7 @@ async def obscurity(ctx, mode: str = None):
             )
             embed.add_field(
                 name="ACTIVE CULTURE MODES:",
-                value=f"{', '.join(active_culture_modes)}",
+                value=f"{', '.join(channel_culture_modes)}",
                 inline=False,
             )
     elif mode not in available_modes:
@@ -1026,7 +1028,6 @@ async def post_governance_gif(ctx):
 
     FILE_COUNT = 0
 
-
 # META CONDITION COMMANDS
 @bot.command(hidden=True)
 async def update_bot_icon(ctx):
@@ -1095,14 +1096,13 @@ async def post_submissions(ctx):
 # @commands.check(lambda ctx: False)
 async def vote_submissions(ctx, question: str, decision_module=None, timeout=20):
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-    contenders = list(bot.quest.players_to_submissions.keys())
+    contenders = list(bot.quest.players_to_submissions.values())
     if decision_module == None:
         decision_module = await set_decision_module()
     quest = bot.quest
     await vote(ctx, quest, question, contenders, decision_module, timeout)
     # Reset the players_to_submissions dictionary for the next round
     bot.quest.reset_submissions()
-
 
 # CLEANING COMMANDS
 @bot.command()
@@ -1165,7 +1165,7 @@ async def solo(ctx, *args, quest_mode=TUTORIAL_BUILD_COMMUNITY):
         description=f"Play here: {quest.game_channel.mention}",
     )
     await ctx.send(embed=embed)
-    await start_quest(quest)
+    await start_quest(ctx, quest)
 
 
 @bot.command()
@@ -1271,10 +1271,18 @@ async def on_command(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
-    import traceback
-    error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}"
+    traceback_text = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+    error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
     print(error_message)
+    logging.error(error_message)
+    await ctx.send("An error occurred.")
 
+@bot.event
+async def on_error(event):
+    type, value, tb = sys.exc_info()
+    traceback_str = ''.join(traceback.format_exception(type, value, tb))
+    print(f'Unhandled exception in {event}:\n{traceback_str}')
+    logging.error(f'Unhandled exception in {event}:\n{traceback_str}')
 
 # MESSAGE PROCESSING
 async def create_webhook(channel):
@@ -1295,7 +1303,7 @@ async def send_webhook_message(webhook, message, filtered_message):
     payload = {
         "content": f"※{filtered_message}",
         "username": message.author.name,
-        "avatar_url": message.author.avatar.url,
+        "avatar_url": message.author.avatar.url if message.author.avatar else None,
     }
     await webhook.send(**payload)
 
@@ -1377,11 +1385,12 @@ async def on_message(message):
             return
 
         await process_message(message)
-
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        await message.channel.send("An error occurred")
-
+        type, value, tb = sys.exc_info()
+        traceback_str = ''.join(traceback.format_exception(type, value, tb))
+        print(f'Unhandled exception:\n{traceback_str}')
+        logging.error(f'Unhandled exception:\n{traceback_str}')
+        await message.channel.send("An error occurred.")
 
 # BOT CHANNEL CHECKS
 async def check_cmd_channel(ctx, channel_name):

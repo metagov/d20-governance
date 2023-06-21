@@ -3,22 +3,21 @@ stages:
   - stage: Introduction
     message: "Welcome to the Build a Community Governance Simulator!\n\n You are tasked with building a new community from scratch and have three questions to collectively answer. However, this simulation takes place in the future, after a \U0001F914 **new confusion** \U0001F914 has set in. Deliberation on the internet is now randomly subjected to communication collapses \U0001F631.\n\n While things may at first appear normal, over time you will experience new challenges in making decisions. Be prepared to adapt or risk remaining in the new confusion for forever!"
     actions: []
-    progress_conditions:
-      - timeout 30
+    progress_conditions: ["timeout 10"]
   - stage: Community Name
     message: >-
       The first step in building a community and making sense of our situation
       is to give it a name. What should we call ourselves?
     actions: []
-    progress_conditions: []
+    progress_conditions: ["timeout 10"]
   - stage: 'Submit Answers: Community Name'
     message: >-
       Take a moment to submit a proposal to the question: `What should we call
       ourselves?`.
 
-       You have 2 minutes to submit an answer.
+      You have 2 minutes to submit an answer.
 
-       Type `/submit [message]`
+       To submit your proposal, type `/submit [message]`
     actions:
       - action: countdown 120
     progress_conditions: []
@@ -28,24 +27,27 @@ stages:
       community.
     actions:
       - action: post_submissions
-    progress_conditions: []
+    progress_conditions: ["timeout 15"]
   - stage: 'Deliberation: Community Name'
     message: >-
-      Review the answers and deliberate amongst yourselves. Which name do we
-      most prefer.
+      Review the answers and deliberate and discuss amongst yourselves. Which name do we
+      most prefer?
 
-       There will be a majority based vote in 2 minutes
+      There will be a majority-based vote in 2 minutes.
     actions:
       - action: countdown 120
     progress_conditions: []
   - stage: 'Vote: Community Name'
     message: |-
-      Deliberation ends and votes are cast.
+      Deliberation ends and the voting period begins.
 
-       We have 30 seconds to vote on our community name.
+      You have 30 seconds to vote on your community name.
     actions:
       - action: post_submissions
       - action: vote_submissions 'What should we call ourselves?' majority
+        retries: 2
+        retry_message: "You have failed to reach a majority vote. Voting commences again!"
+        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote."
       - action: countdown 30
     progress_conditions: []
   - stage: Community Goal
@@ -53,15 +55,13 @@ stages:
       Now that we have a name, we need to decide on our community's goal. What
       is our animating purpose?
     actions: []
-    progress_conditions: []
+    progress_conditions: ["timeout 15"]
   - stage: 'Submit Answers: Community Goal'
     message: >-
       Take a moment to submit a proposal to the question: `What should the goal
       of our community be?`.
 
-
-      You have 2 minutes to submit an answer
-
+      You have 2 minutes to submit an answer.
 
       Type `/submit [message]`
     actions:
@@ -73,7 +73,7 @@ stages:
       community.
     actions:
       - action: post_submissions
-    progress_conditions: []
+    progress_conditions: ["timeout 10"]
   - stage: Simulation Interference
     message: "\U0001F47ESIMULATION INTERFERENCE: ELOQUENCE\U0001F47E\n\nOut of no where, the simulator has imposed a culture of eloquence upon this community. Everything you type will be transformed in accord with a culture of eloquence and rhetorical speech.\n\nDespire this interuption, deliberation must now commence."
     actions:
@@ -82,9 +82,7 @@ stages:
   - stage: 'Deliberation: Community Goal'
     message: >-
       Review the answers and deliberate amongst yourselves which goal this
-      community should persure. What will animate your activities?
-
-
+      community should pursue. What will animate your activities?
       There will be a majority based vote in 2 minutes.
     actions:
       - action: countdown 120
@@ -97,6 +95,9 @@ stages:
     actions:
       - action: post_submissions
       - action: vote_submissions 'What should be the goal of our community?' majority
+        retries: 2
+        retry_message: "You have failed to reach a majority vote. Voting commences again!"
+        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote."
       - action: countdown 30
     progress_conditions: []
   - stage: Simulation Reset
@@ -121,7 +122,7 @@ stages:
       - action: post_submissions
     progress_conditions: []
   - stage: Simulation Interference
-    message: "\U0001F47ESIMULATION INTERFERENCE: ELOQUENCE + OBSCURITY\U0001F47E\n\nThe simulator has returned to interfer with the deliberation process. This time, a culture of obscurity is layered on top of a culture of eloquence.\n\n It seems as though the simulator is responsive to the challenges of consensus, and is making communication more challenging than before.\n\n Deliberation must now commence. Good luck reaching consensus."
+    message: "\U0001F47ESIMULATION INTERFERENCE: ELOQUENCE + OBSCURITY\U0001F47E\n\nThe simulator has returned to interfere with the deliberation process. This time, a culture of obscurity is layered on top of a culture of eloquence.\n\n It seems as though the simulator is responsive to the challenges of consensus, and is making communication more challenging than before.\n\n Deliberation must now commence. Good luck reaching consensus."
     actions:
       - action: eloquence
       - action: obscurity
@@ -142,7 +143,10 @@ stages:
        We have 30 seconds to vote.
     actions:
       - action: post_submissions
-      - action: vote_submissions 'What should our first action be??' consensus
+      - action: vote_submissions 'What should our first action be?' consensus
+        retries: 2
+        retry_message: "You have failed to reach consensus. Voting commences again!"
+        failure_message: "Bummer. After several tries, your community has failed to reach a consensus vote."
       - action: countdown 30
     progress_conditions: []
   - stage: Simulation Reset

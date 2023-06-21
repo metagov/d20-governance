@@ -157,6 +157,5 @@ class TestVote(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncioTestCase
                 await vote(mock_ctx, quest, "question", options, "consensus")
                 self.assertEqual(str(cm.exception), "No winner was found.")
 
-
 if __name__ == "__main__":
     unittest.main()
