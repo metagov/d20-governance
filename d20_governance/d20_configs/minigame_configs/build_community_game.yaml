@@ -47,7 +47,7 @@ stages:
       - action: vote_submissions 'What should we call ourselves?' majority
         retries: 2
         retry_message: "You have failed to reach a majority vote. Voting commences again!"
-        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote."
+        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
       - action: countdown 30
     progress_conditions: []
   - stage: Community Goal
@@ -97,7 +97,7 @@ stages:
       - action: vote_submissions 'What should be the goal of our community?' majority
         retries: 2
         retry_message: "You have failed to reach a majority vote. Voting commences again!"
-        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote."
+        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
       - action: countdown 30
     progress_conditions: []
   - stage: Simulation Reset
@@ -146,7 +146,7 @@ stages:
       - action: vote_submissions 'What should our first action be?' consensus
         retries: 2
         retry_message: "You have failed to reach consensus. Voting commences again!"
-        failure_message: "Bummer. After several tries, your community has failed to reach a consensus vote."
+        failure_message: "Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over."
       - action: countdown 30
     progress_conditions: []
   - stage: Simulation Reset
