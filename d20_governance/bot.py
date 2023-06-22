@@ -616,19 +616,15 @@ async def countdown(ctx, timeout_seconds):
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
 
-    message = None
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
         new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
-        if message is None:
-            message = await ctx.send(new_message)
-        else:
-            await message.edit(content=new_message)
+        await ctx.send(new_message)
 
         remaining_seconds -= sleep_interval
         await asyncio.sleep(sleep_interval)
 
-    await message.edit(content="⏲️ Counting down finished.")
+    await ctx.send("⏲️ Counting down finished.")
     print("Countdown finished.")
 
 
