@@ -191,6 +191,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                 tokens = shlex.split(condition)
                 func_name, *args = tokens
                 func = globals()[func_name]
+                print(f"Invoking {func_name} with arguments {args}")  # Debugging line
                 tasks.append(func(*args))
             for future in asyncio.as_completed(tasks):
                 condition_result = await future
@@ -203,13 +204,14 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
     await asyncio.gather(action_runner(), progress_checker())
 
 async def all_submissions_submitted():
-    players_to_nicknames = bot.quest.players_to_nicknames
-    players_to_submissions = bot.quest.players_to_submissions
-    if len(players_to_nicknames) == len(players_to_submissions):
-        print("All submissions submitted.")
-        return True
-    print("Waiting for all submissions to be submitted.")
-    return False
+    while True:
+        joined_players = bot.quest.joined_players
+        players_to_submissions = bot.quest.players_to_submissions
+        if len(joined_players) == len(players_to_submissions):
+            print("All submissions submitted.")
+            return True
+        print("Waiting for all submissions to be submitted.")
+        await asyncio.sleep(1)  # Wait for a second before checking again
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -611,7 +613,7 @@ async def make_game_channel(ctx, quest: Quest):
 async def countdown(ctx, timeout_seconds):
     if bot.quest.fast_mode:
         await asyncio.sleep(7)
-        return
+        return True
 
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
@@ -626,7 +628,7 @@ async def countdown(ctx, timeout_seconds):
 
     await ctx.send("⏲️ Counting down finished.")
     print("Countdown finished.")
-
+    return True
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))

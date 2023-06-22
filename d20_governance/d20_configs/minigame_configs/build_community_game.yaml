@@ -22,7 +22,7 @@ stages:
        To submit your proposal, type `/submit [message]`
     actions:
       - action: countdown 120
-    progress_conditions: []
+    progress_conditions: ["all_submissions_submitted", "timeout 120"]
     image_path: "assets/imgs/pre_generated/proposals.png"
   - stage: 'Proposals: Community Name'
     message: >-
