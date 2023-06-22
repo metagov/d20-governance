@@ -609,26 +609,66 @@ async def make_game_channel(ctx, quest: Quest):
 
 
 @bot.command(hidden=True)
-@commands.check(lambda ctx: False)
+# @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
-    if bot.quest.fast_mode:
-        await asyncio.sleep(7)
-        return True
+    # if bot.quest.fast_mode:
+    #     await asyncio.sleep(7)
+    #     return
 
+    # TODO: make this better
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
 
+    send_new_message = True
+    message = None
+    seconds_elapsed = 0
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
         new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
-        await ctx.send(new_message)
+        if seconds_elapsed >= 60:
+            send_new_message = True
+            seconds_elapsed = 0
+        if send_new_message:
+            message = await ctx.send(new_message)
+            send_new_message = False
+        else:
+            await message.edit(content=new_message)
 
         remaining_seconds -= sleep_interval
+        seconds_elapsed += sleep_interval
         await asyncio.sleep(sleep_interval)
 
-    await ctx.send("⏲️ Counting down finished.")
+    await message.edit(content="⏲️ Counting down finished.")
     print("Countdown finished.")
-    return True
+
+
+# @bot.command(hidden=True)
+# @commands.check(lambda ctx: False)
+# async def countdown(ctx, timeout_seconds):
+#     if bot.quest.fast_mode:
+#         await asyncio.sleep(7)
+#         return
+
+#     remaining_seconds = int(timeout_seconds)
+#     sleep_interval = remaining_seconds / 5
+
+#     message = None
+#     while remaining_seconds > 0:
+#         remaining_minutes = remaining_seconds / 60
+#         new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+#         if message is None:
+#             message = await ctx.send(new_message)
+#         else:
+#             await message.edit(content=new_message)
+#             if remaining_seconds % 60 == 0:
+#                 minutes_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+#                 await ctx.send(minutes_message)
+
+#         remaining_seconds -= sleep_interval
+#         await asyncio.sleep(sleep_interval)
+
+#     await message.edit(content="⏲️ Counting down finished.")
+#     print("Countdown finished.")
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -1096,13 +1136,13 @@ async def post_submissions(ctx):
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
-async def vote_submissions(ctx, question: str, decision_module=None, timeout=20):
+async def vote_submissions(ctx, question: str, decision_module=None, timeout="20"):
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
     contenders = list(bot.quest.players_to_submissions.values())
     if decision_module == None:
         decision_module = await set_decision_module()
     quest = bot.quest
-    await vote(ctx, quest, question, contenders, decision_module, timeout)
+    await vote(ctx, quest, question, contenders, decision_module, int(timeout))
     # Reset the players_to_submissions dictionary for the next round
     bot.quest.reset_submissions()
 
@@ -1302,7 +1342,7 @@ async def create_webhook(channel):
 
 async def send_webhook_message(webhook, message, filtered_message):
     payload = {
-        "content": f"※{filtered_message}",
+        "content": f"※ {filtered_message}",
         "username": message.author.name,
         "avatar_url": message.author.avatar.url if message.author.avatar else None,
     }

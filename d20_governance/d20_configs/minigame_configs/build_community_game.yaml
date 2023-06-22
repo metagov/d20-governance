@@ -49,7 +49,7 @@ stages:
       You have 30 seconds to vote on your community name.
     actions:
       - action: post_submissions
-      - action: vote_submissions 'What should we call ourselves?' majority
+      - action: vote_submissions 'What should we call ourselves?' majority 30
         retries: 2
         retry_message: "You have failed to reach a majority vote. Voting commences again!"
         failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
@@ -105,7 +105,7 @@ stages:
       We have 30 seconds to vote on our community goal.
     actions:
       - action: post_submissions
-      - action: vote_submissions 'What should be the goal of our community?' majority
+      - action: vote_submissions 'What should be the goal of our community?' majority 30
         retries: 2
         retry_message: "You have failed to reach a majority vote. Voting commences again!"
         failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
@@ -160,7 +160,7 @@ stages:
        We have 30 seconds to vote.
     actions:
       - action: post_submissions
-      - action: vote_submissions 'What should our first action be?' consensus
+      - action: vote_submissions 'What should our first action be?' consensus 30
         retries: 2
         retry_message: "You have failed to reach consensus. Voting commences again!"
         failure_message: "Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over."
