@@ -11,15 +11,9 @@ from d20_governance.utils.voting import vote
 
 
 class TestVoteSpeeches(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncioTestCase
-    @patch(
-        "d20_governance.bot.set_decision_module", new_callable=AsyncMock
-    )  # Replace with actual import path
-    @patch(
-        "d20_governance.bot.bot", new_callable=MagicMock
-    )  # Replace with actual import path
-    @patch(
-        "discord.ui.View.wait", new_callable=AsyncMock
-    )  # Replace with actual import path
+    @patch('d20_governance.bot.set_decision_module', new_callable=AsyncMock)  
+    @patch('d20_governance.bot.bot', new_callable=MagicMock) 
+    @patch('discord.ui.View.wait', new_callable=AsyncMock)  
     async def test_vote_speeches(self, mock_wait, mock_bot, mock_set_decision_module):
         # Create a mock context
         mock_ctx = MagicMock(spec=commands.Context)
@@ -34,8 +28,9 @@ class TestVoteSpeeches(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncio
         }
         mock_bot.quest = quest
 
-        # Call the function to be tested
-        await vote_submissions(mock_ctx, "question")
+        with self.assertRaises(Exception) as cm:
+            await vote_submissions(mock_ctx, "question")
+            self.assertEqual(str(cm.exception), "No winner was found.")
 
         # Check that the mocked functions were called with the correct arguments
         mock_set_decision_module.assert_called_once()
@@ -73,7 +68,7 @@ class TestVote(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncioTestCase
             expected_winner = "Jigsaw Josh"
             self.assertEqual(winner, expected_winner)
 
-    @patch("d20_governance.bot.bot", new_callable=MagicMock)
+    @patch('d20_governance.bot.bot', new_callable=MagicMock)
     async def test_vote_majority_fail(self, mock_bot):
         # Create a mock context
         mock_ctx = MagicMock(spec=commands.Context)
@@ -92,11 +87,12 @@ class TestVote(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncioTestCase
         vote_view.votes = {"voter1": 1, "voter2": 1, "voter3": 0, "voter4": 0}
 
         # Patch the VoteView class to always return our mocked vote_view
-        with patch("d20_governance.utils.voting.VoteView", return_value=vote_view):
-            # Call the function to be tested
-            winner = await vote(mock_ctx, quest, "question", options, "majority")
-            expected_winner = None
-            self.assertEqual(winner, expected_winner)
+        with patch('d20_governance.utils.voting.VoteView', return_value=vote_view):
+            with self.assertRaises(Exception) as cm:
+                await vote(mock_ctx, quest, "question", options, "majority")
+                
+            self.assertEqual(str(cm.exception), "No winner was found.")
+
 
     @patch("d20_governance.bot.bot", new_callable=MagicMock)
     async def test_vote_consensus_pass(self, mock_bot):
@@ -156,10 +152,41 @@ class TestVote(unittest.IsolatedAsyncioTestCase):  # use IsolatedAsyncioTestCase
         # Patch the VoteView class to always return our mocked vote_view
         with patch("d20_governance.utils.voting.VoteView", return_value=vote_view):
             # Call the function to be tested
-            winner = await vote(mock_ctx, quest, "question", options, "consensus")
-            expected_winner = None
-            self.assertEqual(winner, expected_winner)
+            # Call the function to be tested and expect error
+           with self.assertRaises(Exception) as cm:
+                await vote(mock_ctx, quest, "question", options, "consensus")
+                self.assertEqual(str(cm.exception), "No winner was found.")
 
+
+    @patch("d20_governance.bot.bot", new_callable=MagicMock)
+    async def test_truncated_option(self, mock_bot):
+        # Prepare the function call
+        mock_ctx = MagicMock(spec=commands.Context)
+        quest = create_quest()
+        mock_bot.quest = quest
+
+        long_option = "a" * 101  # Create an option longer than 100 characters
+        short_option = "b" * 99  # Create an option shorter than 100 characters
+        options = [long_option, short_option]
+
+        # Create a mock vote_view
+        vote_view = MagicMock()
+        vote_view.wait = AsyncMock()
+
+         # Setup mock votes
+        vote_view.votes = {
+            "voter1": 1,
+            "voter2": 1,
+            "voter3": 0,
+            "voter4": 0,
+            "voter5": 0,
+        }
+
+            # Patch the VoteView class to always return our mocked vote_view
+        with patch("d20_governance.utils.voting.VoteView", return_value=vote_view):
+            # Call the function
+            result = await vote(mock_ctx, quest, "question", options, "majority")
+            self.assertEqual(result, long_option)
 
 if __name__ == "__main__":
     unittest.main()

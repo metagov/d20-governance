@@ -4,7 +4,6 @@ import os
 import asyncio
 import datetime
 import logging
-import ast
 from discord.ext import commands
 from discord import Webhook
 from typing import Set, List
@@ -17,6 +16,8 @@ from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote
+import traceback
+import sys
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -29,7 +30,6 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 bot.remove_command("help")
-
 
 @bot.command()
 async def help(ctx, command: str = None):
@@ -56,8 +56,6 @@ async def help(ctx, command: str = None):
         )
         for cmd in cmds:
             command = bot.get_command(cmd)
-            # if cmd == None:
-            #     continue
             description = command.brief or command.short_doc
             embed.add_field(
                 name=f"{prefix}{cmd}",
@@ -76,14 +74,12 @@ print("Logging to logs/bot.log")
 
 # QUEST FLOW
 
-
 def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
     return quest
 
-
-async def start_quest(quest: Quest):
+async def start_quest(ctx, quest: Quest):
     """
     Sets up a new quest
     """
@@ -94,23 +90,24 @@ async def start_quest(quest: Quest):
         for _ in range(num_stages):
             print("Generating stage with llm..")
             stage = await generate_stage_llm(llm_agent)
-            await process_stage(stage, quest)
+            await process_stage(ctx, stage, quest)
 
     else:  # yaml mode
         for stage in quest.stages:
+            actions = [Action.from_dict(action_dict) for action_dict in stage[QUEST_ACTIONS_KEY]]
             stage = Stage(
                 name=stage[QUEST_NAME_KEY],
                 message=stage[QUEST_MESSAGE_KEY],
-                actions=stage[QUEST_ACTIONS_KEY],
+                actions=actions,
                 progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
+                image_path = stage.get(QUEST_IMAGE_PATH_KEY)
             )
 
             print(f"Processing stage {stage.name}")
 
-            await process_stage(stage, quest)
+            await process_stage(ctx, stage, quest)
 
-
-async def process_stage(stage: Stage, quest: Quest):
+async def process_stage(ctx, stage: Stage, quest: Quest):
     """
     Run stages from yaml config
     """
@@ -122,8 +119,11 @@ async def process_stage(stage: Stage, quest: Quest):
         await future
 
     if quest.gen_images:
-        # Generate intro image and send to temporary channel
-        image = generate_image(stage.message)
+        if hasattr(stage, 'image_path') and stage.image_path:  # Check if stage has an image_path
+            image = Image.open(stage.image_path)  # Open the image
+        else:
+            # Generate intro image and send to temporary channel
+            image = generate_image(stage.message)
     else:
         # Create an empty image representing the void
         size = (256, 256)
@@ -166,15 +166,21 @@ async def process_stage(stage: Stage, quest: Quest):
     progress_conditions = stage.progress_conditions
 
     async def action_runner():
-        tasks = [
-            execute_action(
-                bot,
-                action,
-                quest.game_channel,
-            )
-            for action in actions
-        ]
-        await asyncio.gather(*tasks)  # wait for all actions to complete
+            for action in actions:
+                retries = action.retries if hasattr(action, 'retries') else 0
+                while retries >= 0:
+                    try:
+                        await execute_action(ctx, bot, action, quest.game_channel)
+                        break
+                    except Exception as e:
+                        if retries > 0:
+                            if hasattr(action, 'retry_message') and action.retry_message:
+                                await quest.game_channel.send(action.retry_message)
+                            retries -= 1
+                        else:
+                            if hasattr(action, 'failure_message') and action.failure_message:
+                                await quest.game_channel.send(action.failure_message)
+                            raise Exception(f"Failed to execute action {action.action}: {e}")
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -185,6 +191,7 @@ async def process_stage(stage: Stage, quest: Quest):
                 tokens = shlex.split(condition)
                 func_name, *args = tokens
                 func = globals()[func_name]
+                print(f"Invoking {func_name} with arguments {args}")  # Debugging line
                 tasks.append(func(*args))
             for future in asyncio.as_completed(tasks):
                 condition_result = await future
@@ -196,20 +203,23 @@ async def process_stage(stage: Stage, quest: Quest):
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
     await asyncio.gather(action_runner(), progress_checker())
 
-
 async def all_submissions_submitted():
-    players_to_nicknames = bot.quest.players_to_nicknames
-    players_to_submissions = bot.quest.players_to_submissions
-    if (
-        players_to_nicknames
-        and players_to_submissions
-        and len(players_to_nicknames) == len(players_to_submissions)
-    ):
-        print("All submissions submitted.")
-        return True
-    print("Waiting for all submissions to be submitted.")
-    return False
+    while True:
+        joined_players = bot.quest.joined_players
+        players_to_submissions = bot.quest.players_to_submissions
+        if len(joined_players) == len(players_to_submissions):
+            print("All submissions submitted.")
+            return True
+        print("Waiting for all submissions to be submitted.")
+        await asyncio.sleep(1)  # Wait for a second before checking again
 
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def timeout(seconds: str):
+    if not bot.quest.fast_mode:
+        print(f"Sleeping for {seconds} seconds...")
+        await asyncio.sleep(int(seconds))
+    return True
 
 async def end(ctx, quest: Quest):
     """
@@ -312,7 +322,7 @@ class QuestBuilderView(discord.ui.View):
                     emoji="#️⃣",
                     value=str(n),
                 )
-                for n in range(1, 20)
+                for n in range(2, 20)
             ],
         )
         self.select3 = QuestBuilder(
@@ -445,7 +455,7 @@ class JoinLeaveView(discord.ui.View):
                     description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
                 )
                 await interaction.message.edit(embed=embed)
-                await start_quest(self.quest)
+                await start_quest(self.ctx, self.quest)
 
         else:
             # Ephemeral means only the person who took the action will see this message
@@ -599,30 +609,66 @@ async def make_game_channel(ctx, quest: Quest):
 
 
 @bot.command(hidden=True)
-@commands.check(lambda ctx: False)
+# @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds):
-    if bot.quest.fast_mode:
-        await asyncio.sleep(7)
-        return
+    # if bot.quest.fast_mode:
+    #     await asyncio.sleep(7)
+    #     return
 
+    # TODO: make this better
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
 
+    send_new_message = True
     message = None
+    seconds_elapsed = 0
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
         new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
-        if message is None:
+        if seconds_elapsed >= 60:
+            send_new_message = True
+            seconds_elapsed = 0
+        if send_new_message:
             message = await ctx.send(new_message)
+            send_new_message = False
         else:
             await message.edit(content=new_message)
 
         remaining_seconds -= sleep_interval
+        seconds_elapsed += sleep_interval
         await asyncio.sleep(sleep_interval)
 
     await message.edit(content="⏲️ Counting down finished.")
     print("Countdown finished.")
 
+
+# @bot.command(hidden=True)
+# @commands.check(lambda ctx: False)
+# async def countdown(ctx, timeout_seconds):
+#     if bot.quest.fast_mode:
+#         await asyncio.sleep(7)
+#         return
+
+#     remaining_seconds = int(timeout_seconds)
+#     sleep_interval = remaining_seconds / 5
+
+#     message = None
+#     while remaining_seconds > 0:
+#         remaining_minutes = remaining_seconds / 60
+#         new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+#         if message is None:
+#             message = await ctx.send(new_message)
+#         else:
+#             await message.edit(content=new_message)
+#             if remaining_seconds % 60 == 0:
+#                 minutes_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+#                 await ctx.send(minutes_message)
+
+#         remaining_seconds -= sleep_interval
+#         await asyncio.sleep(sleep_interval)
+
+#     await message.edit(content="⏲️ Counting down finished.")
+#     print("Countdown finished.")
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -718,7 +764,7 @@ async def obscurity(ctx, mode: str = None):
             )
             embed.add_field(
                 name="ACTIVE CULTURE MODES:",
-                value=f"{', '.join(active_culture_modes)}",
+                value=f"{', '.join(channel_culture_modes)}",
                 inline=False,
             )
     elif mode not in available_modes:
@@ -1024,7 +1070,6 @@ async def post_governance_gif(ctx):
 
     FILE_COUNT = 0
 
-
 # META CONDITION COMMANDS
 @bot.command(hidden=True)
 async def update_bot_icon(ctx):
@@ -1091,16 +1136,15 @@ async def post_submissions(ctx):
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
-async def vote_submissions(ctx, question: str, decision_module=None, timeout=20):
+async def vote_submissions(ctx, question: str, decision_module=None, timeout="20"):
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-    contenders = list(bot.quest.players_to_submissions.keys())
+    contenders = list(bot.quest.players_to_submissions.values())
     if decision_module == None:
         decision_module = await set_decision_module()
     quest = bot.quest
-    await vote(ctx, quest, question, contenders, decision_module, timeout)
+    await vote(ctx, quest, question, contenders, decision_module, int(timeout))
     # Reset the players_to_submissions dictionary for the next round
     bot.quest.reset_submissions()
-
 
 # CLEANING COMMANDS
 @bot.command()
@@ -1163,7 +1207,7 @@ async def solo(ctx, *args, quest_mode=TUTORIAL_BUILD_COMMUNITY):
         description=f"Play here: {quest.game_channel.mention}",
     )
     await ctx.send(embed=embed)
-    await start_quest(quest)
+    await start_quest(ctx, quest)
 
 
 @bot.command()
@@ -1190,11 +1234,10 @@ async def test_png_creation(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_img_generation(ctx):
+async def test_img_generation(ctx, text="Obscurity"):
     """
     Test stability image generation
     """
-    text = "Obscurity"
     image = generate_image(text)
 
     # Save the image to a file
@@ -1267,13 +1310,20 @@ async def on_command(ctx):
         f"Command Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
     )
 
-
 @bot.event
 async def on_command_error(ctx, error):
-    print(
-        f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}"
-    )
+    traceback_text = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+    error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
+    print(error_message)
+    logging.error(error_message)
+    await ctx.send("An error occurred.")
 
+@bot.event
+async def on_error(event):
+    type, value, tb = sys.exc_info()
+    traceback_str = ''.join(traceback.format_exception(type, value, tb))
+    print(f'Unhandled exception in {event}:\n{traceback_str}')
+    logging.error(f'Unhandled exception in {event}:\n{traceback_str}')
 
 # MESSAGE PROCESSING
 async def create_webhook(channel):
@@ -1292,9 +1342,9 @@ async def create_webhook(channel):
 
 async def send_webhook_message(webhook, message, filtered_message):
     payload = {
-        "content": f"※{filtered_message}",
+        "content": f"※ {filtered_message}",
         "username": message.author.name,
-        "avatar_url": message.author.avatar.url,
+        "avatar_url": message.author.avatar.url if message.author.avatar else None,
     }
     await webhook.send(**payload)
 
@@ -1351,6 +1401,7 @@ async def apply_culture_modes(modes, message, filtered_message):
                 filtered_message = obscure_function.camel_case()
         if mode == "ELOQUENCE":
             filtered_message = await filter_eloquence(filtered_message)
+    print(filtered_message)
     return filtered_message
 
 
@@ -1376,11 +1427,12 @@ async def on_message(message):
             return
 
         await process_message(message)
-
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        await message.channel.send("An error occurred")
-
+        type, value, tb = sys.exc_info()
+        traceback_str = ''.join(traceback.format_exception(type, value, tb))
+        print(f'Unhandled exception:\n{traceback_str}')
+        logging.error(f'Unhandled exception:\n{traceback_str}')
+        await message.channel.send("An error occurred.")
 
 # BOT CHANNEL CHECKS
 async def check_cmd_channel(ctx, channel_name):

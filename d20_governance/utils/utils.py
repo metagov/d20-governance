@@ -1,3 +1,4 @@
+from typing import List
 from click import command
 import discord
 from discord.ext import commands
@@ -25,14 +26,36 @@ from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
+import shlex
+
+class Action:
+    def __init__(self, action: str, arguments: list, retries: int, retry_message: str, failure_message: str):
+        self.action = action
+        self.arguments = arguments
+        self.retries = retries
+        self.retry_message = retry_message
+        self.failure_message = failure_message
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        action_string = data.get('action', '')
+        tokens = shlex.split(action_string)
+        action, *arguments = tokens
+        return cls(
+            action=action,
+            arguments=arguments,
+            retries=int(data.get('retries', 0)),
+            retry_message=data.get('retry_message', ''),
+            failure_message=data.get('failure_message', '')
+        )
 
 class Stage:
-    def __init__(self, name, message, actions, progress_conditions):
+    def __init__(self, name, message, actions, progress_conditions, image_path=None):
         self.name = name
         self.message = message
         self.actions = actions
         self.progress_conditions = progress_conditions
-
+        self.image_path = image_path
 
 class Quest:
     def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
@@ -189,24 +212,39 @@ async def setup_server(guild):
         logging.info("Some necessary channels or categories are missing.")
 
 
-# Yaml command callback and parsing
-async def execute_action(bot, action_string, temp_channel):
-    tokens = shlex.split(action_string.lower())
-    command_name, *args = tokens
+async def execute_action(ctx, bot, action, temp_channel):
+    command_name = action.action
+    args = action.arguments
     command = bot.get_command(command_name)
     if command is None:
-        return
+        raise Exception(f"Command {command_name} not found.")
 
     print(f"Executing {command}")
 
-    # Get the last message object from the channel to set context
-    message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+    # Unfortunately we need to do this as a workaround for the fact that we can't easily get the context for the current channel. 
+    message_obj = None
+    attempts = 0
+    max_attempts = 3  # Number of attempts to fetch the message
+    while message_obj is None and attempts < max_attempts:
+        try:
+            # Get the last message object from the channel to set context
+            message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+        except discord.NotFound:
+            attempts += 1
+            await asyncio.sleep(1)  # Delay before next attempt
+
+    if message_obj is None:
+        # If message_obj is still None, all attempts failed
+        error_message = f"Failed to fetch last message from channel {temp_channel.id} after {max_attempts} attempts."
+        print(error_message)
+        logging.error(error_message)
+        raise Exception("Failed to fetch last message from channel.")
 
     # Create a context object for the message
     ctx = await bot.get_context(message_obj)
 
+    # Pass the arguments to the command's callback function
     await command.callback(ctx, *args)
-
 
 # Module Management
 def get_modules_for_type(governance_type):
@@ -378,7 +416,8 @@ def tts(text, filename):
 
 # Image Utils
 # Generate Quest Images
-def generate_image(prompt):
+def generate_image(message):
+    prompt = f"generate a fun image with no words that matches this message: {message}"
     response = requests.post(
         f"{STABILITY_API_HOST}/v1/generation/{ENGINE_ID}/text-to-image",
         headers={

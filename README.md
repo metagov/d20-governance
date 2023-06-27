@@ -1,11 +1,16 @@
+# D20 Governance Bot
+
 ## How to run
 
 1. Install poetry for managing dependencies
 2. Run `poetry install`
-3. Run `poetry env`
+3. Run `poetry shell`
 4. Set DISCORD_TOKEN environment variable to your bot's token
 5. Run `python3 bot.py`
 
+## Running tests
+
+Run `pytest` from project root.
 
 ## Designing a new game
 

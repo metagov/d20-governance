@@ -65,6 +65,7 @@ QUEST_MESSAGE_KEY = "message"
 QUEST_NAME_KEY = "stage"
 QUEST_ACTIONS_KEY = "actions"
 QUEST_PROGRESS_CONDITIONS_KEY = "progress_conditions"
+QUEST_IMAGE_PATH_KEY = "image_path"
 
 # GOVERNANCE CONFIGS
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
