@@ -27,16 +27,14 @@ modules:
   - name: continuous_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: >-
-      Voting can occur anytime, not just on a fixed schedule, and decisions can
-      change if participants alter their votes.
+      Voting can occur anytime, not just on a fixed schedule, and decisions can change if participants alter their votes.
     config: &ref_0 {}
     type: decision
     modules: []
   - name: disapproval_voting
     icon: assets/imgs/CommunityRule/icons/thumb-up.svg
     summary: >-
-      Votes are cast for the options voters do not want, and the option with the
-      fewest votes wins.
+      Votes are cast for the options voters do not want, and the option with the fewest votes wins.
     config: *ref_0
     type: decision
     modules: []

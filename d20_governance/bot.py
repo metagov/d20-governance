@@ -31,6 +31,7 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 bot.remove_command("help")
 
+
 @bot.command()
 async def help(ctx, command: str = None):
     prefix = bot.command_prefix
@@ -74,10 +75,12 @@ print("Logging to logs/bot.log")
 
 # QUEST FLOW
 
+
 def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
     return quest
+
 
 async def start_quest(ctx, quest: Quest):
     """
@@ -94,18 +97,22 @@ async def start_quest(ctx, quest: Quest):
 
     else:  # yaml mode
         for stage in quest.stages:
-            actions = [Action.from_dict(action_dict) for action_dict in stage[QUEST_ACTIONS_KEY]]
+            actions = [
+                Action.from_dict(action_dict)
+                for action_dict in stage[QUEST_ACTIONS_KEY]
+            ]
             stage = Stage(
                 name=stage[QUEST_NAME_KEY],
                 message=stage[QUEST_MESSAGE_KEY],
                 actions=actions,
                 progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
-                image_path = stage.get(QUEST_IMAGE_PATH_KEY)
+                image_path=stage.get(QUEST_IMAGE_PATH_KEY),
             )
 
             print(f"Processing stage {stage.name}")
 
             await process_stage(ctx, stage, quest)
+
 
 async def process_stage(ctx, stage: Stage, quest: Quest):
     """
@@ -119,7 +126,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
         await future
 
     if quest.gen_images:
-        if hasattr(stage, 'image_path') and stage.image_path:  # Check if stage has an image_path
+        if (
+            hasattr(stage, "image_path") and stage.image_path
+        ):  # Check if stage has an image_path
             image = Image.open(stage.image_path)  # Open the image
         else:
             # Generate intro image and send to temporary channel
@@ -166,21 +175,26 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
     progress_conditions = stage.progress_conditions
 
     async def action_runner():
-            for action in actions:
-                retries = action.retries if hasattr(action, 'retries') else 0
-                while retries >= 0:
-                    try:
-                        await execute_action(ctx, bot, action, quest.game_channel)
-                        break
-                    except Exception as e:
-                        if retries > 0:
-                            if hasattr(action, 'retry_message') and action.retry_message:
-                                await quest.game_channel.send(action.retry_message)
-                            retries -= 1
-                        else:
-                            if hasattr(action, 'failure_message') and action.failure_message:
-                                await quest.game_channel.send(action.failure_message)
-                            raise Exception(f"Failed to execute action {action.action}: {e}")
+        for action in actions:
+            retries = action.retries if hasattr(action, "retries") else 0
+            while retries >= 0:
+                try:
+                    await execute_action(ctx, bot, action, quest.game_channel)
+                    break
+                except Exception as e:
+                    if retries > 0:
+                        if hasattr(action, "retry_message") and action.retry_message:
+                            await quest.game_channel.send(action.retry_message)
+                        retries -= 1
+                    else:
+                        if (
+                            hasattr(action, "failure_message")
+                            and action.failure_message
+                        ):
+                            await quest.game_channel.send(action.failure_message)
+                        raise Exception(
+                            f"Failed to execute action {action.action}: {e}"
+                        )
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -203,6 +217,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
     await asyncio.gather(action_runner(), progress_checker())
 
+
 async def all_submissions_submitted():
     while True:
         joined_players = bot.quest.joined_players
@@ -213,6 +228,7 @@ async def all_submissions_submitted():
         print("Waiting for all submissions to be submitted.")
         await asyncio.sleep(1)  # Wait for a second before checking again
 
+
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def timeout(seconds: str):
@@ -220,6 +236,7 @@ async def timeout(seconds: str):
         print(f"Sleeping for {seconds} seconds...")
         await asyncio.sleep(int(seconds))
     return True
+
 
 async def end(ctx, quest: Quest):
     """
@@ -670,6 +687,7 @@ async def countdown(ctx, timeout_seconds):
 #     await message.edit(content="⏲️ Counting down finished.")
 #     print("Countdown finished.")
 
+
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def transparency(ctx):
@@ -1070,6 +1088,7 @@ async def post_governance_gif(ctx):
 
     FILE_COUNT = 0
 
+
 # META CONDITION COMMANDS
 @bot.command(hidden=True)
 async def update_bot_icon(ctx):
@@ -1145,6 +1164,7 @@ async def vote_submissions(ctx, question: str, decision_module=None, timeout="20
     await vote(ctx, quest, question, contenders, decision_module, int(timeout))
     # Reset the players_to_submissions dictionary for the next round
     bot.quest.reset_submissions()
+
 
 # CLEANING COMMANDS
 @bot.command()
@@ -1310,20 +1330,25 @@ async def on_command(ctx):
         f"Command Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
     )
 
+
 @bot.event
 async def on_command_error(ctx, error):
-    traceback_text = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+    traceback_text = "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )
     error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
     print(error_message)
     logging.error(error_message)
     await ctx.send("An error occurred.")
 
+
 @bot.event
 async def on_error(event):
     type, value, tb = sys.exc_info()
-    traceback_str = ''.join(traceback.format_exception(type, value, tb))
-    print(f'Unhandled exception in {event}:\n{traceback_str}')
-    logging.error(f'Unhandled exception in {event}:\n{traceback_str}')
+    traceback_str = "".join(traceback.format_exception(type, value, tb))
+    print(f"Unhandled exception in {event}:\n{traceback_str}")
+    logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
+
 
 # MESSAGE PROCESSING
 async def create_webhook(channel):
@@ -1405,9 +1430,70 @@ async def apply_culture_modes(modes, message, filtered_message):
     return filtered_message
 
 
+async def tally_vote(channel_id):
+    global anarchy_votes, democracy_votes, scale, threshold, anarchy_reached, democracy_reached
+
+    channel = bot.get_channel(channel_id)
+
+    if not democracy_reached and democracy_votes > threshold:
+        mode = "Democracy"
+        await channel.send("```Democracy mode activated!```")
+        democracy_reached = True
+        anarchy_reached = False
+    if not anarchy_reached and democracy_votes <= threshold:
+        mode = "Anarchy"
+        await channel.send("```Anarchy mode activated!```")
+        democracy_reached = False
+        anarchy_reached = True
+    else:
+        pass
+
+
+async def update_vote_progress(channel_id):
+    global anarchy_votes, democracy_votes, scale, threshold
+
+    channel = bot.get_channel(channel_id)
+
+    mode = "Anarchy"
+    if democracy_votes <= threshold:
+        mode = "Democracy"
+
+    filled = int(min(democracy_votes, scale))
+    empty = scale - filled
+
+    threshold_index = int(threshold)
+    print(threshold_index)
+
+    progress_bar = "🟦" * filled + "🟨" * empty
+    progress_bar = progress_bar[:threshold_index] + "📍" + progress_bar[threshold_index:]
+
+    embed = discord.Embed(
+        title="Vote Progress",
+        color=discord.Color.green(),
+    )
+    embed.add_field(
+        name="Anarchy <> Democracy",
+        value=f"**Anarchy** {progress_bar} **Democracy**",
+        inline=False,
+    )
+
+    await channel.send(embed=embed)
+    await tally_vote(channel_id)
+
+
+anarchy_votes = 0
+democracy_votes = 0
+scale = 10
+threshold = 7
+democracy_reached = False
+anarchy_reached = True
+
+
 # ON MESSAGE
 @bot.event
 async def on_message(message):
+    global anarchy_votes, democracy_votes
+    channel_id = message.channel.id
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
             return
@@ -1422,17 +1508,36 @@ async def on_message(message):
             await bot.process_commands(message)
             return
 
-        # FIXME: This is a hack to ensure webhook messages don't loop
+        # This symbold ensures webhook messages don't loop
         if message.content.startswith("※"):
             return
+
+        if message.content.lower() == "anarchy":
+            if anarchy_votes >= 10:
+                pass
+            else:
+                anarchy_votes += 1
+            if democracy_votes >= 1:
+                democracy_votes -= 1
+            await update_vote_progress(channel_id)
+
+        if message.content.lower() == "democracy":
+            if democracy_votes >= 10:
+                pass
+            else:
+                democracy_votes += 1
+            if anarchy_votes >= 1:
+                anarchy_votes -= 1
+            await update_vote_progress(channel_id)
 
         await process_message(message)
     except Exception as e:
         type, value, tb = sys.exc_info()
-        traceback_str = ''.join(traceback.format_exception(type, value, tb))
-        print(f'Unhandled exception:\n{traceback_str}')
-        logging.error(f'Unhandled exception:\n{traceback_str}')
+        traceback_str = "".join(traceback.format_exception(type, value, tb))
+        print(f"Unhandled exception:\n{traceback_str}")
+        logging.error(f"Unhandled exception:\n{traceback_str}")
         await message.channel.send("An error occurred.")
+
 
 # BOT CHANNEL CHECKS
 async def check_cmd_channel(ctx, channel_name):
