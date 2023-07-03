@@ -879,6 +879,53 @@ async def obscurity(ctx, mode: str = None, state: bool = None, timeout: int = No
     )
 
 
+async def turn_eloquence_on(ctx, channel_culture_modes):
+    channel_culture_modes.append("ELOQUENCE")
+    active_culture_modes[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+    )
+    embed.add_field(
+        name="ACTIVATED:",
+        value="Messages will now be process through an LLM.",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    embed.add_field(
+        name="LLM Prompt:",
+        value="`You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]`",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
+async def turn_eloquence_off(ctx, channel_culture_modes):
+    channel_culture_modes.remove("ELOQUENCE")
+    active_culture_modes[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+    )
+    embed.add_field(
+        name="DEACTIVATED",
+        value="Messages will no longer be processed through an LLM",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def eloquence(ctx, state: bool = None, timeout: int = None):
