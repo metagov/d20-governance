@@ -447,15 +447,14 @@ async def start_quest(ctx, quest: Quest):
 #         self.timeout += 60
 #         await interaction.response.send_message("Vote duration extended by 60 seconds.")
 
+
 async def process_retry(ctx, retry_message):
     await clear_decision_input_values(ctx)
     await ctx.send(retry_message)
     await ctx.send(
         "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
     )
-    await display_module_status(
-        ctx, CONTINUOUS_INPUT_DECISION_MODULES
-    )
+    await display_module_status(ctx, CONTINUOUS_INPUT_DECISION_MODULES)
     await ctx.send(
         f"```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to {INPUT_SPECTRUM['threshold']}, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
     )
@@ -472,7 +471,7 @@ async def process_retry(ctx, retry_message):
 
     await ctx.send("No winner was found. The status quo will remain.")
 
-        
+
 async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Message):
     """
     Run stages from yaml config
@@ -598,7 +597,6 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     )
                     break
 
-
     async def progress_checker():
         if progress_conditions is None or len(progress_conditions) == 0:
             return
@@ -613,13 +611,17 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     raise Exception(f"Function {function_name} not found.")
                 function = globals().get(function_name)
                 args = progress_condition.arguments
-                tasks.append(asyncio.create_task(function(game_channel_ctx, *args)))  # Modified line
+                tasks.append(
+                    asyncio.create_task(function(game_channel_ctx, *args))
+                )  # Modified line
                 print(
                     f"{Fore.BLUE}+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list{Style.RESET_ALL}"
                 )  # Debugging line
-            
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            
+
+            done, pending = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+
             for future in done:
                 condition_result = await future
                 if condition_result:
@@ -1191,7 +1193,7 @@ async def embark(
     if not 1 <= number_of_players.value <= 8:
         await ctx.send("The game requires at least 2 and at most 8 players")
         return
-    
+
     if QUEST_IN_PROGRESS:
         await ctx.send("There is already a quest in progress.")
         return
@@ -1787,7 +1789,7 @@ async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]["file"]):
     if QUEST_IN_PROGRESS:
         await ctx.send("There is already a quest in progress.")
         return
-    
+
     quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=True)
     quest.add_player(ctx.author.name)
 
