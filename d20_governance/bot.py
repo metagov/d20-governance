@@ -627,7 +627,7 @@ async def make_game_channel(ctx, quest: Quest):
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
-async def countdown(ctx, timeout_seconds):
+async def countdown(ctx, timeout_seconds, text=None):
     # if bot.quest.fast_mode:
     #     await asyncio.sleep(7)
     #     return
@@ -641,7 +641,7 @@ async def countdown(ctx, timeout_seconds):
     seconds_elapsed = 0
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
-        new_message = f"⏳ {remaining_minutes:.2f} minutes remaining before the next stage of the game."
+        new_message = f"⏳ {remaining_minutes:.2f} minutes remaining {text}."
         if seconds_elapsed >= 60:
             send_new_message = True
             seconds_elapsed = 0
@@ -816,65 +816,98 @@ async def obscurity(ctx, mode: str = None):
     )
 
 
+async def turn_eloquence_on(ctx, channel_culture_modes):
+    channel_culture_modes.append("ELOQUENCE")
+    active_culture_modes[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+    )
+    embed.add_field(
+        name="ACTIVATED:",
+        value="Messages will now be process through an LLM.",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    embed.add_field(
+        name="LLM Prompt:",
+        value="`You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]`",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
+async def turn_eloquence_off(ctx, channel_culture_modes):
+    channel_culture_modes.remove("ELOQUENCE")
+    active_culture_modes[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+    )
+    embed.add_field(
+        name="DEACTIVATED",
+        value="Messages will no longer be processed through an LLM",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def eloquence(ctx):
+async def eloquence(ctx, state: bool = None, timeout: int = None):
     """
-    Toggle eloquence module
+    Control eloquence module
     """
-    global ELOQUENCE
+    global ELOQUENCE, eloquence_activated
 
     channel_culture_modes = active_culture_modes.get(ctx.channel, [])
 
-    if "ELOQUENCE" not in channel_culture_modes:
-        ELOQUENCE = True
-        channel_culture_modes.append("ELOQUENCE")
-        active_culture_modes[ctx.channel] = channel_culture_modes
+    # Turn on eloquence mode if not activated
+    if state == True:
+        if "ELOQUENCE" not in channel_culture_modes:
+            await turn_eloquence_on(ctx, channel_culture_modes)
+        else:
+            return
 
-        embed = discord.Embed(
-            title="Culture: Eloquence", color=discord.Color.dark_gold()
-        )
-        embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-        )
-        embed.add_field(
-            name="ACTIVATED:",
-            value="Messages will now be process through an LLM.",
-            inline=False,
-        )
-        embed.add_field(
-            name="ACTIVE CULTURE MODES:",
-            value=f"{', '.join(channel_culture_modes)}",
-            inline=False,
-        )
-        embed.add_field(
-            name="LLM Prompt:",
-            value="`You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]`",
-            inline=False,
-        )
-        await ctx.send(embed=embed)
-    else:
-        ELOQUENCE = False
-        channel_culture_modes.remove("ELOQUENCE")
-        active_culture_modes[ctx.channel] = channel_culture_modes
+    # Turn off eloquence mode if activated
+    if state == False:
+        if timeout == None:
+            if "ELOQUENCE" in channel_culture_modes:
+                await turn_eloquence_off(ctx, channel_culture_modes)
+            else:
+                return
+        if timeout is not None:
+            if "ELOQUENCE" in channel_culture_modes:
+                ELOQUENCE = None
+                await turn_eloquence_off(ctx, channel_culture_modes)
+            # use a countdown here to show when eloquence will be turned back on
+            countdown_message = "until eloquence turns back on"
+            await countdown(ctx, timeout, countdown_message)
+            if not eloquence_activated:
+                ELOQUENCE = True
+                await turn_eloquence_on(ctx, channel_culture_modes)
+            else:
+                return
 
-        embed = discord.Embed(
-            title="Culture: Eloquence", color=discord.Color.dark_gold()
-        )
-        embed.set_thumbnail(
-            url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-        )
-        embed.add_field(
-            name="DEACTIVATED",
-            value="Messages will no longer be processed through an LLM",
-            inline=False,
-        )
-        embed.add_field(
-            name="ACTIVE CULTURE MODES:",
-            value=f"{', '.join(channel_culture_modes)}",
-            inline=False,
-        )
-        await ctx.send(embed=embed)
+    # Toggle eloquence mode and set global state
+    if state == None:
+        if "ELOQUENCE" not in channel_culture_modes:
+            ELOQUENCE = True
+            await turn_eloquence_on(ctx, channel_culture_modes)
+        else:
+            ELOQUENCE = False
+            await turn_eloquence_off(ctx, channel_culture_modes)
 
 
 @bot.command()
@@ -1430,69 +1463,156 @@ async def apply_culture_modes(modes, message, filtered_message):
     return filtered_message
 
 
-async def tally_vote(channel_id):
-    global anarchy_votes, democracy_votes, scale, threshold, anarchy_reached, democracy_reached
+async def tally_input(channel_id):
+    global consensus_input, majority_input, scale, threshold, consensus_reached, majority_reached, eloquence_input, eloquence_activated, ELOQUENCE
 
     channel = bot.get_channel(channel_id)
+    last_message = await channel.fetch_message(channel.last_message_id)
 
-    if not democracy_reached and democracy_votes > threshold:
-        mode = "Democracy"
-        await channel.send("```Democracy mode activated!```")
-        democracy_reached = True
-        anarchy_reached = False
-    if not anarchy_reached and democracy_votes <= threshold:
-        mode = "Anarchy"
-        await channel.send("```Anarchy mode activated!```")
-        democracy_reached = False
-        anarchy_reached = True
+    if majority_input > threshold and consensus_input:
+        await channel.send("```Majority mode activated!```")
+        # majority_reached = True
+        # consensus_reached = False
+    if consensus_input > threshold and majority_input:
+        await channel.send("```Consensus mode activated!```")
+        # majority_reached = False
+        # consensus_reached = True
+    if not eloquence_activated and eloquence_input > threshold:
+        eloquence_activated = True
+        context = await bot.get_context(last_message)
+        if ELOQUENCE == False:
+            await eloquence(context, True)
+        if ELOQUENCE == True:
+            await channel.send("```Eloquence mode already activated!```")
+        if ELOQUENCE == None:
+            await eloquence(context)
+    elif eloquence_activated and eloquence_input <= threshold:
+        eloquence_activated = False
+        context = await bot.get_context(last_message)
+        if not ELOQUENCE:
+            await eloquence(
+                context,
+                False,
+            )
+        else:
+            # timeout eloquence if global eloquence mode is True
+            await eloquence(context, False, 20)
+            if not eloquence_activated:
+                eloquence_activated = True
+            if eloquence_input <= threshold:
+                eloquence_input = (
+                    scale  # maybe try +3 or +4 instead of a full turn back on?
+                )
+                await display_culture_status(channel_id)
+            else:
+                pass
     else:
         pass
 
 
-async def update_vote_progress(channel_id):
-    global anarchy_votes, democracy_votes, scale, threshold
+async def display_decision_status(channel_id):
+    global consensus_input, majority_input, scale, threshold
 
     channel = bot.get_channel(channel_id)
 
     mode = "Anarchy"
-    if democracy_votes <= threshold:
+    if majority_input <= threshold:
         mode = "Democracy"
 
-    filled = int(min(democracy_votes, scale))
-    empty = scale - filled
+    consensus_filled = int(min(consensus_input, scale))
+    consensus_empty = scale - consensus_filled
+
+    majority_filled = int(min(majority_input, scale))
+    majority_empty = scale - majority_filled
 
     threshold_index = int(threshold)
-    print(threshold_index)
 
-    progress_bar = "🟦" * filled + "🟨" * empty
-    progress_bar = progress_bar[:threshold_index] + "📍" + progress_bar[threshold_index:]
+    consensus_progress_bar = "🟦" * consensus_filled + "🟨" * consensus_empty
+    consensus_progress_bar = (
+        consensus_progress_bar[:threshold_index]
+        + "📍"
+        + consensus_progress_bar[threshold_index:]
+    )
+
+    majority_progress_bar = "🟦" * majority_filled + "🟨" * majority_empty
+    majority_progress_bar = (
+        majority_progress_bar[:threshold_index]
+        + "📍"
+        + majority_progress_bar[threshold_index:]
+    )
 
     embed = discord.Embed(
-        title="Vote Progress",
+        title="Decision Display Status",
         color=discord.Color.green(),
     )
     embed.add_field(
-        name="Anarchy <> Democracy",
-        value=f"**Anarchy** {progress_bar} **Democracy**",
+        name="Consensus",
+        value=f"{consensus_progress_bar}",
+        inline=False,
+    )
+    embed.add_field(
+        name="Majority",
+        value=f"{majority_progress_bar}",
         inline=False,
     )
 
     await channel.send(embed=embed)
-    await tally_vote(channel_id)
+    await tally_input(channel_id)
 
 
-anarchy_votes = 0
-democracy_votes = 0
+async def display_culture_status(channel_id):
+    global eloquence_input, scale, threshold
+
+    channel = bot.get_channel(channel_id)
+
+    eloquence_filled = int(min(eloquence_input, scale))
+    eloquence_empty = scale - eloquence_filled
+
+    threshold_index = int(threshold)
+
+    eloquence_progress_bar = "🟦" * eloquence_filled + "🟨" * eloquence_empty
+    eloquence_progress_bar = (
+        eloquence_progress_bar[:threshold_index]
+        + "📍"
+        + eloquence_progress_bar[threshold_index:]
+    )
+
+    # if eloquence global = True, moving bellow threshold temporary turns off eloquence for 20 seconds before turning back on
+    # add better state management of culture modules
+    # this way a culture module can invervene at the global level
+    # when it intervenes at global level the threshold int for eloquence input jumps to 10
+    # the eloquence meter either increments + 1 every 5 seconds or jumps back to 10 after 20 seconds
+
+    embed = discord.Embed(
+        title="Culture Display Status",
+        color=discord.Color.green(),
+    )
+    embed.add_field(
+        name="Eloquence",
+        value=f"{eloquence_progress_bar}",
+        inline=False,
+    )
+
+    await channel.send(embed=embed)
+    await tally_input(channel_id)
+
+
+eloquence_input = 0
+consensus_input = 0
+majority_input = 0
 scale = 10
 threshold = 7
-democracy_reached = False
-anarchy_reached = True
+majority_reached = False
+consensus_reached = False
+ranked_choice_reached = False
+consensus_reached = False
+eloquence_activated = False
 
 
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    global anarchy_votes, democracy_votes
+    global consensus_input, majority_input, eloquence_input
     channel_id = message.channel.id
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
@@ -1512,23 +1632,53 @@ async def on_message(message):
         if message.content.startswith("※"):
             return
 
-        if message.content.lower() == "anarchy":
-            if anarchy_votes >= 10:
+        if message.content.lower() == "consensus +1":
+            if consensus_input >= 10:
                 pass
             else:
-                anarchy_votes += 1
-            if democracy_votes >= 1:
-                democracy_votes -= 1
-            await update_vote_progress(channel_id)
+                consensus_input += 1
+            await display_decision_status(channel_id)
+            return
 
-        if message.content.lower() == "democracy":
-            if democracy_votes >= 10:
+        if message.content.lower() == "consensus -1":
+            if consensus_input <= 0:
                 pass
             else:
-                democracy_votes += 1
-            if anarchy_votes >= 1:
-                anarchy_votes -= 1
-            await update_vote_progress(channel_id)
+                consensus_input -= 1
+            await display_decision_status(channel_id)
+            return
+
+        if message.content.lower() == "majority +1":
+            if majority_input >= 10:
+                pass
+            else:
+                majority_input += 1
+            await display_decision_status(channel_id)
+            return
+
+        if message.content.lower() == "majority -1":
+            if majority_input <= 0:
+                pass
+            else:
+                majority_input -= 1
+            await display_decision_status(channel_id)
+            return
+
+        if message.content.lower() == "eloquence +1":
+            if eloquence_input >= 10:
+                pass
+            else:
+                eloquence_input += 1
+            await display_culture_status(channel_id)
+            return
+
+        if message.content.lower() == "eloquence -1":
+            if eloquence_input <= 0:
+                pass
+            else:
+                eloquence_input -= 1
+            await display_culture_status(channel_id)
+            return
 
         await process_message(message)
     except Exception as e:
