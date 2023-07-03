@@ -732,135 +732,61 @@ async def autonomy(ctx):
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def obscurity(ctx, mode: str = None):
+async def obscurity(ctx, mode: str = None, state: bool = None, timeout: int = None):
     """
-    Toggle obscurity module
+    Control obscurity module
     """
-    global OBSCURITY
-    global OBSCURITY_MODE
-    print(OBSCURITY_MODE)
+    global OBSCURITY, OBSCURITY_MODE, obscurity_activated
 
     # A list of available obscurity modes
     available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
 
     channel_culture_modes = active_culture_modes.get(ctx.channel, [])
 
-    if mode is None:
+    # Turn on obscurity mode if not activated
+    if state == True:
         if "OBSCURITY" not in channel_culture_modes:
-            OBSCURITY = True
-            channel_culture_modes.append("OBSCURITY")
+            await turn_obscurity_on(ctx, channel_culture_modes)
+        else:
+            return
+
+    # Turn off obscurity mode if activated
+    if state == False:
+        if timeout == None:
+            if "OBSCURITY" in channel_culture_modes:
+                await turn_obscurity_off(ctx, channel_culture_modes)
+            else:
+                return
+        if timeout is not None:
+            if "OBSCURITY" in channel_culture_modes:
+                OBSCURITY = None
+                await turn_obscurity_off(ctx, channel_culture_modes)
+                countdown_message = "until obscurity turns back on"
+                await countdown(ctx, timeout, countdown_message)
+            if not obscurity_activated:
+                OBSCURITY = True
+                await turn_obscurity_on(ctx, channel_culture_modes)
+            else:
+                return
+
+    # Toggle obscurity mode and set global state
+    if state == None:
+        if mode is None:
+            if "OBSCURITY" not in channel_culture_modes:
+                OBSCURITY = True
+                await turn_obscurity_on(ctx, channel_culture_modes)
+            else:
+                OBSCURITY = False
+                await turn_obscurity_off(ctx, channel_culture_modes)
+        elif mode not in available_modes:
             embed = discord.Embed(
-                title=f"Culture: OBSCURITY",
-                color=discord.Color.dark_gold(),
-            )
-            embed.add_field(
-                name="ACTIVATED",
-                value="Messages will be distored based on mode of obscurity.",
-                inline=False,
-            )
-            embed.add_field(
-                name="Mode:",
-                value=f"{OBSCURITY_MODE}",
-                inline=False,
-            )
-            embed.add_field(
-                name="ACTIVE CULTURE MODES:",
-                value=f"{', '.join(channel_culture_modes)}",
-                inline=False,
+                title=f"Error - The mode '{mode}' is not available.",
+                color=discord.Color.red(),
             )
         else:
-            OBSCURITY = False
-            channel_culture_modes.remove("OBSCURITY")
-            embed = discord.Embed(
-                title=f"Culture: OBSCURITY",
-                color=discord.Color.dark_gold(),
-            )
-            embed.add_field(
-                name="DEACTIVATED",
-                value="Messages will no longer be distored by obscurity.",
-                inline=False,
-            )
-            embed.add_field(
-                name="ACTIVE CULTURE MODES:",
-                value=f"{', '.join(channel_culture_modes)}",
-                inline=False,
-            )
-    elif mode not in available_modes:
-        embed = discord.Embed(
-            title=f"Error - The mode '{mode}' is not available.",
-            color=discord.Color.red(),
-        )
-    else:
-        print(OBSCURITY_MODE)
-        OBSCURITY_MODE = mode
-        if "OBSCURITY" not in channel_culture_modes:
-            channel_culture_modes.append("OBSCURITY")
-
-        embed = discord.Embed(
-            title="Culture: Obscurity On!", color=discord.Color.dark_gold()
-        )
-        embed.add_field(name="Mode:", value=f"{OBSCURITY_MODE}", inline=False)
-        embed.add_field(
-            name="ACTIVE CULTURE MODES:",
-            value=f"{', '.join(channel_culture_modes)}",
-            inline=False,
-        )
-
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
-    )
-    active_culture_modes[ctx.channel] = channel_culture_modes
-    await ctx.send(embed=embed)
-    print(
-        f"Obscurity: {'on' if 'OBSCURITY' in channel_culture_modes else 'off'}, Mode: {OBSCURITY_MODE}"
-    )
-
-
-async def turn_eloquence_on(ctx, channel_culture_modes):
-    channel_culture_modes.append("ELOQUENCE")
-    active_culture_modes[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-    )
-    embed.add_field(
-        name="ACTIVATED:",
-        value="Messages will now be process through an LLM.",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    embed.add_field(
-        name="LLM Prompt:",
-        value="`You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]`",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def turn_eloquence_off(ctx, channel_culture_modes):
-    channel_culture_modes.remove("ELOQUENCE")
-    active_culture_modes[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-    )
-    embed.add_field(
-        name="DEACTIVATED",
-        value="Messages will no longer be processed through an LLM",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
+            OBSCURITY_MODE = mode
+            if "OBSCURITY" not in channel_culture_modes:
+                await turn_obscurity_on(ctx, channel_culture_modes)
 
 
 @bot.command()
@@ -891,9 +817,8 @@ async def eloquence(ctx, state: bool = None, timeout: int = None):
             if "ELOQUENCE" in channel_culture_modes:
                 ELOQUENCE = None
                 await turn_eloquence_off(ctx, channel_culture_modes)
-            # use a countdown here to show when eloquence will be turned back on
-            countdown_message = "until eloquence turns back on"
-            await countdown(ctx, timeout, countdown_message)
+                countdown_message = "until eloquence turns back on"
+                await countdown(ctx, timeout, countdown_message)
             if not eloquence_activated:
                 ELOQUENCE = True
                 await turn_eloquence_on(ctx, channel_culture_modes)
@@ -1463,21 +1388,26 @@ async def apply_culture_modes(modes, message, filtered_message):
     return filtered_message
 
 
-async def tally_input(channel_id):
-    global consensus_input, majority_input, scale, threshold, consensus_reached, majority_reached, eloquence_input, eloquence_activated, ELOQUENCE
+async def calculate_module_inputs(channel_id):
+    global spectrum_scale, spectrum_threshold, consensus_input, majority_input, eloquence_input, obscurity_input, consensus_reached, majority_reached, eloquence_activated, obscurity_activated, ELOQUENCE, OBSCURITY
 
     channel = bot.get_channel(channel_id)
     last_message = await channel.fetch_message(channel.last_message_id)
 
-    if majority_input > threshold and consensus_input:
+    # Calculate majority input
+    if majority_input > spectrum_threshold and consensus_input:
         await channel.send("```Majority mode activated!```")
         # majority_reached = True
         # consensus_reached = False
-    if consensus_input > threshold and majority_input:
+
+    # Calculate consensus input
+    if consensus_input > spectrum_threshold and majority_input:
         await channel.send("```Consensus mode activated!```")
         # majority_reached = False
         # consensus_reached = True
-    if not eloquence_activated and eloquence_input > threshold:
+
+    # Calculate eloquence input
+    if not eloquence_activated and eloquence_input > spectrum_threshold:
         eloquence_activated = True
         context = await bot.get_context(last_message)
         if ELOQUENCE == False:
@@ -1486,46 +1416,61 @@ async def tally_input(channel_id):
             await channel.send("```Eloquence mode already activated!```")
         if ELOQUENCE == None:
             await eloquence(context)
-    elif eloquence_activated and eloquence_input <= threshold:
+    elif eloquence_activated and eloquence_input <= spectrum_threshold:
         eloquence_activated = False
         context = await bot.get_context(last_message)
         if not ELOQUENCE:
-            await eloquence(
-                context,
-                False,
-            )
+            await eloquence(context, False)
         else:
             # timeout eloquence if global eloquence mode is True
             await eloquence(context, False, 20)
             if not eloquence_activated:
                 eloquence_activated = True
-            if eloquence_input <= threshold:
-                eloquence_input = (
-                    scale  # maybe try +3 or +4 instead of a full turn back on?
-                )
+            if eloquence_input <= spectrum_threshold:
+                eloquence_input = spectrum_scale
                 await display_culture_status(channel_id)
-            else:
-                pass
-    else:
-        pass
+
+    # Calculate obscurity input
+    if not obscurity_activated and obscurity_input > spectrum_threshold:
+        obscurity_activated = True
+        context = await bot.get_context(last_message)
+        if OBSCURITY == False:
+            await obscurity(context, None, True)
+        if OBSCURITY == True:
+            await channel.send("```Obscurity mode already activated!```")
+        if OBSCURITY == None:
+            await obscurity(context)
+    elif obscurity_activated and obscurity_input <= spectrum_threshold:
+        obscurity_activated = False
+        context = await bot.get_context(last_message)
+        if not OBSCURITY:
+            await obscurity(context, None, False)
+        else:
+            # timeout obscurity if global obscurity mode is True
+            await obscurity(context, None, False, 20)
+            if not obscurity_activated:
+                obscurity_activated = True
+            if obscurity_input <= spectrum_threshold:
+                obscurity_input = spectrum_scale
+                await display_culture_status(channel_id)
 
 
 async def display_decision_status(channel_id):
-    global consensus_input, majority_input, scale, threshold
+    global consensus_input, majority_input, spectrum_scale, spectrum_threshold
 
     channel = bot.get_channel(channel_id)
 
     mode = "Anarchy"
-    if majority_input <= threshold:
+    if majority_input <= spectrum_threshold:
         mode = "Democracy"
 
-    consensus_filled = int(min(consensus_input, scale))
-    consensus_empty = scale - consensus_filled
+    consensus_filled = int(min(consensus_input, spectrum_scale))
+    consensus_empty = spectrum_scale - consensus_filled
 
-    majority_filled = int(min(majority_input, scale))
-    majority_empty = scale - majority_filled
+    majority_filled = int(min(majority_input, spectrum_scale))
+    majority_empty = spectrum_scale - majority_filled
 
-    threshold_index = int(threshold)
+    threshold_index = int(spectrum_threshold)
 
     consensus_progress_bar = "🟦" * consensus_filled + "🟨" * consensus_empty
     consensus_progress_bar = (
@@ -1557,18 +1502,18 @@ async def display_decision_status(channel_id):
     )
 
     await channel.send(embed=embed)
-    await tally_input(channel_id)
+    await calculate_module_inputs(channel_id)
 
 
 async def display_culture_status(channel_id):
-    global eloquence_input, scale, threshold
+    global eloquence_input, spectrum_scale, spectrum_threshold
 
     channel = bot.get_channel(channel_id)
 
-    eloquence_filled = int(min(eloquence_input, scale))
-    eloquence_empty = scale - eloquence_filled
+    threshold_index = int(spectrum_threshold)
 
-    threshold_index = int(threshold)
+    eloquence_filled = int(min(eloquence_input, spectrum_scale))
+    eloquence_empty = spectrum_scale - eloquence_filled
 
     eloquence_progress_bar = "🟦" * eloquence_filled + "🟨" * eloquence_empty
     eloquence_progress_bar = (
@@ -1577,11 +1522,15 @@ async def display_culture_status(channel_id):
         + eloquence_progress_bar[threshold_index:]
     )
 
-    # if eloquence global = True, moving bellow threshold temporary turns off eloquence for 20 seconds before turning back on
-    # add better state management of culture modules
-    # this way a culture module can invervene at the global level
-    # when it intervenes at global level the threshold int for eloquence input jumps to 10
-    # the eloquence meter either increments + 1 every 5 seconds or jumps back to 10 after 20 seconds
+    obscurity_filled = int(min(obscurity_input, spectrum_scale))
+    obscurity_empty = spectrum_scale - obscurity_filled
+
+    obscurity_progress_bar = "🟦" * obscurity_filled + "🟨" * obscurity_empty
+    obscurity_progress_bar = (
+        obscurity_progress_bar[:threshold_index]
+        + "📍"
+        + obscurity_progress_bar[threshold_index:]
+    )
 
     embed = discord.Embed(
         title="Culture Display Status",
@@ -1592,27 +1541,32 @@ async def display_culture_status(channel_id):
         value=f"{eloquence_progress_bar}",
         inline=False,
     )
+    embed.add_field(
+        name="Obscurity",
+        value=f"{obscurity_progress_bar}",
+        inline=False,
+    )
 
     await channel.send(embed=embed)
-    await tally_input(channel_id)
+    await calculate_module_inputs(channel_id)
 
 
 eloquence_input = 0
+obscurity_input = 0
 consensus_input = 0
 majority_input = 0
-scale = 10
-threshold = 7
+spectrum_scale = 10
+spectrum_threshold = 7
 majority_reached = False
 consensus_reached = False
-ranked_choice_reached = False
-consensus_reached = False
 eloquence_activated = False
+obscurity_activated = False
 
 
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    global consensus_input, majority_input, eloquence_input
+    global consensus_input, majority_input, eloquence_input, obscurity_input
     channel_id = message.channel.id
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
@@ -1677,6 +1631,22 @@ async def on_message(message):
                 pass
             else:
                 eloquence_input -= 1
+            await display_culture_status(channel_id)
+            return
+
+        if message.content.lower() == "obscurity +1":
+            if obscurity_input >= 10:
+                pass
+            else:
+                obscurity_input += 1
+            await display_culture_status(channel_id)
+            return
+
+        if message.content.lower() == "obscurity -1":
+            if obscurity_input <= 0:
+                pass
+            else:
+                obscurity_input -= 1
             await display_culture_status(channel_id)
             return
 
