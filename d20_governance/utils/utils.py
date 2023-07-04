@@ -28,8 +28,16 @@ from langchain.chat_models import ChatOpenAI
 
 import shlex
 
+
 class Action:
-    def __init__(self, action: str, arguments: list, retries: int, retry_message: str, failure_message: str):
+    def __init__(
+        self,
+        action: str,
+        arguments: list,
+        retries: int,
+        retry_message: str,
+        failure_message: str,
+    ):
         self.action = action
         self.arguments = arguments
         self.retries = retries
@@ -38,16 +46,17 @@ class Action:
 
     @classmethod
     def from_dict(cls, data: dict):
-        action_string = data.get('action', '')
+        action_string = data.get("action", "")
         tokens = shlex.split(action_string)
         action, *arguments = tokens
         return cls(
             action=action,
             arguments=arguments,
-            retries=int(data.get('retries', 0)),
-            retry_message=data.get('retry_message', ''),
-            failure_message=data.get('failure_message', '')
+            retries=int(data.get("retries", 0)),
+            retry_message=data.get("retry_message", ""),
+            failure_message=data.get("failure_message", ""),
         )
+
 
 class Stage:
     def __init__(self, name, message, actions, progress_conditions, image_path=None):
@@ -56,6 +65,7 @@ class Stage:
         self.actions = actions
         self.progress_conditions = progress_conditions
         self.image_path = image_path
+
 
 class Quest:
     def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
@@ -212,16 +222,10 @@ async def setup_server(guild):
         logging.info("Some necessary channels or categories are missing.")
 
 
-async def execute_action(ctx, bot, action, temp_channel):
-    command_name = action.action
-    args = action.arguments
-    command = bot.get_command(command_name)
-    if command is None:
-        raise Exception(f"Command {command_name} not found.")
-
+async def execute_action(ctx, bot, command, args, temp_channel):
     print(f"Executing {command}")
 
-    # Unfortunately we need to do this as a workaround for the fact that we can't easily get the context for the current channel. 
+    # Unfortunately we need to do this as a workaround for the fact that we can't easily get the context for the current channel.
     message_obj = None
     attempts = 0
     max_attempts = 3  # Number of attempts to fetch the message
@@ -244,7 +248,9 @@ async def execute_action(ctx, bot, action, temp_channel):
     ctx = await bot.get_context(message_obj)
 
     # Pass the arguments to the command's callback function
-    await command.callback(ctx, *args)
+    # await command.callback(ctx, *args)
+    await command(ctx, *args)
+
 
 # Module Management
 def get_modules_for_type(governance_type):

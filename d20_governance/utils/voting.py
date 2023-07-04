@@ -1,8 +1,9 @@
 from typing import List
 import random
 import discord
-from d20_governance.utils.constants import CIRCLE_EMOJIS
+from d20_governance.utils.constants import CIRCLE_EMOJIS, GLOBAL_DECISION_MODULE
 from d20_governance.utils.utils import Quest
+from d20_governance.utils.decisions import *
 
 # Voting functions
 majority = (
@@ -61,17 +62,23 @@ class VoteView(discord.ui.View):
                 "You've already voted.", ephemeral=True
             )
 
+
 async def vote(
     ctx,
     quest: Quest,
     question: str = None,
     options: List[str] = [],
-    decision_module: str = "majority",
     timeout: int = 60,
 ):
     """
     Trigger a vote
     """
+    global GLOBAL_DECISION_MODULE
+    if GLOBAL_DECISION_MODULE == None:
+        GLOBAL_DECISION_MODULE = await set_global_governance(GLOBAL_DECISION_MODULE)
+
+    decision_module = GLOBAL_DECISION_MODULE
+
     print(f"A vote has been triggered. The decision module is: {decision_module}")
 
     if not options:
@@ -104,7 +111,7 @@ async def vote(
             truncated_option = option[:97] + "..."
         else:
             truncated_option = option
-         # truncate the option if it's longer than 100 characters
+        # truncate the option if it's longer than 100 characters
         vote_view.add_option(
             label=truncated_option,
             value=str(i),
@@ -129,7 +136,7 @@ async def vote(
         color=discord.Color.dark_gold(),
     )
 
-    # If retries are configured, voting will be repeated 
+    # If retries are configured, voting will be repeated
     if winning_option is None:
         raise Exception("No winner was found.")
 
@@ -148,16 +155,17 @@ async def get_vote_results(results, votes, options):
 
     return results
 
+
 def get_results_message(results, winning_option):
     total_votes = sum(results.values())
     message = f"Total votes: {total_votes}\n\n"
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
         message += f"Option `{option}` received `{votes}` votes ({percentage:.2f}%)\n\n"
-    
+
     if winning_option:
         message += f"The winner is `{winning_option}`.\n\n"
     else:
         message += "No winner was found.\n\n"
-        
+
     return message
