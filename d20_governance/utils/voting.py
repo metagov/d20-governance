@@ -1,7 +1,7 @@
 from typing import List
 import random
 import discord
-from d20_governance.utils.constants import CIRCLE_EMOJIS
+from d20_governance.utils.constants import CIRCLE_EMOJIS, GLOBAL_DECISION_MODULE
 from d20_governance.utils.utils import Quest
 from d20_governance.utils.decisions import *
 
