@@ -1,6 +1,5 @@
 from d20_governance.utils.constants import *
 from d20_governance.utils.utils import *
-import discord
 import random
 
 
@@ -10,14 +9,6 @@ async def majority_voting():
     Majority voting: A majority voting function
     """
     pass
-
-
-async def set_global_governance(decision_module: str = None):
-    global GLOBAL_DECISION_MODULE
-    if decision_module is None and GLOBAL_DECISION_MODULE is None:
-        GLOBAL_DECISION_MODULE = await set_decision_module()
-    GLOBAL_DECISION_MODULE = decision_module
-    print(f"Global Decision Module set to: {GLOBAL_DECISION_MODULE}")
 
 
 async def set_decision_module():

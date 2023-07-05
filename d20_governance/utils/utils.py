@@ -222,8 +222,8 @@ async def setup_server(guild):
         logging.info("Some necessary channels or categories are missing.")
 
 
-async def execute_action(ctx, bot, command, args, temp_channel):
-    print(f"Executing {command}")
+async def execute_action(ctx, bot, command, args, game_channel):
+    print(f"--\n>> Executing {command} with arguments {args}\n--")
 
     # Unfortunately we need to do this as a workaround for the fact that we can't easily get the context for the current channel.
     message_obj = None
@@ -232,14 +232,14 @@ async def execute_action(ctx, bot, command, args, temp_channel):
     while message_obj is None and attempts < max_attempts:
         try:
             # Get the last message object from the channel to set context
-            message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
+            message_obj = await game_channel.fetch_message(game_channel.last_message_id)
         except discord.NotFound:
             attempts += 1
             await asyncio.sleep(1)  # Delay before next attempt
 
     if message_obj is None:
         # If message_obj is still None, all attempts failed
-        error_message = f"Failed to fetch last message from channel {temp_channel.id} after {max_attempts} attempts."
+        error_message = f"Failed to fetch last message from channel {game_channel.id} after {max_attempts} attempts."
         print(error_message)
         logging.error(error_message)
         raise Exception("Failed to fetch last message from channel.")

@@ -142,8 +142,12 @@ user_message_count = {}
 # stores webhooks
 webhooks = []
 
-# CULTURE COMMANDS
-active_culture_modes = {}
+# GLOBAL CULTURE MODULES
+active_global_culture_modules = {}
+
+# GLOBAL DECISION MODULES
+active_global_decision_modules = {}
+
 
 # JOSH GAME # todo: move this out to game-specific file
 nicknames = [

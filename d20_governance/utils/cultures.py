@@ -107,7 +107,7 @@ def initialize_ritual_agreement(previous_message, new_message):
 
 async def turn_eloquence_on(ctx, channel_culture_modes):
     channel_culture_modes.append("ELOQUENCE")
-    active_culture_modes[ctx.channel] = channel_culture_modes
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
 
     embed = discord.Embed(title="Culture: ELOQUENCE", color=discord.Color.dark_gold())
     embed.set_thumbnail(
@@ -133,7 +133,7 @@ async def turn_eloquence_on(ctx, channel_culture_modes):
 
 async def turn_eloquence_off(ctx, channel_culture_modes):
     channel_culture_modes.remove("ELOQUENCE")
-    active_culture_modes[ctx.channel] = channel_culture_modes
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
 
     embed = discord.Embed(title="Culture: ELOQUENCE", color=discord.Color.dark_gold())
     embed.set_thumbnail(
@@ -154,7 +154,7 @@ async def turn_eloquence_off(ctx, channel_culture_modes):
 
 async def turn_obscurity_off(ctx, channel_culture_modes):
     channel_culture_modes.remove("OBSCURITY")
-    active_culture_modes[ctx.channel] = channel_culture_modes
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
 
     embed = discord.Embed(title=f"Culture: OBSCURITY", color=discord.Color.dark_gold())
     embed.set_thumbnail(
@@ -175,7 +175,7 @@ async def turn_obscurity_off(ctx, channel_culture_modes):
 
 async def turn_obscurity_on(ctx, channel_culture_modes):
     channel_culture_modes.append("OBSCURITY")
-    active_culture_modes[ctx.channel] = channel_culture_modes
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
 
     embed = discord.Embed(title=f"Culture: OBSCURITY", color=discord.Color.dark_gold())
     embed.set_thumbnail(

@@ -43,7 +43,7 @@ stages:
 
       There will be a majority-based vote in 2 minutes.
     actions:
-      - action: countdown 120 "until the next stage"
+      - action: countdown 120 "until making a deicison"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
@@ -54,7 +54,7 @@ stages:
       You have 30 seconds to vote on your community name.
     actions:
       - action: post_submissions
-      - action: set_global_governance majority
+      - action: set_global_decision_module "majority"
       - action: vote_submissions 'What should we call ourselves?' 30
         retries: 2
         retry_message: "You have failed to reach a majority vote. Voting commences again!"
@@ -80,7 +80,7 @@ stages:
 
       Type `/submit [message]`
     actions:
-      - action: countdown 120
+      - action: countdown 120 "until deliberation stage. Type /submit and your message now"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/proposals.png"
   
@@ -106,7 +106,7 @@ stages:
       community should pursue. What will animate your activities?
       There will be a majority based vote in 2 minutes.
     actions:
-      - action: countdown 120
+      - action: countdown 120 "until makking a deicison"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
@@ -117,11 +117,12 @@ stages:
       We have 30 seconds to vote on our community goal.
     actions:
       - action: post_submissions
-      - action: vote_submissions 'What should be the goal of our community?' majority 30
+      - action: set_global_decision_module "majority"
+      - action: vote_submissions 'What should be the goal of our community?' 30
         retries: 2
         retry_message: "You have failed to reach a majority vote. Voting commences again!"
         failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
-      - action: countdown 30
+      - action: countdown 30 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/goal.png"
   
@@ -143,7 +144,7 @@ stages:
   - stage: 'Submit Answers: First Action'
     message: "Take a moment to submit a proposal to the question: `What should our first action be?`.\n\n\U0001F3AF Be mindful that **consensus** will need to be achieved among the community for an action to be approved.\n\nYou have 2 minutes to submit an answer"
     actions:
-      - action: countdown 120
+      - action: countdown 120 "until deliberation. Type /submit and your message now"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/proposals.png"
   
@@ -168,7 +169,7 @@ stages:
 
        There will be a **consensus** based vote in 2 minutes
     actions:
-      - action: countdown 120
+      - action: countdown 120 "until making a decision"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
@@ -179,11 +180,12 @@ stages:
        We have 30 seconds to vote.
     actions:
       - action: post_submissions
-      - action: vote_submissions 'What should our first action be?' consensus 30
+      - action: set_global_decision_module "consensus"
+      - action: vote_submissions 'What should our first action be?' 30
         retries: 2
         retry_message: "You have failed to reach consensus. Voting commences again!"
         failure_message: "Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over."
-      - action: countdown 30
+      - action: countdown 30 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/vote.png"
   

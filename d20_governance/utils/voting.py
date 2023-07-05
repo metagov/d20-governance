@@ -20,6 +20,24 @@ consensus = (
 VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
 
 
+async def set_global_decision_module(ctx, decision_module: str = None):
+    channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
+
+    if len(channel_decision_modules) > 0:
+        channel_decision_modules = []
+
+    if decision_module is None and not channel_decision_modules:
+        decision_module = await set_decision_module()
+        print(decision_module)
+
+    channel_decision_modules.append(decision_module)
+    active_global_decision_modules[ctx.channel] = channel_decision_modules
+    print(
+        f"Global Decision Module set to: {channel_decision_modules} and {active_global_decision_modules}"
+    )
+    return channel_decision_modules
+
+
 class VoteView(discord.ui.View):
     def __init__(self, ctx, timeout):
         super().__init__(timeout=timeout)
@@ -73,12 +91,12 @@ async def vote(
     """
     Trigger a vote
     """
-    global GLOBAL_DECISION_MODULE
-    if GLOBAL_DECISION_MODULE == None:
-        GLOBAL_DECISION_MODULE = await set_global_governance(GLOBAL_DECISION_MODULE)
+    channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
 
-    decision_module = GLOBAL_DECISION_MODULE
+    if not channel_decision_modules:
+        channel_decision_modules = await set_global_decision_module(ctx)
 
+    decision_module = channel_decision_modules[0]
     print(f"A vote has been triggered. The decision module is: {decision_module}")
 
     if not options:

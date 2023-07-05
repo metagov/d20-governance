@@ -15,7 +15,7 @@ from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
-from d20_governance.utils.voting import vote, set_global_governance
+from d20_governance.utils.voting import vote, set_global_decision_module
 import traceback
 import sys
 
@@ -189,7 +189,15 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                 except Exception as e:
                     if retries > 0:
                         if hasattr(action, "retry_message") and action.retry_message:
+                            global MAJORITY_INPUT, CONSENSUS_INPUT
                             await quest.game_channel.send(action.retry_message)
+                            await quest.game_channel.send(
+                                "```You have a chance to change how you make decisions\nType the type of decision you want to use and +1 or -1 after.\nThe decision module with the most votes or first to 10 will be the new decision making module.\nyou have 30 seconds before the next vote.```"
+                            )
+                            MAJORITY_INPUT = 0
+                            CONSENSUS_INPUT = 0
+                            await display_decision_status(quest.game_channel.id)
+                            await asyncio.sleep(30)
                         retries -= 1
                     else:
                         if (
@@ -197,6 +205,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                             and action.failure_message
                         ):
                             await quest.game_channel.send(action.failure_message)
+                            await end(ctx, quest.game_channel)
                         raise Exception(
                             f"Failed to execute action {action.action}: {e}"
                         )
@@ -210,7 +219,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                 tokens = shlex.split(condition)
                 func_name, *args = tokens
                 func = globals()[func_name]
-                print(f"Invoking {func_name} with arguments {args}")  # Debugging line
+                print(
+                    f"⁂ Invoked: `{func_name}` in channel `{quest.game_channel}` with arguments {args}. Channel ID: {quest.game_channel.id}"
+                )  # Debugging line
                 tasks.append(func(*args))
             for future in asyncio.as_completed(tasks):
                 condition_result = await future
@@ -717,7 +728,7 @@ async def obscurity(ctx, mode: str = None, state: bool = None, timeout: int = No
     # A list of available obscurity modes
     available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
 
-    channel_culture_modes = active_culture_modes.get(ctx.channel, [])
+    channel_culture_modes = active_global_culture_modules.get(ctx.channel, [])
 
     # Turn on obscurity mode if not activated
     if state == True:
@@ -773,7 +784,7 @@ async def eloquence(ctx, state: bool = None, timeout: int = None):
     """
     global ELOQUENCE, ELOQUENCE_ACTIVATED
 
-    channel_culture_modes = active_culture_modes.get(ctx.channel, [])
+    channel_culture_modes = active_global_culture_modules.get(ctx.channel, [])
 
     # Turn on eloquence mode if not activated
     if state == True:
@@ -840,8 +851,8 @@ async def ritual(ctx):
     global RITUAL
     RITUAL = not RITUAL
     if RITUAL:
-        if "RITUAL" not in active_culture_modes:
-            active_culture_modes.append("RITUAL")
+        if "RITUAL" not in active_global_culture_modules:
+            active_global_culture_modules.append("RITUAL")
             embed = discord.Embed(
                 title="Culture: ritual", color=discord.Color.dark_gold()
             )
@@ -855,12 +866,12 @@ async def ritual(ctx):
             )
             embed.add_field(
                 name="ACTIVE CULTURE MODES:",
-                value=f"{', '.join(active_culture_modes)}",
+                value=f"{', '.join(active_global_culture_modules)}",
                 inline=False,
             )
             await ctx.send(embed=embed)
     else:
-        active_culture_modes.remove("RITUAL")
+        active_global_culture_modules.remove("RITUAL")
         embed = discord.Embed(title="Culture: ritual", color=discord.Color.dark_gold())
         # embed.set_thumbnail(
         #     url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/ritual.png"
@@ -872,7 +883,7 @@ async def ritual(ctx):
         )
         embed.add_field(
             name="ACTIVE CULTURE MODES:",
-            value=f"{', '.join(active_culture_modes)}",
+            value=f"{', '.join(active_global_culture_modules)}",
             inline=False,
         )
         await ctx.send(embed=embed)
@@ -1243,7 +1254,7 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
 @bot.event
 async def on_command(ctx):
     print(
-        f"Command Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+        f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
     )
 
 
@@ -1304,7 +1315,7 @@ async def process_message(message):
         filtered_message = message.content
 
         # Check if any modes are active deleted the original message
-        channel_culture_modes = active_culture_modes.get(message.channel, [])
+        channel_culture_modes = active_global_culture_modules.get(message.channel, [])
         if channel_culture_modes:
             await message.delete()
             filtered_message = await apply_culture_modes(
@@ -1342,32 +1353,49 @@ async def apply_culture_modes(modes, message, filtered_message):
                 filtered_message = obscure_function.camel_case()
         if mode == "ELOQUENCE":
             filtered_message = await filter_eloquence(filtered_message)
-    print(filtered_message)
     return filtered_message
 
 
 async def calculate_module_inputs(channel_id):
-    global SPECTRUM_SCALE, SPECTRUM_THRESHOLD, CONSENSUS_INPUT, MAJORITY_INPUT, ELOQUENCE_INPUT, OBSCURITY_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED, ELOQUENCE_ACTIVATED, OBSCURITY_ACTIVATED, ELOQUENCE, OBSCURITY
+    global SPECTRUM_SCALE, SPECTRUM_THRESHOLD, CONSENSUS_INPUT, MAJORITY_INPUT, ELOQUENCE_INPUT, OBSCURITY_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED, ELOQUENCE_ACTIVATED, OBSCURITY_ACTIVATED, ELOQUENCE, OBSCURITY, GLOBAL_DECISION_MODULE
 
     channel = bot.get_channel(channel_id)
     last_message = await channel.fetch_message(channel.last_message_id)
+    context = await bot.get_context(last_message)
 
     # Calculate majority input
-    if MAJORITY_INPUT > SPECTRUM_THRESHOLD and CONSENSUS_INPUT:
-        await channel.send("```Majority mode activated!```")
-        # majority_reached = True
-        # consensus_reached = False
+    if MAJORITY_INPUT > SPECTRUM_THRESHOLD:
+        channel_decision_modules = active_global_decision_modules.get(
+            context.channel, []
+        )
+        if len(channel_decision_modules) > 0:
+            channel_decision_modules = []
+            channel_decision_modules.append("majority")
+            active_global_decision_modules[context.channel] = channel_decision_modules
+        else:
+            channel_decision_modules.append("majority")
+            active_global_decision_modules[context.channel] = channel_decision_modules
+        global_decision_module = channel_decision_modules[0]
+        await channel.send(f"```{global_decision_module} mode activated!```")
 
     # Calculate consensus input
-    if CONSENSUS_INPUT > SPECTRUM_THRESHOLD and MAJORITY_INPUT:
-        await channel.send("```Consensus mode activated!```")
-        # majority_reached = False
-        # consensus_reached = True
+    if CONSENSUS_INPUT > SPECTRUM_THRESHOLD:
+        channel_decision_modules = active_global_decision_modules.get(
+            context.channel, []
+        )
+        if len(channel_decision_modules) > 0:
+            channel_decision_modules = []
+            channel_decision_modules.append("consensus")
+            active_global_decision_modules[context.channel] = channel_decision_modules
+        else:
+            channel_decision_modules.append("consensus")
+            active_global_decision_modules[context.channel] = channel_decision_modules
+        global_decision_module = channel_decision_modules[0]
+        await channel.send(f"```{global_decision_module} mode activated!```")
 
     # Calculate eloquence input
     if not ELOQUENCE_ACTIVATED and ELOQUENCE_INPUT > SPECTRUM_THRESHOLD:
         ELOQUENCE_ACTIVATED = True
-        context = await bot.get_context(last_message)
         function_name = "eloquence"
         if ELOQUENCE == False:
             function_to_call = globals().get(function_name)
@@ -1378,7 +1406,6 @@ async def calculate_module_inputs(channel_id):
             await eloquence(context)
     elif ELOQUENCE_ACTIVATED and ELOQUENCE_INPUT <= SPECTRUM_THRESHOLD:
         ELOQUENCE_ACTIVATED = False
-        context = await bot.get_context(last_message)
         if not ELOQUENCE:
             await eloquence(context, False)
         else:
