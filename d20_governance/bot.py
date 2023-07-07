@@ -4,9 +4,7 @@ import os
 import asyncio
 import logging
 from discord.ext import commands
-from interactions import Greedy
 from requests import options
-from ruamel.yaml import YAML
 from collections import OrderedDict
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *

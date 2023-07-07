@@ -1,9 +1,4 @@
-from typing import List
-from click import command
 import discord
-from discord.ext import commands
-from langchain import PromptTemplate
-from pytest import param
 import requests
 import random
 import base64
@@ -15,18 +10,18 @@ import datetime
 import string
 import asyncio
 import logging
-from pydub import AudioSegment
-from PIL import Image, ImageDraw, ImageFont
-from d20_governance.utils.constants import *
 import shlex
-from io import BytesIO
 import os
+
+from d20_governance.utils.constants import *
+
+from discord.ext import commands
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
-
-import shlex
 
 
 class Action:
