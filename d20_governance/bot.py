@@ -188,14 +188,14 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                 except Exception as e:
                     if retries > 0:
                         if hasattr(action, "retry_message") and action.retry_message:
-                            global MAJORITY_INPUT, CONSENSUS_INPUT
                             await quest.game_channel.send(action.retry_message)
                             await quest.game_channel.send(
-                                "```You have a chance to change how you make decisions\nType the type of decision you want to use and +1 or -1 after.\nThe decision module with the most votes or first to 10 will be the new decision making module.\nyou have 30 seconds before the next vote.```"
+                                "```* You have a chance to change how you make decisions\n\n* Type the type of decision you want to use and +1 or -1 after.\n\n* The decision module with the most votes or first to 10 will be the new decision making module.\n\n* You have 30 seconds before the next vote.```"
                             )
-                            MAJORITY_INPUT = 0
-                            CONSENSUS_INPUT = 0
-                            await display_decision_status(quest.game_channel.id)
+                            for input_key in decision_inputs:
+                                input_value = globals()[input_key.upper() + "_INPUT"]
+                                input_value = 0
+                            await display_decision_status(quest.game_channel)
                             await asyncio.sleep(30)
                         retries -= 1
                     else:
@@ -1355,12 +1355,8 @@ async def apply_culture_modes(modes, message, filtered_message):
     return filtered_message
 
 
-async def calculate_module_inputs(channel_id):
-    global SPECTRUM_SCALE, SPECTRUM_THRESHOLD, CONSENSUS_INPUT, MAJORITY_INPUT, ELOQUENCE_INPUT, OBSCURITY_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED, ELOQUENCE_ACTIVATED, OBSCURITY_ACTIVATED, ELOQUENCE, OBSCURITY, GLOBAL_DECISION_MODULE
-
-    channel = bot.get_channel(channel_id)
-    last_message = await channel.fetch_message(channel.last_message_id)
-    context = await bot.get_context(last_message)
+async def calculate_module_inputs(context):
+    global SPECTRUM_SCALE, SPECTRUM_THRESHOLD, MAJORITY_INPUT, CONSENSUS_INPUT, OBSCURITY_INPUT, ELOQUENCE_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED, ELOQUENCE_ACTIVATED, OBSCURITY_ACTIVATED, ELOQUENCE, OBSCURITY
 
     # Calculate majority input
     if MAJORITY_INPUT > SPECTRUM_THRESHOLD:
@@ -1375,7 +1371,7 @@ async def calculate_module_inputs(channel_id):
             channel_decision_modules.append("majority")
             active_global_decision_modules[context.channel] = channel_decision_modules
         global_decision_module = channel_decision_modules[0]
-        await channel.send(f"```{global_decision_module} mode activated!```")
+        await context.send(f"```{global_decision_module} mode activated!```")
 
     # Calculate consensus input
     if CONSENSUS_INPUT > SPECTRUM_THRESHOLD:
@@ -1390,7 +1386,7 @@ async def calculate_module_inputs(channel_id):
             channel_decision_modules.append("consensus")
             active_global_decision_modules[context.channel] = channel_decision_modules
         global_decision_module = channel_decision_modules[0]
-        await channel.send(f"```{global_decision_module} mode activated!```")
+        await context.send(f"```{global_decision_module} mode activated!```")
 
     # Calculate eloquence input
     if not ELOQUENCE_ACTIVATED and ELOQUENCE_INPUT > SPECTRUM_THRESHOLD:
@@ -1400,7 +1396,7 @@ async def calculate_module_inputs(channel_id):
             function_to_call = globals().get(function_name)
             await function_to_call(context, True)
         if ELOQUENCE == True:
-            await channel.send("```Eloquence mode already activated!```")
+            await context.send("```Eloquence mode already activated!```")
         if ELOQUENCE == None:
             await eloquence(context)
     elif ELOQUENCE_ACTIVATED and ELOQUENCE_INPUT <= SPECTRUM_THRESHOLD:
@@ -1414,21 +1410,19 @@ async def calculate_module_inputs(channel_id):
                 ELOQUENCE_ACTIVATED = True
             if ELOQUENCE_INPUT <= SPECTRUM_THRESHOLD:
                 ELOQUENCE_INPUT = SPECTRUM_SCALE
-                await display_culture_status(channel_id)
+                await display_culture_status(context)
 
     # Calculate obscurity input
     if not OBSCURITY_ACTIVATED and OBSCURITY_INPUT > SPECTRUM_THRESHOLD:
         OBSCURITY_ACTIVATED = True
-        context = await bot.get_context(last_message)
         if OBSCURITY == False:
             await obscurity(context, None, True)
         if OBSCURITY == True:
-            await channel.send("```Obscurity mode already activated!```")
+            await context.send("```Obscurity mode already activated!```")
         if OBSCURITY == None:
             await obscurity(context)
     elif OBSCURITY_ACTIVATED and OBSCURITY_INPUT <= SPECTRUM_THRESHOLD:
         OBSCURITY_ACTIVATED = False
-        context = await bot.get_context(last_message)
         if not OBSCURITY:
             await obscurity(context, None, False)
         else:
@@ -1438,110 +1432,60 @@ async def calculate_module_inputs(channel_id):
                 OBSCURITY_ACTIVATED = True
             if OBSCURITY_INPUT <= SPECTRUM_THRESHOLD:
                 OBSCURITY_INPUT = SPECTRUM_SCALE
-                await display_culture_status(channel_id)
+                await display_culture_status(context)
 
 
-async def display_decision_status(channel_id):
-    global CONSENSUS_INPUT, MAJORITY_INPUT, SPECTRUM_SCALE, SPECTRUM_THRESHOLD
-
-    channel = bot.get_channel(channel_id)
-
-    mode = "Anarchy"
-    if MAJORITY_INPUT <= SPECTRUM_THRESHOLD:
-        mode = "Democracy"
-
-    consensus_filled = int(min(CONSENSUS_INPUT, SPECTRUM_SCALE))
-    consensus_empty = SPECTRUM_SCALE - consensus_filled
-
-    majority_filled = int(min(MAJORITY_INPUT, SPECTRUM_SCALE))
-    majority_empty = SPECTRUM_SCALE - majority_filled
-
-    threshold_index = int(SPECTRUM_THRESHOLD)
-
-    consensus_progress_bar = "🟦" * consensus_filled + "🟨" * consensus_empty
-    consensus_progress_bar = (
-        consensus_progress_bar[:threshold_index]
-        + "📍"
-        + consensus_progress_bar[threshold_index:]
-    )
-
-    majority_progress_bar = "🟦" * majority_filled + "🟨" * majority_empty
-    majority_progress_bar = (
-        majority_progress_bar[:threshold_index]
-        + "📍"
-        + majority_progress_bar[threshold_index:]
-    )
-
+async def display_decision_status(context):
     embed = discord.Embed(
         title="Decision Display Status",
         color=discord.Color.green(),
     )
-    embed.add_field(
-        name="Consensus",
-        value=f"{consensus_progress_bar}",
-        inline=False,
-    )
-    embed.add_field(
-        name="Majority",
-        value=f"{majority_progress_bar}",
-        inline=False,
-    )
 
-    await channel.send(embed=embed)
-    await calculate_module_inputs(channel_id)
+    for input_key in decision_inputs:
+        input_value = globals()[input_key.upper() + "_INPUT"]
+
+        await make_input_progress_bar(embed, input_key, input_value)
+
+    await context.send(embed=embed)
+    await calculate_module_inputs(context)
 
 
-async def display_culture_status(channel_id):
-    global ELOQUENCE_INPUT, SPECTRUM_SCALE, SPECTRUM_THRESHOLD
-
-    channel = bot.get_channel(channel_id)
-
-    threshold_index = int(SPECTRUM_THRESHOLD)
-
-    eloquence_filled = int(min(ELOQUENCE_INPUT, SPECTRUM_SCALE))
-    eloquence_empty = SPECTRUM_SCALE - eloquence_filled
-
-    eloquence_progress_bar = "🟦" * eloquence_filled + "🟨" * eloquence_empty
-    eloquence_progress_bar = (
-        eloquence_progress_bar[:threshold_index]
-        + "📍"
-        + eloquence_progress_bar[threshold_index:]
-    )
-
-    obscurity_filled = int(min(OBSCURITY_INPUT, SPECTRUM_SCALE))
-    obscurity_empty = SPECTRUM_SCALE - obscurity_filled
-
-    obscurity_progress_bar = "🟦" * obscurity_filled + "🟨" * obscurity_empty
-    obscurity_progress_bar = (
-        obscurity_progress_bar[:threshold_index]
-        + "📍"
-        + obscurity_progress_bar[threshold_index:]
-    )
-
+async def display_culture_status(context):
     embed = discord.Embed(
         title="Culture Display Status",
         color=discord.Color.green(),
     )
-    embed.add_field(
-        name="Eloquence",
-        value=f"{eloquence_progress_bar}",
-        inline=False,
-    )
-    embed.add_field(
-        name="Obscurity",
-        value=f"{obscurity_progress_bar}",
-        inline=False,
+
+    for input_key in culture_inputs:
+        input_value = globals()[input_key.upper() + "_INPUT"]
+        await make_input_progress_bar(embed, input_key, input_value)
+
+    await context.send(embed=embed)
+    await calculate_module_inputs(context)
+
+
+async def make_input_progress_bar(embed, input_key, input_value):
+    input_filled = int(min(input_value, SPECTRUM_SCALE))
+    input_empty = SPECTRUM_SCALE - input_filled
+
+    progress_bar = "🟦" * input_filled + "🟨" * input_empty
+    progress_bar = (
+        progress_bar[:SPECTRUM_THRESHOLD] + "📍" + progress_bar[SPECTRUM_THRESHOLD:]
     )
 
-    await channel.send(embed=embed)
-    await calculate_module_inputs(channel_id)
+    embed.add_field(
+        name=f"{input_key.capitalize()}",
+        value=f"{progress_bar}",
+        inline=False,
+    )
 
 
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    global CONSENSUS_INPUT, MAJORITY_INPUT, ELOQUENCE_INPUT, OBSCURITY_INPUT
-    channel_id = message.channel.id
+    channel = bot.get_channel(message.channel.id)
+    last_message = await channel.fetch_message(channel.last_message_id)
+    context = await bot.get_context(last_message)
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
             return
@@ -1560,69 +1504,45 @@ async def on_message(message):
         if message.content.startswith("※"):
             return
 
-        if message.content.lower() == "consensus +1":
-            if CONSENSUS_INPUT >= 10:
-                pass
-            else:
-                CONSENSUS_INPUT += 1
-            await display_decision_status(channel_id)
-            return
+        for input_key in decision_inputs:
+            if (
+                message.content.lower() == f"{input_key} +1"
+                or message.content.lower() == f"{input_key} -1"
+            ):
+                if message.content.lower() == f"{input_key} +1":
+                    if decision_inputs[input_key] >= 10:
+                        pass
+                    else:
+                        decision_inputs[input_key] += 1
+                        globals()[input_key.upper() + "_INPUT"] += 1
+                else:
+                    if decision_inputs[input_key] <= 0:
+                        pass
+                    else:
+                        decision_inputs[input_key] -= 1
+                        globals()[input_key.upper() + "_INPUT"] -= 1
+                await display_decision_status(context)
+                return
 
-        if message.content.lower() == "consensus -1":
-            if CONSENSUS_INPUT <= 0:
-                pass
-            else:
-                CONSENSUS_INPUT -= 1
-            await display_decision_status(channel_id)
-            return
-
-        if message.content.lower() == "majority +1":
-            if MAJORITY_INPUT >= 10:
-                pass
-            else:
-                MAJORITY_INPUT += 1
-            await display_decision_status(channel_id)
-            return
-
-        if message.content.lower() == "majority -1":
-            if MAJORITY_INPUT <= 0:
-                pass
-            else:
-                MAJORITY_INPUT -= 1
-            await display_decision_status(channel_id)
-            return
-
-        if message.content.lower() == "eloquence +1":
-            if ELOQUENCE_INPUT >= 10:
-                pass
-            else:
-                ELOQUENCE_INPUT += 1
-            await display_culture_status(channel_id)
-            return
-
-        if message.content.lower() == "eloquence -1":
-            if ELOQUENCE_INPUT <= 0:
-                pass
-            else:
-                ELOQUENCE_INPUT -= 1
-            await display_culture_status(channel_id)
-            return
-
-        if message.content.lower() == "obscurity +1":
-            if OBSCURITY_INPUT >= 10:
-                pass
-            else:
-                OBSCURITY_INPUT += 1
-            await display_culture_status(channel_id)
-            return
-
-        if message.content.lower() == "obscurity -1":
-            if OBSCURITY_INPUT <= 0:
-                pass
-            else:
-                OBSCURITY_INPUT -= 1
-            await display_culture_status(channel_id)
-            return
+        for input_key in culture_inputs:
+            if (
+                message.content.lower() == f"{input_key} +1"
+                or message.content.lower() == f"{input_key} -1"
+            ):
+                if message.content.lower() == f"{input_key} +1":
+                    if culture_inputs[input_key] >= 10:
+                        pass
+                    else:
+                        culture_inputs[input_key] += 1
+                        globals()[input_key.upper() + "_INPUT"] += 1
+                else:
+                    if culture_inputs[input_key] <= 0:
+                        pass
+                    else:
+                        culture_inputs[input_key] -= 1
+                        globals()[input_key.upper() + "_INPUT"] -= 1
+                await display_culture_status(context)
+                return
 
         await process_message(message)
     except Exception as e:

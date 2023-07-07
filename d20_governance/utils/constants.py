@@ -126,6 +126,16 @@ CONSENSUS_REACHED = False
 ELOQUENCE_ACTIVATED = False
 OBSCURITY_ACTIVATED = False
 
+decision_inputs = {
+    "consensus": CONSENSUS_INPUT,
+    "majority": MAJORITY_INPUT,
+}
+
+culture_inputs = {
+    "eloquence": ELOQUENCE_INPUT,
+    "obscurity": OBSCURITY_INPUT,
+}
+
 GLOBAL_DECISION_MODULE = None
 
 # INTERNAL ACCESS CONTROL SETTINGS
