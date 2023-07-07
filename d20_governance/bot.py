@@ -2,11 +2,8 @@ import argparse
 import discord
 import os
 import asyncio
-import datetime
 import logging
 from discord.ext import commands
-from discord import Webhook
-from typing import Set, List
 from interactions import Greedy
 from requests import options
 from ruamel.yaml import YAML
@@ -30,6 +27,10 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="/", description=description, intents=intents)
 bot.remove_command("help")
+
+
+def run_bot():
+    bot.run(token=DISCORD_TOKEN)
 
 
 @bot.command()
@@ -1670,14 +1671,3 @@ def check_dirs():
         with open(LOG_FILE_NAME, "w") as f:
             f.write("This is a new log file.")
             print(f"Creates {LOG_FILE_NAME} file")
-
-
-if __name__ == "__main__":
-    try:
-        with open(f"{LOGGING_PATH}/bot.log", "a") as f:
-            f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
-        bot.run(token=DISCORD_TOKEN)
-    finally:
-        clean_temp_files()
-        with open(f"{LOGGING_PATH}/bot.log", "a") as f:
-            f.write(f"\n--- Bot stopped at {datetime.datetime.now()} ---\n\n")
