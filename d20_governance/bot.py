@@ -1391,6 +1391,9 @@ async def calculate_module_inputs(context):
     for input_key in culture_inputs:
         global_key = globals()[input_key.upper()]
         global_input_key = globals()[input_key.upper() + "_INPUT"]
+        # TODO: Is there a better way of changing the global variable dynamically
+        # I tried global_key_activation = globals()[input_key.upper() + "_ACTIVATED"]
+        # But global_key_activation shadows the global var and doesn't change the global bool value
         if (
             not globals()[input_key.upper() + "_ACTIVATED"]
             and global_input_key > SPECTRUM_THRESHOLD
