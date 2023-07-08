@@ -3,16 +3,16 @@ import discord
 import os
 import asyncio
 import logging
+import traceback
+import sys
+
 from discord.ext import commands
-from requests import options
-from collections import OrderedDict
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
-import traceback
-import sys
+
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -643,7 +643,7 @@ async def make_game_channel(ctx, quest: Quest):
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds, text: str = None):
-    if bot.quest.fast_mode:
+    if hasattr(bot, "quest") and bot.quest.fast_mode:
         await asyncio.sleep(7)
         return
 
@@ -1356,9 +1356,8 @@ async def apply_culture_modes(modes, message, filtered_message):
 
 
 async def calculate_module_inputs(context):
-    global SPECTRUM_SCALE, SPECTRUM_THRESHOLD, MAJORITY_INPUT, CONSENSUS_INPUT, OBSCURITY_INPUT, ELOQUENCE_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED, ELOQUENCE_ACTIVATED, OBSCURITY_ACTIVATED, ELOQUENCE, OBSCURITY
+    global MAJORITY_INPUT, CONSENSUS_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED
 
-    # Calculate majority input
     if MAJORITY_INPUT > SPECTRUM_THRESHOLD:
         channel_decision_modules = active_global_decision_modules.get(
             context.channel, []
@@ -1388,51 +1387,53 @@ async def calculate_module_inputs(context):
         global_decision_module = channel_decision_modules[0]
         await context.send(f"```{global_decision_module} mode activated!```")
 
-    # Calculate eloquence input
-    if not ELOQUENCE_ACTIVATED and ELOQUENCE_INPUT > SPECTRUM_THRESHOLD:
-        ELOQUENCE_ACTIVATED = True
-        function_name = "eloquence"
-        if ELOQUENCE == False:
-            function_to_call = globals().get(function_name)
-            await function_to_call(context, True)
-        if ELOQUENCE == True:
-            await context.send("```Eloquence mode already activated!```")
-        if ELOQUENCE == None:
-            await eloquence(context)
-    elif ELOQUENCE_ACTIVATED and ELOQUENCE_INPUT <= SPECTRUM_THRESHOLD:
-        ELOQUENCE_ACTIVATED = False
-        if not ELOQUENCE:
-            await eloquence(context, False)
-        else:
-            # timeout eloquence if global eloquence mode is True
-            await eloquence(context, False, 20)
-            if not ELOQUENCE_ACTIVATED:
-                ELOQUENCE_ACTIVATED = True
-            if ELOQUENCE_INPUT <= SPECTRUM_THRESHOLD:
-                ELOQUENCE_INPUT = SPECTRUM_SCALE
-                await display_culture_status(context)
+    # Calculate culture inputs
+    for input_key in culture_inputs:
+        global_key = globals()[input_key.upper()]
+        global_input_key = globals()[input_key.upper() + "_INPUT"]
+        if (
+            not globals()[input_key.upper() + "_ACTIVATED"]
+            and global_input_key > SPECTRUM_THRESHOLD
+        ):
+            globals()[input_key.upper() + "_ACTIVATED"] = True
+            if global_key == False:
+                function_to_call = globals().get(input_key)
+                if input_key == "obscurity":
+                    await function_to_call(context, None, True)
+                await function_to_call(context, True)
+            if global_key == True:
+                await context.send(
+                    f"```{input_key.capitalize()} mode already activated!```"
+                )
+            if global_key == None:
+                function_to_call = globals().get(input_key)
+                await function_to_call(context)
+        elif (
+            globals()[input_key.upper() + "_ACTIVATED"]
+            and global_input_key <= SPECTRUM_THRESHOLD
+        ):
+            globals()[input_key.upper() + "_ACTIVATED"] = False
+            if not global_key:
+                function_to_call = globals().get(input_key)
+                if input_key == "obscurity":
+                    await function_to_call(context, None, False)
+                await function_to_call(context, False)
+            else:
+                function_to_call = globals().get(input_key)
+                if input_key == "obscurity":
+                    await function_to_call(context, None, False, 20)
+                await function_to_call(context, False, 20)
+                if not globals()[input_key.upper() + "_ACTIVATED"]:
+                    globals()[input_key.upper() + "_ACTIVATED"] = True
+                if global_input_key <= SPECTRUM_THRESHOLD:
+                    global_input_key <= SPECTRUM_SCALE
+                    await display_culture_status(context)
 
-    # Calculate obscurity input
-    if not OBSCURITY_ACTIVATED and OBSCURITY_INPUT > SPECTRUM_THRESHOLD:
-        OBSCURITY_ACTIVATED = True
-        if OBSCURITY == False:
-            await obscurity(context, None, True)
-        if OBSCURITY == True:
-            await context.send("```Obscurity mode already activated!```")
-        if OBSCURITY == None:
-            await obscurity(context)
-    elif OBSCURITY_ACTIVATED and OBSCURITY_INPUT <= SPECTRUM_THRESHOLD:
-        OBSCURITY_ACTIVATED = False
-        if not OBSCURITY:
-            await obscurity(context, None, False)
-        else:
-            # timeout obscurity if global obscurity mode is True
-            await obscurity(context, None, False, 20)
-            if not OBSCURITY_ACTIVATED:
-                OBSCURITY_ACTIVATED = True
-            if OBSCURITY_INPUT <= SPECTRUM_THRESHOLD:
-                OBSCURITY_INPUT = SPECTRUM_SCALE
-                await display_culture_status(context)
+
+@bot.command()
+async def show_governance_status(ctx):
+    await display_culture_status(ctx)
+    await display_decision_status(ctx)
 
 
 async def display_decision_status(context):
@@ -1442,9 +1443,9 @@ async def display_decision_status(context):
     )
 
     for input_key in decision_inputs:
-        input_value = globals()[input_key.upper() + "_INPUT"]
+        global_input_key = globals()[input_key.upper() + "_INPUT"]
 
-        await make_input_progress_bar(embed, input_key, input_value)
+        await make_input_progress_bar(embed, input_key, global_input_key)
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
@@ -1457,15 +1458,15 @@ async def display_culture_status(context):
     )
 
     for input_key in culture_inputs:
-        input_value = globals()[input_key.upper() + "_INPUT"]
-        await make_input_progress_bar(embed, input_key, input_value)
+        global_input_key = globals()[input_key.upper() + "_INPUT"]
+        await make_input_progress_bar(embed, input_key, global_input_key)
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
 
 
-async def make_input_progress_bar(embed, input_key, input_value):
-    input_filled = int(min(input_value, SPECTRUM_SCALE))
+async def make_input_progress_bar(embed, input_key, global_input_key):
+    input_filled = int(min(global_input_key, SPECTRUM_SCALE))
     input_empty = SPECTRUM_SCALE - input_filled
 
     progress_bar = "🟦" * input_filled + "🟨" * input_empty
