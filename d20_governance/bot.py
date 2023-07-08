@@ -1390,13 +1390,13 @@ async def calculate_module_inputs(context):
     # Calculate culture inputs
     for input_key in culture_inputs:
         global_key = globals()[input_key.upper()]
-        global_input_key = globals()[input_key.upper() + "_INPUT"]
+        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
         # TODO: Is there a better way of changing the global variable dynamically
         # I tried global_key_activation = globals()[input_key.upper() + "_ACTIVATED"]
         # But global_key_activation shadows the global var and doesn't change the global bool value
         if (
             not globals()[input_key.upper() + "_ACTIVATED"]
-            and global_input_key > SPECTRUM_THRESHOLD
+            and global_key_input_value > SPECTRUM_THRESHOLD
         ):
             globals()[input_key.upper() + "_ACTIVATED"] = True
             if global_key == False:
@@ -1413,7 +1413,7 @@ async def calculate_module_inputs(context):
                 await function_to_call(context)
         elif (
             globals()[input_key.upper() + "_ACTIVATED"]
-            and global_input_key <= SPECTRUM_THRESHOLD
+            and global_key_input_value <= SPECTRUM_THRESHOLD
         ):
             globals()[input_key.upper() + "_ACTIVATED"] = False
             if not global_key:
@@ -1428,8 +1428,8 @@ async def calculate_module_inputs(context):
                 await function_to_call(context, False, 20)
                 if not globals()[input_key.upper() + "_ACTIVATED"]:
                     globals()[input_key.upper() + "_ACTIVATED"] = True
-                if global_input_key <= SPECTRUM_THRESHOLD:
-                    global_input_key <= SPECTRUM_SCALE
+                if global_key_input_value <= SPECTRUM_THRESHOLD:
+                    global_key_input_value <= SPECTRUM_SCALE
                     await display_culture_status(context)
 
 
@@ -1446,9 +1446,9 @@ async def display_decision_status(context):
     )
 
     for input_key in decision_inputs:
-        global_input_key = globals()[input_key.upper() + "_INPUT"]
+        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
 
-        await make_input_progress_bar(embed, input_key, global_input_key)
+        await make_input_progress_bar(embed, input_key, global_key_input_value)
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
@@ -1461,15 +1461,15 @@ async def display_culture_status(context):
     )
 
     for input_key in culture_inputs:
-        global_input_key = globals()[input_key.upper() + "_INPUT"]
-        await make_input_progress_bar(embed, input_key, global_input_key)
+        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
+        await make_input_progress_bar(embed, input_key, global_key_input_value)
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
 
 
-async def make_input_progress_bar(embed, input_key, global_input_key):
-    input_filled = int(min(global_input_key, SPECTRUM_SCALE))
+async def make_input_progress_bar(embed, input_key, global_key_input_value):
+    input_filled = int(min(global_key_input_value, SPECTRUM_SCALE))
     input_empty = SPECTRUM_SCALE - input_filled
 
     progress_bar = "🟦" * input_filled + "🟨" * input_empty
@@ -1509,41 +1509,43 @@ async def on_message(message):
             return
 
         for input_key in decision_inputs:
+            input_value = decision_inputs[input_key]
             if (
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
                 if message.content.lower() == f"{input_key} +1":
-                    if decision_inputs[input_key] >= 10:
+                    if input_value >= 10:
                         pass
                     else:
-                        decision_inputs[input_key] += 1
+                        input_value += 1
                         globals()[input_key.upper() + "_INPUT"] += 1
                 else:
-                    if decision_inputs[input_key] <= 0:
+                    if input_value <= 0:
                         pass
                     else:
-                        decision_inputs[input_key] -= 1
+                        input_value -= 1
                         globals()[input_key.upper() + "_INPUT"] -= 1
                 await display_decision_status(context)
                 return
 
         for input_key in culture_inputs:
+            input_value = culture_inputs[input_key]
             if (
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
                 if message.content.lower() == f"{input_key} +1":
-                    if culture_inputs[input_key] >= 10:
+                    if input_values >= 10:
                         pass
                     else:
-                        culture_inputs[input_key] += 1
+                        input_values += 1
                         globals()[input_key.upper() + "_INPUT"] += 1
                 else:
-                    if culture_inputs[input_key] <= 0:
+                    if input_values <= 0:
                         pass
                     else:
-                        culture_inputs[input_key] -= 1
+                        input_values -= 1
                         globals()[input_key.upper() + "_INPUT"] -= 1
                 await display_culture_status(context)
                 return
