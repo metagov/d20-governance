@@ -91,6 +91,9 @@ async def vote(
     """
     Trigger a vote
     """
+    if quest.fast_mode:
+        timeout = 7
+
     channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
 
     if not channel_decision_modules:

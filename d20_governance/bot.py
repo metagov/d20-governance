@@ -108,7 +108,7 @@ async def start_quest(ctx, quest: Quest):
                 image_path=stage.get(QUEST_IMAGE_PATH_KEY),
             )
 
-            print(f"Processing stage {stage.name}")
+            print(f"↷ Processing stage {stage.name}")
 
             await process_stage(ctx, stage, quest)
 
@@ -175,6 +175,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
 
     async def action_runner():
         for action in actions:
+            game_channel_ctx = await get_channel_context(bot, quest.game_channel)
             command_name = action.action
             if command_name is None:
                 raise Exception(f"Command {command_name} not found.")
@@ -183,29 +184,49 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
             retries = action.retries if hasattr(action, "retries") else 0
             while retries >= 0:
                 try:
-                    await execute_action(ctx, bot, command, args, quest.game_channel)
+                    await execute_action(game_channel_ctx, command, args)
                     break
                 except Exception as e:
                     if retries > 0:
+                        print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
-                            await quest.game_channel.send(action.retry_message)
-                            await quest.game_channel.send(
+                            await clear_decision_status(game_channel_ctx)
+                            await game_channel_ctx.send(action.retry_message)
+                            await game_channel_ctx.send(
                                 "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
                             )
-                            await clear_decision_status(quest.game_channel)
-                            await display_decision_status(quest.game_channel)
-                            await quest.game_channel.send(
-                                "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 30 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 30 seconds before the next decision is retried. ⏳```"
+                            await display_decision_status(game_channel_ctx)
+                            await game_channel_ctx.send(
+                                "```👀--Instructions--sss👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
                             )
-                            await asyncio.sleep(30)
-                        retries -= 1
+                            bypass_sleep = False
+                            timeout = 0
+                            while True:
+                                condition_result = await calculate_module_inputs(
+                                    game_channel_ctx, retry=True, tally=False
+                                )
+                                if condition_result:
+                                    bypass_sleep = True
+                                    print("Bypass is True")
+                                if bypass_sleep:
+                                    break
+                                timeout += 1
+                                print(f"⧗ Set New Decision Timeout = {timeout}")
+                                if timeout == 10:
+                                    print("Tallying Inputs")
+                                    await calculate_module_inputs(
+                                        game_channel_ctx, retry=True, tally=True
+                                    )
+                                    break
+                                await asyncio.sleep(1)
+                            retries -= 1
                     else:
                         if (
                             hasattr(action, "failure_message")
                             and action.failure_message
                         ):
-                            await quest.game_channel.send(action.failure_message)
-                            await end(ctx, quest.game_channel)
+                            await game_channel_ctx.send(action.failure_message)
+                            await end(ctx, quest)
                         raise Exception(
                             f"Failed to execute action {action.action}: {e}"
                         )
@@ -241,7 +262,7 @@ async def all_submissions_submitted():
         if len(joined_players) == len(players_to_submissions):
             print("All submissions submitted.")
             return True
-        print("Waiting for all submissions to be submitted.")
+        print("⧗ Waiting for all submissions to be submitted.")
         await asyncio.sleep(1)  # Wait for a second before checking again
 
 
@@ -263,7 +284,7 @@ async def end(ctx, quest: Quest):
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
     if quest.game_channel is not None:
         await quest.game_channel.send(
-            f"**The game is over. This channel is now archived.**"
+            "```👋👋👋\n\nThe game is over. This channel is now archived.```"
         )
         await quest.game_channel.edit(category=archive_category)
         overwrites = {
@@ -645,8 +666,7 @@ async def make_game_channel(ctx, quest: Quest):
 # @commands.check(lambda ctx: False)
 async def countdown(ctx, timeout_seconds, text: str = None):
     if hasattr(bot, "quest") and bot.quest.fast_mode:
-        await asyncio.sleep(7)
-        return
+        timeout_seconds = 7
 
     # TODO: make this better
     remaining_seconds = int(timeout_seconds)
@@ -672,7 +692,7 @@ async def countdown(ctx, timeout_seconds, text: str = None):
         await asyncio.sleep(sleep_interval)
 
     await message.edit(content="```⏲️ Counting down finished.```")
-    print("Countdown finished.")
+    print("⧗ Countdown finished.")
 
 
 @bot.command()
@@ -1356,30 +1376,106 @@ async def apply_culture_modes(modes, message, filtered_message):
     return filtered_message
 
 
-async def calculate_module_inputs(context):
-    global MAJORITY_INPUT, CONSENSUS_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED
+# GOVERNANCE INPUT
+@bot.command()
+async def show_governance_status(ctx):
+    await display_culture_status(ctx)
+    await display_decision_status(ctx)
 
-    # Calculate decision input
+
+async def clear_decision_status(ctx):
+    for input_key in decision_inputs:
+        globals()[input_key.upper() + "_INPUT"] = 0
+
+
+async def governance_input_processing(context, message, input_key, display_function):
+    if message.content.lower() == f"{input_key} +1":
+        if globals()[input_key.upper() + "_INPUT"] < 10:
+            globals()[input_key.upper() + "_INPUT"] += 1
+    else:
+        if globals()[input_key.upper() + "_INPUT"] > 0:
+            globals()[input_key.upper() + "_INPUT"] -= 1
+    # function_to_call = globals().get(display_function)
+    # function_to_call(context)
+    await display_function(context)
+    return
+
+
+async def check_if_values_tied(input_values):
+    sorted_input_values = sorted(input_values, reverse=True)
+    print(sorted_input_values)
+    max_value = sorted_input_values[0]
+
+    count = sorted_input_values.count(max_value)
+    if count >= 2:
+        return True
+    else:
+        return False
+
+
+async def calculate_module_inputs(context, retry=None, tally=None):
+    # Calculate decision inputs if retry True
+    decision_input_values = []
     for input_key in decision_inputs:
         global_key_input_value = globals()[input_key.upper() + "_INPUT"]
-
-        if global_key_input_value > SPECTRUM_THRESHOLD:
-            channel_decision_modules = active_global_decision_modules.get(
-                context.channel, []
-            )
-            if len(channel_decision_modules) > 0:
-                channel_decision_modules = []
-                channel_decision_modules.append(input_key)
-                active_global_decision_modules[
-                    context.channel
-                ] = channel_decision_modules
+        decision_input_values.append(global_key_input_value)
+        print(f"decision input values = {decision_input_values}")
+        if retry == True:
+            decision_set = None
+            if not tally:
+                print("not tally")
+                print(f"global_key_input_value: {global_key_input_value}")
+                if global_key_input_value == SPECTRUM_SCALE:
+                    channel_decision_modules = active_global_decision_modules.get(
+                        context.channel, []
+                    )
+                    if len(channel_decision_modules) > 0:
+                        channel_decision_modules = []
+                        channel_decision_modules.append(input_key)
+                        active_global_decision_modules[
+                            context.channel
+                        ] = channel_decision_modules
+                    else:
+                        channel_decision_modules.append(input_key)
+                        active_global_decision_modules[
+                            context.channel
+                        ] = channel_decision_modules
+                    decision_set = True
+                    global_decision_module = channel_decision_modules[0]
+                    await context.send(
+                        f"```{global_decision_module} mode activated!```"
+                    )
+                    return decision_set
             else:
-                channel_decision_modules.append(input_key)
-                active_global_decision_modules[
-                    context.channel
-                ] = channel_decision_modules
-            global_decision_module = channel_decision_modules[0]
-            await context.send(f"```{global_decision_module} mode activated!```")
+                print("tally")
+                are_tied = await check_if_values_tied(decision_input_values)
+                print(are_tied)
+                if not are_tied:
+                    print("not tied")
+                    new_decison_module = max(decision_inputs, key=decision_inputs.get)
+                    print(new_decison_module)
+                    channel_decision_modules = active_global_decision_modules.get(
+                        context.channel, []
+                    )
+                    if len(channel_decision_modules) > 0:
+                        channel_decision_modules = []
+                        channel_decision_modules.append(new_decison_module)
+                        active_global_decision_modules[
+                            context.channel
+                        ] = channel_decision_modules
+                    else:
+                        channel_decision_modules.append(new_decison_module)
+                        active_global_decision_modules[
+                            context.channel
+                        ] = channel_decision_modules
+                    global_decision_module = channel_decision_modules[0]
+                    await context.send(
+                        f"```{global_decision_module} mode activated!```"
+                    )
+                else:
+                    await context.send(
+                        f"```Poll resulted in tie. Previous decision mode kept.```"
+                    )
 
     # Calculate culture inputs
     for input_key in culture_inputs:
@@ -1395,9 +1491,7 @@ async def calculate_module_inputs(context):
             globals()[input_key.upper() + "_ACTIVATED"] = True
             if global_key == False:
                 function_to_call = globals().get(input_key)
-                if input_key == "obscurity":
-                    await function_to_call(context, None, True)
-                await function_to_call(context, True)
+                await function_to_call(context, state=True)
             if global_key == True:
                 await context.send(
                     f"```{input_key.capitalize()} mode already activated!```"
@@ -1412,30 +1506,16 @@ async def calculate_module_inputs(context):
             globals()[input_key.upper() + "_ACTIVATED"] = False
             if not global_key:
                 function_to_call = globals().get(input_key)
-                if input_key == "obscurity":
-                    await function_to_call(context, None, False)
-                await function_to_call(context, False)
+                await function_to_call(context, state=False)
             else:
                 function_to_call = globals().get(input_key)
-                if input_key == "obscurity":
-                    await function_to_call(context, None, False, 20)
-                await function_to_call(context, False, 20)
+                await function_to_call(context, state=False, timeout=20)
                 if not globals()[input_key.upper() + "_ACTIVATED"]:
                     globals()[input_key.upper() + "_ACTIVATED"] = True
                 if global_key_input_value <= SPECTRUM_THRESHOLD:
-                    global_key_input_value <= SPECTRUM_SCALE
+                    global_key_input_value = SPECTRUM_SCALE
+                    globals()[input_key.upper() + "_INPUT"] = SPECTRUM_SCALE
                     await display_culture_status(context)
-
-
-@bot.command()
-async def show_governance_status(ctx):
-    await display_culture_status(ctx)
-    await display_decision_status(ctx)
-
-
-async def clear_decision_status(ctx):
-    for input_key in decision_inputs:
-        globals()[input_key.upper() + "_INPUT"] = 0
 
 
 async def display_decision_status(context):
@@ -1446,8 +1526,16 @@ async def display_decision_status(context):
 
     for input_key in decision_inputs:
         global_key_input_value = globals()[input_key.upper() + "_INPUT"]
+        input_filled = int(min(global_key_input_value, SPECTRUM_SCALE))
+        input_empty = SPECTRUM_SCALE - input_filled
 
-        await make_input_progress_bar(embed, input_key, global_key_input_value)
+        progress_bar = "🟦" * input_filled + "🟨" * input_empty
+
+        embed.add_field(
+            name=f"{input_key.capitalize()}",
+            value=f"{progress_bar}",
+            inline=False,
+        )
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
@@ -1461,26 +1549,22 @@ async def display_culture_status(context):
 
     for input_key in culture_inputs:
         global_key_input_value = globals()[input_key.upper() + "_INPUT"]
-        await make_input_progress_bar(embed, input_key, global_key_input_value)
+        input_filled = int(min(global_key_input_value, SPECTRUM_SCALE))
+        input_empty = SPECTRUM_SCALE - input_filled
+
+        progress_bar = "🟦" * input_filled + "🟨" * input_empty
+        progress_bar = (
+            progress_bar[:SPECTRUM_THRESHOLD] + "📍" + progress_bar[SPECTRUM_THRESHOLD:]
+        )
+
+        embed.add_field(
+            name=f"{input_key.capitalize()}",
+            value=f"{progress_bar}",
+            inline=False,
+        )
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
-
-
-async def make_input_progress_bar(embed, input_key, global_key_input_value):
-    input_filled = int(min(global_key_input_value, SPECTRUM_SCALE))
-    input_empty = SPECTRUM_SCALE - input_filled
-
-    progress_bar = "🟦" * input_filled + "🟨" * input_empty
-    progress_bar = (
-        progress_bar[:SPECTRUM_THRESHOLD] + "📍" + progress_bar[SPECTRUM_THRESHOLD:]
-    )
-
-    embed.add_field(
-        name=f"{input_key.capitalize()}",
-        value=f"{progress_bar}",
-        inline=False,
-    )
 
 
 # ON MESSAGE
@@ -1508,45 +1592,23 @@ async def on_message(message):
             return
 
         for input_key in decision_inputs:
-            input_value = decision_inputs[input_key]
             if (
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
-                if message.content.lower() == f"{input_key} +1":
-                    if input_value >= 10:
-                        pass
-                    else:
-                        input_value += 1
-                        globals()[input_key.upper() + "_INPUT"] += 1
-                else:
-                    if input_value <= 0:
-                        pass
-                    else:
-                        input_value -= 1
-                        globals()[input_key.upper() + "_INPUT"] -= 1
-                await display_decision_status(context)
+                await governance_input_processing(
+                    context, message, input_key, display_decision_status
+                )
                 return
 
         for input_key in culture_inputs:
-            input_value = culture_inputs[input_key]
             if (
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
-                if message.content.lower() == f"{input_key} +1":
-                    if input_values >= 10:
-                        pass
-                    else:
-                        input_values += 1
-                        globals()[input_key.upper() + "_INPUT"] += 1
-                else:
-                    if input_values <= 0:
-                        pass
-                    else:
-                        input_values -= 1
-                        globals()[input_key.upper() + "_INPUT"] -= 1
-                await display_culture_status(context)
+                await governance_input_processing(
+                    context, message, input_key, display_culture_status
+                )
                 return
 
         await process_message(message)

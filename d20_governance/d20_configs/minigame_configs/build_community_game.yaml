@@ -1,7 +1,7 @@
 title: 'Governance Game: Build a Community'
 stages:
   - stage: Introduction
-    message: "Welcome to the Build a Community Governance Simulator!\n\n You are tasked with building a new community from scratch and have three questions to collectively answer. However, this simulation takes place in the future, after a \U0001F914 **new confusion** \U0001F914 has set in. Deliberation on the internet is now randomly subjected to communication collapses \U0001F631.\n\n While things may at first appear normal, over time you will experience new challenges in making decisions. Be prepared to adapt or risk remaining in the new confusion for forever!"
+    message: "Welcome to the Build a Community Governance Simulator!\n\nYou are tasked with building a new community from scratch and have three questions to collectively answer. However, this simulation takes place in the future, after a \U0001F914 **new confusion** \U0001F914 has set in. Deliberation on the internet is now randomly subjected to communication collapses \U0001F631.\n\n While things may at first appear normal, over time you will experience new challenges in making decisions. Be prepared to adapt or risk remaining in the new confusion for forever!"
     actions: []
     progress_conditions: ["timeout 10"]
     image_path: "assets/imgs/pre_generated/online_community.png"
@@ -9,7 +9,8 @@ stages:
   - stage: Community Name
     message: >-
       The first step in building a community and making sense of our situation
-      is to give it a name. What should we call ourselves?
+      is to give it a name.\n
+      What should we call ourselves?
     actions: []
     progress_conditions: ["timeout 10"]
     image_path: "assets/imgs/pre_generated/name.png"
@@ -17,11 +18,11 @@ stages:
   - stage: 'Submit Answers: Community Name'
     message: >-
       Take a moment to submit a proposal to the question: `What should we call
-      ourselves?`.
+      ourselves?`.\n
 
       You have 2 minutes to submit an answer.
 
-       To submit your proposal, type `/submit [message]`
+      To submit your proposal, type `/submit [message]`
     actions:
       - action: countdown 120 "until the next stage. Type /submit and your message now"
     progress_conditions: ["all_submissions_submitted", "timeout 120"]
@@ -57,7 +58,7 @@ stages:
       - action: set_global_decision_module "majority"
       - action: vote_submissions 'What should we call ourselves?' 30
         retries: 2
-        retry_message: "```You have failed to reach a majority vote. Voting commences again!```"
+        retry_message: "```You have failed to reach decision! You will have another change to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: countdown 30 "untill the next stage"
     progress_conditions: []
@@ -121,7 +122,7 @@ stages:
       - action: set_global_decision_module "majority"
       - action: vote_submissions 'What should be the goal of our community?' 30
         retries: 2
-        retry_message: "```You have failed to reach a majority vote. Voting commences again!```"
+        retry_message: "```You have failed to reach decision! You will have another change to vote soon.```"        
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: countdown 30 "until the next stage"
     progress_conditions: []
@@ -185,7 +186,7 @@ stages:
       - action: set_global_decision_module "consensus"
       - action: vote_submissions 'What should our first action be?' 30
         retries: 2
-        retry_message: "```You have failed to reach consensus. Voting commences again!```"
+        retry_message: "```You have failed to reach decision! You will have another change to vote soon.```"        
         failure_message: "```Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over.```"
       - action: countdown 30 "until the next stage"
     progress_conditions: []
