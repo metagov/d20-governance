@@ -43,7 +43,7 @@ stages:
 
       There will be a majority-based vote in 2 minutes.
     actions:
-      - action: countdown 120 "until making a deicison"
+      - action: countdown 120 "until making a decision"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
@@ -57,8 +57,8 @@ stages:
       - action: set_global_decision_module "majority"
       - action: vote_submissions 'What should we call ourselves?' 30
         retries: 2
-        retry_message: "You have failed to reach a majority vote. Voting commences again!"
-        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
+        retry_message: "```You have failed to reach a majority vote. Voting commences again!```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: countdown 30 "untill the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/vote.png"
@@ -67,7 +67,8 @@ stages:
     message: >-
       Now that we have a name, we need to decide on our community's goal. What
       is our animating purpose?
-    actions: []
+    actions:
+      - action: clear_decision_status
     progress_conditions: ["timeout 15"]
     image_path: "assets/imgs/pre_generated/goal.png"
   
@@ -106,7 +107,7 @@ stages:
       community should pursue. What will animate your activities?
       There will be a majority based vote in 2 minutes.
     actions:
-      - action: countdown 120 "until makking a deicison"
+      - action: countdown 120 "until makking a decision"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
@@ -120,8 +121,8 @@ stages:
       - action: set_global_decision_module "majority"
       - action: vote_submissions 'What should be the goal of our community?' 30
         retries: 2
-        retry_message: "You have failed to reach a majority vote. Voting commences again!"
-        failure_message: "Bummer. After several tries, your community has failed to reach a majority vote. The game is now over."
+        retry_message: "```You have failed to reach a majority vote. Voting commences again!```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: countdown 30 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/goal.png"
@@ -137,7 +138,8 @@ stages:
     message: >-
       Now that we have a goal, what should our first action be in this strange
       new world?
-    actions: []
+    actions:
+      - action: clear_decision_status
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/first_action.png"
   
@@ -183,8 +185,8 @@ stages:
       - action: set_global_decision_module "consensus"
       - action: vote_submissions 'What should our first action be?' 30
         retries: 2
-        retry_message: "You have failed to reach consensus. Voting commences again!"
-        failure_message: "Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over."
+        retry_message: "```You have failed to reach consensus. Voting commences again!```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over.```"
       - action: countdown 30 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/vote.png"

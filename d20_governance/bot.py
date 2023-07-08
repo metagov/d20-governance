@@ -190,12 +190,13 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                         if hasattr(action, "retry_message") and action.retry_message:
                             await quest.game_channel.send(action.retry_message)
                             await quest.game_channel.send(
-                                "```* You have a chance to change how you make decisions\n\n* Type the type of decision you want to use and +1 or -1 after.\n\n* The decision module with the most votes or first to 10 will be the new decision making module.\n\n* You have 30 seconds before the next vote.```"
+                                "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
                             )
-                            for input_key in decision_inputs:
-                                input_value = globals()[input_key.upper() + "_INPUT"]
-                                input_value = 0
+                            await clear_decision_status(quest.game_channel)
                             await display_decision_status(quest.game_channel)
+                            await quest.game_channel.send(
+                                "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 30 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 30 seconds before the next decision is retried. ⏳```"
+                            )
                             await asyncio.sleep(30)
                         retries -= 1
                     else:
@@ -1358,34 +1359,27 @@ async def apply_culture_modes(modes, message, filtered_message):
 async def calculate_module_inputs(context):
     global MAJORITY_INPUT, CONSENSUS_INPUT, CONSENSUS_REACHED, MAJORITY_REACHED
 
-    if MAJORITY_INPUT > SPECTRUM_THRESHOLD:
-        channel_decision_modules = active_global_decision_modules.get(
-            context.channel, []
-        )
-        if len(channel_decision_modules) > 0:
-            channel_decision_modules = []
-            channel_decision_modules.append("majority")
-            active_global_decision_modules[context.channel] = channel_decision_modules
-        else:
-            channel_decision_modules.append("majority")
-            active_global_decision_modules[context.channel] = channel_decision_modules
-        global_decision_module = channel_decision_modules[0]
-        await context.send(f"```{global_decision_module} mode activated!```")
+    # Calculate decision input
+    for input_key in decision_inputs:
+        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
 
-    # Calculate consensus input
-    if CONSENSUS_INPUT > SPECTRUM_THRESHOLD:
-        channel_decision_modules = active_global_decision_modules.get(
-            context.channel, []
-        )
-        if len(channel_decision_modules) > 0:
-            channel_decision_modules = []
-            channel_decision_modules.append("consensus")
-            active_global_decision_modules[context.channel] = channel_decision_modules
-        else:
-            channel_decision_modules.append("consensus")
-            active_global_decision_modules[context.channel] = channel_decision_modules
-        global_decision_module = channel_decision_modules[0]
-        await context.send(f"```{global_decision_module} mode activated!```")
+        if global_key_input_value > SPECTRUM_THRESHOLD:
+            channel_decision_modules = active_global_decision_modules.get(
+                context.channel, []
+            )
+            if len(channel_decision_modules) > 0:
+                channel_decision_modules = []
+                channel_decision_modules.append(input_key)
+                active_global_decision_modules[
+                    context.channel
+                ] = channel_decision_modules
+            else:
+                channel_decision_modules.append(input_key)
+                active_global_decision_modules[
+                    context.channel
+                ] = channel_decision_modules
+            global_decision_module = channel_decision_modules[0]
+            await context.send(f"```{global_decision_module} mode activated!```")
 
     # Calculate culture inputs
     for input_key in culture_inputs:
@@ -1437,6 +1431,11 @@ async def calculate_module_inputs(context):
 async def show_governance_status(ctx):
     await display_culture_status(ctx)
     await display_decision_status(ctx)
+
+
+async def clear_decision_status(ctx):
+    for input_key in decision_inputs:
+        globals()[input_key.upper() + "_INPUT"] = 0
 
 
 async def display_decision_status(context):

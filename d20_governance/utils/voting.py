@@ -109,7 +109,7 @@ async def vote(
     # Define embed
     embed = discord.Embed(
         title=f"Vote: {question}",
-        description=f"Decision module: {decision_module}",
+        description=f"Decision module: **{decision_module}**",
         color=discord.Color.dark_gold(),
     )
 
