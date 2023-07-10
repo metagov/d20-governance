@@ -115,10 +115,6 @@ DECISION_MODULE = None
 MAX_VOTE_TRIGGERS = 3
 
 # CONTINUOUS INPUT VARS
-ELOQUENCE_INPUT = 0
-OBSCURITY_INPUT = 0
-CONSENSUS_INPUT = 0
-MAJORITY_INPUT = 0
 SPECTRUM_SCALE = 10
 SPECTRUM_THRESHOLD = 7
 MAJORITY_REACHED = False
@@ -127,13 +123,13 @@ ELOQUENCE_ACTIVATED = False
 OBSCURITY_ACTIVATED = False
 
 decision_inputs = {
-    "consensus": CONSENSUS_INPUT,
-    "majority": MAJORITY_INPUT,
+    "consensus": 0,
+    "majority": 0,
 }
 
 culture_inputs = {
-    "eloquence": ELOQUENCE_INPUT,
-    "obscurity": OBSCURITY_INPUT,
+    "eloquence": 0,
+    "obscurity": 0,
 }
 
 GLOBAL_DECISION_MODULE = None

@@ -197,7 +197,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                             )
                             await display_decision_status(game_channel_ctx)
                             await game_channel_ctx.send(
-                                "```👀--Instructions--sss👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
+                                "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
                             )
                             bypass_sleep = False
                             timeout = 0
@@ -207,12 +207,11 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                                 )
                                 if condition_result:
                                     bypass_sleep = True
-                                    print("Bypass is True")
                                 if bypass_sleep:
                                     break
                                 timeout += 1
                                 print(f"⧗ Set New Decision Timeout = {timeout}")
-                                if timeout == 10:
+                                if timeout == 60:
                                     print("Tallying Inputs")
                                     await calculate_module_inputs(
                                         game_channel_ctx, retry=True, tally=True
@@ -1385,108 +1384,50 @@ async def show_governance_status(ctx):
 
 async def clear_decision_status(ctx):
     for input_key in decision_inputs:
-        globals()[input_key.upper() + "_INPUT"] = 0
+        decision_inputs[input_key] = 0
 
 
-async def governance_input_processing(context, message, input_key, display_function):
-    if message.content.lower() == f"{input_key} +1":
-        if globals()[input_key.upper() + "_INPUT"] < 10:
-            globals()[input_key.upper() + "_INPUT"] += 1
+async def update_module_decision(context, new_decision_module):
+    channel_decision_modules = active_global_culture_modules.get(context.channel, [])
+    if len(channel_decision_modules) > 0:
+        channel_decision_modules = []
+        channel_decision_modules.append(new_decision_module)
+        active_global_decision_modules[context.channel] = channel_decision_modules
     else:
-        if globals()[input_key.upper() + "_INPUT"] > 0:
-            globals()[input_key.upper() + "_INPUT"] -= 1
-    # function_to_call = globals().get(display_function)
-    # function_to_call(context)
-    await display_function(context)
-    return
-
-
-async def check_if_values_tied(input_values):
-    sorted_input_values = sorted(input_values, reverse=True)
-    print(sorted_input_values)
-    max_value = sorted_input_values[0]
-
-    count = sorted_input_values.count(max_value)
-    if count >= 2:
-        return True
-    else:
-        return False
+        channel_decision_modules.append(new_decision_module)
+        active_global_decision_modules[context.channel] = channel_decision_modules
 
 
 async def calculate_module_inputs(context, retry=None, tally=None):
     # Calculate decision inputs if retry True
-    decision_input_values = []
-    for input_key in decision_inputs:
-        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
-        decision_input_values.append(global_key_input_value)
-        print(f"decision input values = {decision_input_values}")
-        if retry == True:
-            decision_set = None
-            if not tally:
-                print("not tally")
-                print(f"global_key_input_value: {global_key_input_value}")
-                if global_key_input_value == SPECTRUM_SCALE:
-                    channel_decision_modules = active_global_decision_modules.get(
-                        context.channel, []
-                    )
-                    if len(channel_decision_modules) > 0:
-                        channel_decision_modules = []
-                        channel_decision_modules.append(input_key)
-                        active_global_decision_modules[
-                            context.channel
-                        ] = channel_decision_modules
-                    else:
-                        channel_decision_modules.append(input_key)
-                        active_global_decision_modules[
-                            context.channel
-                        ] = channel_decision_modules
-                    decision_set = True
-                    global_decision_module = channel_decision_modules[0]
-                    await context.send(
-                        f"```{global_decision_module} mode activated!```"
-                    )
-                    return decision_set
+    if retry == True:
+        max_value = max(decision_inputs.values())
+        max_keys = [k for k, v in decision_inputs.items() if v == max_value]
+
+        if not tally:
+            if max_value == SPECTRUM_SCALE and len(max_keys) == 1:
+                await update_module_decision(context, max_keys[0])
+                await context.send(f"```{max_keys[0]} mode activated!```")
+                return True
+
+        else:
+            if len(max_keys) > 1:
+                await context.send(
+                    f"```Poll resulted in tie. Previous decision module kept.```"
+                )
             else:
-                print("tally")
-                are_tied = await check_if_values_tied(decision_input_values)
-                print(are_tied)
-                if not are_tied:
-                    print("not tied")
-                    new_decison_module = max(decision_inputs, key=decision_inputs.get)
-                    print(new_decison_module)
-                    channel_decision_modules = active_global_decision_modules.get(
-                        context.channel, []
-                    )
-                    if len(channel_decision_modules) > 0:
-                        channel_decision_modules = []
-                        channel_decision_modules.append(new_decison_module)
-                        active_global_decision_modules[
-                            context.channel
-                        ] = channel_decision_modules
-                    else:
-                        channel_decision_modules.append(new_decison_module)
-                        active_global_decision_modules[
-                            context.channel
-                        ] = channel_decision_modules
-                    global_decision_module = channel_decision_modules[0]
-                    await context.send(
-                        f"```{global_decision_module} mode activated!```"
-                    )
-                else:
-                    await context.send(
-                        f"```Poll resulted in tie. Previous decision mode kept.```"
-                    )
+                await update_module_decision(context, max_keys[0])
+                await context.send(f"```{max_keys[0]} mode activated!```")
 
     # Calculate culture inputs
     for input_key in culture_inputs:
         global_key = globals()[input_key.upper()]
-        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
         # TODO: Is there a better way of changing the global variable dynamically
         # I tried global_key_activation = globals()[input_key.upper() + "_ACTIVATED"]
         # But global_key_activation shadows the global var and doesn't change the global bool value
         if (
             not globals()[input_key.upper() + "_ACTIVATED"]
-            and global_key_input_value > SPECTRUM_THRESHOLD
+            and culture_inputs[input_key] > SPECTRUM_THRESHOLD
         ):
             globals()[input_key.upper() + "_ACTIVATED"] = True
             if global_key == False:
@@ -1501,7 +1442,7 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                 await function_to_call(context)
         elif (
             globals()[input_key.upper() + "_ACTIVATED"]
-            and global_key_input_value <= SPECTRUM_THRESHOLD
+            and culture_inputs[input_key] <= SPECTRUM_THRESHOLD
         ):
             globals()[input_key.upper() + "_ACTIVATED"] = False
             if not global_key:
@@ -1512,9 +1453,8 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                 await function_to_call(context, state=False, timeout=20)
                 if not globals()[input_key.upper() + "_ACTIVATED"]:
                     globals()[input_key.upper() + "_ACTIVATED"] = True
-                if global_key_input_value <= SPECTRUM_THRESHOLD:
-                    global_key_input_value = SPECTRUM_SCALE
-                    globals()[input_key.upper() + "_INPUT"] = SPECTRUM_SCALE
+                if culture_inputs[input_key] <= SPECTRUM_THRESHOLD:
+                    culture_inputs[input_key] = SPECTRUM_SCALE
                     await display_culture_status(context)
 
 
@@ -1525,8 +1465,8 @@ async def display_decision_status(context):
     )
 
     for input_key in decision_inputs:
-        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
-        input_filled = int(min(global_key_input_value, SPECTRUM_SCALE))
+        input_value = decision_inputs[input_key]
+        input_filled = int(min(input_value, SPECTRUM_SCALE))
         input_empty = SPECTRUM_SCALE - input_filled
 
         progress_bar = "🟦" * input_filled + "🟨" * input_empty
@@ -1548,8 +1488,8 @@ async def display_culture_status(context):
     )
 
     for input_key in culture_inputs:
-        global_key_input_value = globals()[input_key.upper() + "_INPUT"]
-        input_filled = int(min(global_key_input_value, SPECTRUM_SCALE))
+        input_value = culture_inputs[input_key]
+        input_filled = int(min(input_value, SPECTRUM_SCALE))
         input_empty = SPECTRUM_SCALE - input_filled
 
         progress_bar = "🟦" * input_filled + "🟨" * input_empty
@@ -1596,9 +1536,13 @@ async def on_message(message):
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
-                await governance_input_processing(
-                    context, message, input_key, display_decision_status
-                )
+                if message.content.lower() == f"{input_key} +1":
+                    if decision_inputs[input_key] < 10:
+                        decision_inputs[input_key] += 1
+                else:
+                    if decision_inputs[input_key] > 0:
+                        decision_inputs[input_key] -= 1
+                await display_decision_status(context)
                 return
 
         for input_key in culture_inputs:
@@ -1606,9 +1550,13 @@ async def on_message(message):
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
-                await governance_input_processing(
-                    context, message, input_key, display_culture_status
-                )
+                if message.content.lower() == f"{input_key} +1":
+                    if culture_inputs[input_key] < 10:
+                        culture_inputs[input_key] += 1
+                else:
+                    if culture_inputs[input_key] > 0:
+                        culture_inputs[input_key] -= 1
+                await display_culture_status(context)
                 return
 
         await process_message(message)
