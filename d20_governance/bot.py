@@ -200,18 +200,16 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                                 "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
                             )
                             bypass_sleep = False
-                            timeout = 0
+                            loop_count = 0
                             while True:
                                 condition_result = await calculate_module_inputs(
                                     game_channel_ctx, retry=True, tally=False
                                 )
                                 if condition_result:
-                                    bypass_sleep = True
-                                if bypass_sleep:
                                     break
-                                timeout += 1
-                                print(f"⧗ Set New Decision Timeout = {timeout}")
-                                if timeout == 60:
+                                loop_count += 1
+                                print(f"⧗ {loop_count} seconds to set new decision")
+                                if loop_count == 60:
                                     print("Tallying Inputs")
                                     await calculate_module_inputs(
                                         game_channel_ctx, retry=True, tally=True
@@ -750,14 +748,14 @@ async def obscurity(ctx, mode: str = None, state: bool = None, timeout: int = No
     channel_culture_modes = active_global_culture_modules.get(ctx.channel, [])
 
     # Turn on obscurity mode if not activated
-    if state == True:
+    if state:
         if "OBSCURITY" not in channel_culture_modes:
             await turn_obscurity_on(ctx, channel_culture_modes)
         else:
             return
 
     # Turn off obscurity mode if activated
-    if state == False:
+    if not state:
         if timeout == None:
             if "OBSCURITY" in channel_culture_modes:
                 await turn_obscurity_off(ctx, channel_culture_modes)
@@ -806,14 +804,14 @@ async def eloquence(ctx, state: bool = None, timeout: int = None):
     channel_culture_modes = active_global_culture_modules.get(ctx.channel, [])
 
     # Turn on eloquence mode if not activated
-    if state == True:
+    if state:
         if "ELOQUENCE" not in channel_culture_modes:
             await turn_eloquence_on(ctx, channel_culture_modes)
         else:
             return
 
     # Turn off eloquence mode if activated
-    if state == False:
+    if not state:
         if timeout == None:
             if "ELOQUENCE" in channel_culture_modes:
                 await turn_eloquence_off(ctx, channel_culture_modes)
@@ -1399,8 +1397,11 @@ async def update_module_decision(context, new_decision_module):
 
 
 async def calculate_module_inputs(context, retry=None, tally=None):
+    """
+    Change state of modules based on calculation of module inputs
+    """
     # Calculate decision inputs if retry True
-    if retry == True:
+    if retry:
         max_value = max(decision_inputs.values())
         max_keys = [k for k, v in decision_inputs.items() if v == max_value]
 
@@ -1430,10 +1431,10 @@ async def calculate_module_inputs(context, retry=None, tally=None):
             and culture_inputs[input_key] > SPECTRUM_THRESHOLD
         ):
             globals()[input_key.upper() + "_ACTIVATED"] = True
-            if global_key == False:
+            if not global_key:
                 function_to_call = globals().get(input_key)
                 await function_to_call(context, state=True)
-            if global_key == True:
+            if global_key:
                 await context.send(
                     f"```{input_key.capitalize()} mode already activated!```"
                 )
