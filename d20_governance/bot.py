@@ -188,6 +188,8 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                     break
                 except Exception as e:
                     if retries > 0:
+                        global VOTE_RETRY
+                        VOTE_RETRY = True
                         print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
                             await clear_decision_status(game_channel_ctx)
@@ -206,10 +208,12 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                                     game_channel_ctx, retry=True, tally=False
                                 )
                                 if condition_result:
+                                    VOTE_RETRY = False
                                     break
                                 loop_count += 1
                                 print(f"⧗ {loop_count} seconds to set new decision")
                                 if loop_count == 60:
+                                    VOTE_RETRY = False
                                     print("Tallying Inputs")
                                     await calculate_module_inputs(
                                         game_channel_ctx, retry=True, tally=True
@@ -804,14 +808,14 @@ async def eloquence(ctx, state: bool = None, timeout: int = None):
     channel_culture_modes = active_global_culture_modules.get(ctx.channel, [])
 
     # Turn on eloquence mode if not activated
-    if state:
+    if state == True:
         if "ELOQUENCE" not in channel_culture_modes:
             await turn_eloquence_on(ctx, channel_culture_modes)
         else:
             return
 
     # Turn off eloquence mode if activated
-    if not state:
+    if state == False:
         if timeout == None:
             if "ELOQUENCE" in channel_culture_modes:
                 await turn_eloquence_off(ctx, channel_culture_modes)
@@ -1511,9 +1515,8 @@ async def display_culture_status(context):
 # ON MESSAGE
 @bot.event
 async def on_message(message):
-    channel = bot.get_channel(message.channel.id)
-    last_message = await channel.fetch_message(channel.last_message_id)
-    context = await bot.get_context(last_message)
+    global VOTE_RETRY, CULTURE_COOLDOWN, DECISION_COOLDOWN
+    context = await bot.get_context(message)
     try:
         if message.author == bot.user:  # Ignore messages sent by the bot itself
             return
@@ -1532,33 +1535,36 @@ async def on_message(message):
         if message.content.startswith("※"):
             return
 
-        for input_key in decision_inputs:
+        for input_key in decision_inputs.keys() | culture_inputs.keys():
             if (
                 message.content.lower() == f"{input_key} +1"
                 or message.content.lower() == f"{input_key} -1"
             ):
-                if message.content.lower() == f"{input_key} +1":
-                    if decision_inputs[input_key] < 10:
-                        decision_inputs[input_key] += 1
-                else:
-                    if decision_inputs[input_key] > 0:
-                        decision_inputs[input_key] -= 1
-                await display_decision_status(context)
-                return
-
-        for input_key in culture_inputs:
-            if (
-                message.content.lower() == f"{input_key} +1"
-                or message.content.lower() == f"{input_key} -1"
-            ):
-                if message.content.lower() == f"{input_key} +1":
-                    if culture_inputs[input_key] < 10:
-                        culture_inputs[input_key] += 1
-                else:
-                    if culture_inputs[input_key] > 0:
-                        culture_inputs[input_key] -= 1
-                await display_culture_status(context)
-                return
+                if input_key in decision_inputs:
+                    if VOTE_RETRY:
+                        decision_bucket = DECISION_COOLDOWN.get_bucket(message)
+                        retry_after = decision_bucket.update_rate_limit()
+                        if retry_after:
+                            await context.send(
+                                f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+                            )
+                            return
+                        await process_decision_input(context, input_key)
+                        await display_decision_status(context)
+                        return
+                    else:
+                        return
+                elif input_key in culture_inputs:
+                    culture_bucket = CULTURE_COOLDOWN.get_bucket(message)
+                    retry_after = culture_bucket.update_rate_limit()
+                    if retry_after:
+                        await context.send(
+                            f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
+                        )
+                        return
+                    await process_culture_input(context, input_key)
+                    await display_culture_status(context)
+                    return
 
         await process_message(message)
     except Exception as e:
@@ -1566,7 +1572,39 @@ async def on_message(message):
         traceback_str = "".join(traceback.format_exception(type, value, tb))
         print(f"Unhandled exception:\n{traceback_str}")
         logging.error(f"Unhandled exception:\n{traceback_str}")
-        await message.channel.send("An error occurred.")
+        await message.context.send("An error occurred.")
+
+
+async def process_decision_input(ctx, input_key):
+    if input_key in decision_inputs:
+        if ctx.message.content.endswith("+1"):
+            await plus_one(ctx, input_key=input_key, input_dict=decision_inputs)
+        if ctx.message.content.endswith("-1"):
+            await minus_one(ctx, input_key=input_key, input_dict=decision_inputs)
+    else:
+        await ctx.send("Invalid input key")
+
+
+async def process_culture_input(ctx, input_key):
+    if input_key in culture_inputs:
+        if ctx.message.content.endswith("+1"):
+            await plus_one(ctx, input_key=input_key, input_dict=culture_inputs)
+        if ctx.message.content.endswith("-1"):
+            await minus_one(ctx, input_key=input_key, input_dict=culture_inputs)
+    else:
+        await ctx.send("Invalid input key")
+
+
+async def plus_one(ctx, input_key, input_dict):
+    if input_key in input_dict:
+        if input_dict[input_key] < 10:
+            input_dict[input_key] += 1
+
+
+async def minus_one(ctx, input_key, input_dict):
+    if input_key in input_dict:
+        if input_dict[input_key] > 0:
+            input_dict[input_key] -= 1
 
 
 # BOT CHANNEL CHECKS

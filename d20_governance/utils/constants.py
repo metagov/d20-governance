@@ -2,6 +2,7 @@ import os
 import yaml as py_yaml
 from dotenv import load_dotenv
 from ruamel.yaml import YAML
+from discord.ext import commands
 
 
 def read_config(file_path):
@@ -117,10 +118,9 @@ MAX_VOTE_TRIGGERS = 3
 # CONTINUOUS INPUT VARS
 SPECTRUM_SCALE = 10
 SPECTRUM_THRESHOLD = 7
-MAJORITY_REACHED = False
-CONSENSUS_REACHED = False
 ELOQUENCE_ACTIVATED = False
 OBSCURITY_ACTIVATED = False
+VOTE_RETRY = False
 
 decision_inputs = {
     "consensus": 0,
@@ -133,6 +133,14 @@ culture_inputs = {
 }
 
 GLOBAL_DECISION_MODULE = None
+
+COOLDOWN_TIMEOUT = 5
+DECISION_COOLDOWN = commands.CooldownMapping.from_cooldown(
+    1, COOLDOWN_TIMEOUT, commands.BucketType.user
+)
+CULTURE_COOLDOWN = commands.CooldownMapping.from_cooldown(
+    1, COOLDOWN_TIMEOUT, commands.BucketType.user
+)
 
 # INTERNAL ACCESS CONTROL SETTINGS
 ACCESS_CONTROL_SETTINGS = {
