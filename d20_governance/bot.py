@@ -1161,7 +1161,7 @@ async def obscurity(ctx, mode: str = None):
 
 async def turn_eloquence_on(ctx, channel_culture_modes):
     channel_culture_modes.append("ELOQUENCE")
-    active_culture_modes[ctx.channel] = channel_culture_modes
+    ACTIVE_GLOBAL_CULTURE_MODULES[ctx.channel] = channel_culture_modes
 
     embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
     embed.set_thumbnail(
@@ -1187,7 +1187,7 @@ async def turn_eloquence_on(ctx, channel_culture_modes):
 
 async def turn_eloquence_off(ctx, channel_culture_modes):
     channel_culture_modes.remove("ELOQUENCE")
-    active_culture_modes[ctx.channel] = channel_culture_modes
+    ACTIVE_GLOBAL_CULTURE_MODULES[ctx.channel] = channel_culture_modes
 
     embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
     embed.set_thumbnail(
