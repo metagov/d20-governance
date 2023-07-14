@@ -21,7 +21,7 @@ VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
 
 
 async def set_global_decision_module(ctx, decision_module: str = None):
-    channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
+    channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
 
     if len(channel_decision_modules) > 0:
         channel_decision_modules = []
@@ -31,9 +31,9 @@ async def set_global_decision_module(ctx, decision_module: str = None):
         print(decision_module)
 
     channel_decision_modules.append(decision_module)
-    active_global_decision_modules[ctx.channel] = channel_decision_modules
+    ACTIVE_GLOBAL_DECISION_MODULES[ctx.channel] = channel_decision_modules
     print(
-        f"Global Decision Module set to: {channel_decision_modules} and {active_global_decision_modules}"
+        f"Global Decision Module set to: {channel_decision_modules} and {ACTIVE_GLOBAL_DECISION_MODULES}"
     )
     return channel_decision_modules
 
@@ -94,7 +94,7 @@ async def vote(
     if quest.fast_mode:
         timeout = 7
 
-    channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
+    channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
 
     if not channel_decision_modules:
         channel_decision_modules = await set_global_decision_module(ctx)

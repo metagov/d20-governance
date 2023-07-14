@@ -78,7 +78,7 @@ stages:
       
         What is our animating purpose?
     actions:
-      - action: clear_decision_status
+      - action: clear_decision_input_values
     progress_conditions: ["timeout 15"]
     image_path: "assets/imgs/pre_generated/goal.png"
   
@@ -163,7 +163,7 @@ stages:
     message: >-
       Now that we have a goal, what should our first action be in this strange new world?
     actions:
-      - action: clear_decision_status
+      - action: clear_decision_input_values
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/first_action.png"
   

@@ -85,7 +85,7 @@ class Quest:
 
     def update_vars(self):
         # LLM mode does not have yaml
-        if self.mode is not QUEST_MODE_LLM:
+        if self.mode is not SIMULATIONS["llm_mode"]:
             with open(self.mode, "r") as f:
                 quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
                 self.quest_data = quest_data
@@ -105,21 +105,21 @@ class Quest:
         # If player has already joined, this is a no-op
         self.joined_players.add(player_name)
         # TODO: figure out how to avoid this game-specific check here
-        if self.mode == MINIGAME_JOSH:
+        if self.mode == SIMULATIONS["josh_game"]:
             # Randomly select a nickname
-            nickname = random.choice(nicknames)
+            nickname = random.choice(JOSH_NICKNAMES)
 
             # Assign the nickname to the player
             self.players_to_nicknames[player_name] = nickname
 
             # Remove the nickname from the list so it can't be used again
-            nicknames.remove(nickname)
+            JOSH_NICKNAMES.remove(nickname)
 
     def add_submission(self, ctx, text):
         # get the name of the user invoking the command
         player_name = str(ctx.message.author.name)
         # get the nickname of the user invoking the command
-        if self.mode == MINIGAME_JOSH:
+        if self.mode == SIMULATIONS["josh_game"]:
             player_name = self.players_to_nicknames.get(player_name)
             self.players_to_submissions[player_name] = text
         else:
@@ -815,6 +815,7 @@ def check_dirs():
         with open(LOG_FILE_NAME, "w") as f:
             f.write("This is a new log file.")
             print(f"Creates {LOG_FILE_NAME} file")
+    print("All necessary repo directories are present")
 
 
 # Cleanup

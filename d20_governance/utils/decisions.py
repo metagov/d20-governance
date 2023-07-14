@@ -13,15 +13,12 @@ async def majority_voting():
 
 async def set_decision_module():
     # Set starting decision module if necessary
-    global DECISION_MODULE
     current_modules = get_current_governance_stack()["modules"]
     decision_module = next(
         (module for module in current_modules if module["type"] == "decision"), None
     )
     if decision_module is None:
         await set_starting_decision_module()
-
-    DECISION_MODULE = decision_module
 
     return decision_module
 
