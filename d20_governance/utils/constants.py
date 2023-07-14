@@ -186,33 +186,6 @@ INPUT_SPECTRUM = {
     "threshold": 7,
 }
 
-# CONTINUOUS INPUT VARS
-SPECTRUM_SCALE = 10
-SPECTRUM_THRESHOLD = 7
-ELOQUENCE_ACTIVATED = False
-OBSCURITY_ACTIVATED = False
-VOTE_RETRY = False
-
-decision_inputs = {
-    "consensus": 0,
-    "majority": 0,
-}
-
-culture_inputs = {
-    "eloquence": 0,
-    "obscurity": 0,
-}
-
-GLOBAL_DECISION_MODULE = None
-
-COOLDOWN_TIMEOUT = 5
-DECISION_COOLDOWN = commands.CooldownMapping.from_cooldown(
-    1, COOLDOWN_TIMEOUT, commands.BucketType.user
-)
-CULTURE_COOLDOWN = commands.CooldownMapping.from_cooldown(
-    1, COOLDOWN_TIMEOUT, commands.BucketType.user
-)
-
 # INTERNAL ACCESS CONTROL SETTINGS
 ACCESS_CONTROL_SETTINGS = {
     "allowed_roles": ["@everyone"],
