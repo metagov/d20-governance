@@ -7,3 +7,6 @@ d20_governance/playground
 logs/*.log
 logs/
 **/.DS_Store/**
+package.json
+node_modules
+package-lock.json

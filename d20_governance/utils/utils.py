@@ -1,9 +1,4 @@
-from typing import List
-from click import command
 import discord
-from discord.ext import commands
-from langchain import PromptTemplate
-from pytest import param
 import requests
 import random
 import base64
@@ -15,21 +10,29 @@ import datetime
 import string
 import asyncio
 import logging
-from pydub import AudioSegment
-from PIL import Image, ImageDraw, ImageFont
-from d20_governance.utils.constants import *
 import shlex
-from io import BytesIO
 import os
+
+from d20_governance.utils.constants import *
+
+from discord.ext import commands
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
 from langchain.chat_models import ChatOpenAI
 
-import shlex
 
 class Action:
-    def __init__(self, action: str, arguments: list, retries: int, retry_message: str, failure_message: str):
+    def __init__(
+        self,
+        action: str,
+        arguments: list,
+        retries: int,
+        retry_message: str,
+        failure_message: str,
+    ):
         self.action = action
         self.arguments = arguments
         self.retries = retries
@@ -38,16 +41,17 @@ class Action:
 
     @classmethod
     def from_dict(cls, data: dict):
-        action_string = data.get('action', '')
+        action_string = data.get("action", "")
         tokens = shlex.split(action_string)
         action, *arguments = tokens
         return cls(
             action=action,
             arguments=arguments,
-            retries=int(data.get('retries', 0)),
-            retry_message=data.get('retry_message', ''),
-            failure_message=data.get('failure_message', '')
+            retries=int(data.get("retries", 0)),
+            retry_message=data.get("retry_message", ""),
+            failure_message=data.get("failure_message", ""),
         )
+
 
 class Stage:
     def __init__(self, name, message, actions, progress_conditions, image_path=None):
@@ -56,6 +60,7 @@ class Stage:
         self.actions = actions
         self.progress_conditions = progress_conditions
         self.image_path = image_path
+
 
 class Quest:
     def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
@@ -163,6 +168,31 @@ def access_control():
     return commands.check(predicate)
 
 
+# Context Utils
+async def get_channel_context(bot, game_channel):
+    message_obj = None
+    attempts = 0
+    max_attempts = 3  # Number of attempts to fetch the message
+    while message_obj is None and attempts < max_attempts:
+        try:
+            # Get the last message object from the channel to set context
+            message_obj = await game_channel.fetch_message(game_channel.last_message_id)
+        except discord.NotFound:
+            attempts += 1
+            await asyncio.sleep(1)  # Delay before next attempt
+
+    if message_obj is None:
+        # If message_obj is still None, all attempts failed
+        error_message = f"Failed to fetch last message from channel {game_channel.id} after {max_attempts} attempts."
+        print(error_message)
+        logging.error(error_message)
+        raise Exception("Failed to fetch last message from channel.")
+
+    # Create a context object for the message
+    game_channel_ctx = await bot.get_context(message_obj)
+    return game_channel_ctx
+
+
 # Setup Utils
 async def setup_server(guild):
     """
@@ -212,39 +242,13 @@ async def setup_server(guild):
         logging.info("Some necessary channels or categories are missing.")
 
 
-async def execute_action(ctx, bot, action, temp_channel):
-    command_name = action.action
-    args = action.arguments
-    command = bot.get_command(command_name)
-    if command is None:
-        raise Exception(f"Command {command_name} not found.")
-
-    print(f"Executing {command}")
-
-    # Unfortunately we need to do this as a workaround for the fact that we can't easily get the context for the current channel. 
-    message_obj = None
-    attempts = 0
-    max_attempts = 3  # Number of attempts to fetch the message
-    while message_obj is None and attempts < max_attempts:
-        try:
-            # Get the last message object from the channel to set context
-            message_obj = await temp_channel.fetch_message(temp_channel.last_message_id)
-        except discord.NotFound:
-            attempts += 1
-            await asyncio.sleep(1)  # Delay before next attempt
-
-    if message_obj is None:
-        # If message_obj is still None, all attempts failed
-        error_message = f"Failed to fetch last message from channel {temp_channel.id} after {max_attempts} attempts."
-        print(error_message)
-        logging.error(error_message)
-        raise Exception("Failed to fetch last message from channel.")
-
-    # Create a context object for the message
-    ctx = await bot.get_context(message_obj)
+async def execute_action(game_channel_ctx, command, args):
+    print(f"> Executing {command} with arguments {args}")
 
     # Pass the arguments to the command's callback function
-    await command.callback(ctx, *args)
+    # await command.callback(channel_ctx, *args)
+    await command(game_channel_ctx, *args)
+
 
 # Module Management
 def get_modules_for_type(governance_type):

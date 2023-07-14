@@ -1,4 +1,5 @@
 import random
+import discord
 from d20_governance.utils.constants import *
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
@@ -102,3 +103,97 @@ def initialize_ritual_agreement(previous_message, new_message):
     chain = LLMChain(llm=llm, prompt=prompt)
     response = chain.run(previous_message=previous_message, new_message=new_message)
     return response
+
+
+async def turn_eloquence_on(ctx, channel_culture_modes):
+    channel_culture_modes.append("ELOQUENCE")
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: ELOQUENCE", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+    )
+    embed.add_field(
+        name="ACTIVATED:",
+        value="Messages will now be process through an LLM.",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    embed.add_field(
+        name="LLM Prompt:",
+        value="You are from the Shakespearean era. Please rewrite the messages in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
+async def turn_eloquence_off(ctx, channel_culture_modes):
+    channel_culture_modes.remove("ELOQUENCE")
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: ELOQUENCE", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
+    )
+    embed.add_field(
+        name="DEACTIVATED",
+        value="Messages will no longer be processed through an LLM",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
+async def turn_obscurity_off(ctx, channel_culture_modes):
+    channel_culture_modes.remove("OBSCURITY")
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title=f"Culture: OBSCURITY", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
+    )
+    embed.add_field(
+        name="DEACTIVATED",
+        value="Messages will no longer be distored by obscurity.",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+
+async def turn_obscurity_on(ctx, channel_culture_modes):
+    channel_culture_modes.append("OBSCURITY")
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title=f"Culture: OBSCURITY", color=discord.Color.dark_gold())
+    embed.set_thumbnail(
+        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
+    )
+    embed.add_field(
+        name="ACTIVATED",
+        value="Messages will be distored based on mode of obscurity.",
+        inline=False,
+    )
+    embed.add_field(
+        name="Mode:",
+        value=f"{OBSCURITY_MODE}",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    await ctx.send(embed=embed)

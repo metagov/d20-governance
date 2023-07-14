@@ -3,6 +3,7 @@ import random
 import discord
 from d20_governance.utils.constants import CIRCLE_EMOJIS
 from d20_governance.utils.utils import Quest
+from d20_governance.utils.decisions import *
 
 # Voting functions
 majority = (
@@ -17,6 +18,24 @@ consensus = (
 )
 
 VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
+
+
+async def set_global_decision_module(ctx, decision_module: str = None):
+    channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
+
+    if len(channel_decision_modules) > 0:
+        channel_decision_modules = []
+
+    if decision_module is None and not channel_decision_modules:
+        decision_module = await set_decision_module()
+        print(decision_module)
+
+    channel_decision_modules.append(decision_module)
+    active_global_decision_modules[ctx.channel] = channel_decision_modules
+    print(
+        f"Global Decision Module set to: {channel_decision_modules} and {active_global_decision_modules}"
+    )
+    return channel_decision_modules
 
 
 class VoteView(discord.ui.View):
@@ -61,17 +80,26 @@ class VoteView(discord.ui.View):
                 "You've already voted.", ephemeral=True
             )
 
+
 async def vote(
     ctx,
     quest: Quest,
     question: str = None,
     options: List[str] = [],
-    decision_module: str = "majority",
     timeout: int = 60,
 ):
     """
     Trigger a vote
     """
+    if quest.fast_mode:
+        timeout = 7
+
+    channel_decision_modules = active_global_decision_modules.get(ctx.channel, [])
+
+    if not channel_decision_modules:
+        channel_decision_modules = await set_global_decision_module(ctx)
+
+    decision_module = channel_decision_modules[0]
     print(f"A vote has been triggered. The decision module is: {decision_module}")
 
     if not options:
@@ -84,7 +112,7 @@ async def vote(
     # Define embed
     embed = discord.Embed(
         title=f"Vote: {question}",
-        description=f"Decision module: {decision_module}",
+        description=f"Decision module: **{decision_module}**",
         color=discord.Color.dark_gold(),
     )
 
@@ -104,7 +132,7 @@ async def vote(
             truncated_option = option[:97] + "..."
         else:
             truncated_option = option
-         # truncate the option if it's longer than 100 characters
+        # truncate the option if it's longer than 100 characters
         vote_view.add_option(
             label=truncated_option,
             value=str(i),
@@ -129,7 +157,7 @@ async def vote(
         color=discord.Color.dark_gold(),
     )
 
-    # If retries are configured, voting will be repeated 
+    # If retries are configured, voting will be repeated
     if winning_option is None:
         raise Exception("No winner was found.")
 
@@ -148,16 +176,17 @@ async def get_vote_results(results, votes, options):
 
     return results
 
+
 def get_results_message(results, winning_option):
     total_votes = sum(results.values())
     message = f"Total votes: {total_votes}\n\n"
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
         message += f"Option `{option}` received `{votes}` votes ({percentage:.2f}%)\n\n"
-    
+
     if winning_option:
         message += f"The winner is `{winning_option}`.\n\n"
     else:
         message += "No winner was found.\n\n"
-        
+
     return message

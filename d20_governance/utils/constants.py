@@ -114,6 +114,26 @@ COMMAND_VISIBILITY = {}
 DECISION_MODULE = None
 MAX_VOTE_TRIGGERS = 3
 
+# CONTINUOUS INPUT VARS
+SPECTRUM_SCALE = 10
+SPECTRUM_THRESHOLD = 7
+MAJORITY_REACHED = False
+CONSENSUS_REACHED = False
+ELOQUENCE_ACTIVATED = False
+OBSCURITY_ACTIVATED = False
+
+decision_inputs = {
+    "consensus": 0,
+    "majority": 0,
+}
+
+culture_inputs = {
+    "eloquence": 0,
+    "obscurity": 0,
+}
+
+GLOBAL_DECISION_MODULE = None
+
 # INTERNAL ACCESS CONTROL SETTINGS
 ACCESS_CONTROL_SETTINGS = {
     "allowed_roles": ["@everyone"],
@@ -128,8 +148,12 @@ user_message_count = {}
 # stores webhooks
 webhooks = []
 
-# CULTURE COMMANDS
-active_culture_modes = {}
+# GLOBAL CULTURE MODULES
+active_global_culture_modules = {}
+
+# GLOBAL DECISION MODULES
+active_global_decision_modules = {}
+
 
 # JOSH GAME # todo: move this out to game-specific file
 nicknames = [
