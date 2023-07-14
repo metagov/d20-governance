@@ -195,7 +195,6 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                             await game_channel_ctx.send(
                                 "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
                             )
-                            bypass_sleep = False
                             loop_count = 0
                             while True:
                                 condition_result = await calculate_module_inputs(
