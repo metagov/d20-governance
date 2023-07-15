@@ -4,6 +4,8 @@ from d20_governance.utils.constants import *
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
+from langchain.chat_models import ChatOpenAI
+from langchain.schema import AIMessage, HumanMessage, SystemMessage
 
 
 # Culture Utils
@@ -76,12 +78,29 @@ async def filter_eloquence(text):
     A LLM filter for messages during the /eloquence command/function
     """
     llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
-    prompt = PromptTemplate(
-        input_variables=["input_text"],
-        template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, just rewrite them. Input: {input_text}",
+    prompt = PromptTemplate.from_template(
+        template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
     )
+    prompt.format(input_text=text)
     chain = LLMChain(llm=llm, prompt=prompt)
     return chain.run(text)
+
+
+async def filter_by_values(text):
+    """
+    Filter and analyze message content based on values
+    """
+    llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
+    template = f"You hold and maintain a set of mutually agreed-upon values. Let's analyze the message '{text}' in terms of the values you hold:\n\n"
+    for (
+        value,
+        description,
+    ) in MOCK_VALUES_DICT.items():
+        template += f"- {value}: {description}\n"
+    template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
+    prompt = PromptTemplate.from_template(template=template)
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain.run({"text": text, "mock_values_dict": MOCK_VALUES_DICT})
 
 
 async def send_msg_to_random_player(game_channel):

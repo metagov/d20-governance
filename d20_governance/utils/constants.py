@@ -156,6 +156,17 @@ CULTURE_MODULES = {
         "url": "",  # TODO: make ritual img
         "input_value": 0,
     },
+    "values": {
+        "state": False,
+        "mode": None,
+        "activated": False,
+        "llm_altered": True,
+        "llm_disclosure": "You hold and maintain a set of mutually agreed upon values. The values you maintain are the values defined by the community. You review the contents of messages sent for validation and analyze the contents in terms of the values you hold. You describe in what ways the input text are aligned or unaligned with the values you hold.",
+        "activated_message": "A means of validating the cultural alignment of this online communiuty is now available. Respond to a message with check-values.",
+        "deactivated_message": "Automatic measurement of values is no longer present, through an essence of the culture remains, and you can respond to messages with `check-values` to check value alignment.",
+        "url": "",  # TODO: make ritual img
+        "input_value": 0,
+    },
 }
 
 # DECISION MODULES
@@ -178,6 +189,25 @@ DECISION_MODULES = {
         "url": "",  # TODO: make decision img
         "input_value": 0,
     },
+}
+
+# VALUES DEFINITION
+
+MOCK_VALUES_LIST = [
+    "respect",
+    "divisiveness",
+    "support",
+    "exploitation",
+    "trust",
+    "domination",
+]
+
+MOCK_VALUES_DICT = {
+    "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
+    "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
+    "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",
+    "Collaboration": "Our community encourage collaboration, fostering an environment where members can work together and share knowledge or skills.",
+    "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
 }
 
 # SPECTRUM VALUES

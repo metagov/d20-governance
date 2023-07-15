@@ -191,7 +191,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                             await game_channel_ctx.send(
                                 "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
                             )
-                            await display_decision_status(game_channel_ctx)
+                            await display_module_status(
+                                game_channel_ctx, DECISION_MODULES
+                            )
                             await game_channel_ctx.send(
                                 "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
                             )
@@ -944,6 +946,22 @@ async def eloquence(ctx, state: bool = None, timeout: int = None):
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def values(ctx, state: bool = None, timeout: int = None):
+    """
+    Trigger values module
+    """
+    channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(ctx.channel, [])
+    await toggle_culture_module(
+        ctx,
+        state=state,
+        timeout=timeout,
+        module_name="values",
+        channel_culture_modules=channel_culture_modules,
+    )
+
+
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def diversity(ctx):
     """
     Trigger diversity module
@@ -1430,7 +1448,7 @@ async def send_webhook_message(webhook, message, filtered_message):
     await webhook.send(**payload)
 
 
-async def process_message(message):
+async def process_message(context, message):
     """
     Process messages from on_message
     """
@@ -1443,13 +1461,25 @@ async def process_message(message):
     if IS_QUIET and not message.author.bot:
         await message.delete()
     else:
-        # Assign message content to be filtered
-        message_to_be_filtered = message.content
-
         # Check if any modes are active deleted the original message
         channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(message.channel, [])
         if channel_culture_modules:
-            await message.delete()
+            if message.content != "check-values":
+                message_to_be_filtered = message
+                await message.delete()
+            else:
+                if message.reference:
+                    referenced_message = await message.channel.fetch_message(
+                        message.reference.message_id
+                    )
+                    if referenced_message.author.bot:
+                        await context.send("Cannot check values of messages from bot")
+                        return
+                    else:
+                        message_to_be_filtered = referenced_message
+                        print(
+                            f"Original Message Contnet: {message_to_be_filtered.content}, posted by {message.author}"
+                        )
             filtered_message = await apply_culture_modes(
                 modules=channel_culture_modules,
                 message=message,
@@ -1482,10 +1512,10 @@ async def apply_culture_modes(modules, message, message_to_be_filtered):
                 previous_message = msg.content
                 break
             filtered_message = await initialize_ritual_agreement(
-                previous_message, message_to_be_filtered
+                previous_message, message_to_be_filtered.content
             )
         if module == "obscurity":
-            obscure_function = Obscurity(message_to_be_filtered)
+            obscure_function = Obscurity(message_to_be_filtered.content)
             if CULTURE_MODULES["obscurity"]["mode"] == "scramble":
                 filtered_message = obscure_function.scramble()
             if CULTURE_MODULES["obscurity"]["mode"] == "replace_vowels":
@@ -1495,7 +1525,14 @@ async def apply_culture_modes(modules, message, message_to_be_filtered):
             if CULTURE_MODULES["obscurity"]["mode"] == "camel_case":
                 filtered_message = obscure_function.camel_case()
         if module == "eloquence":
-            filtered_message = await filter_eloquence(message_to_be_filtered)
+            filtered_message = await filter_eloquence(message_to_be_filtered.content)
+        if module == "values":
+            values_list = f"Community Defined Values:\n\n"
+            for value in MOCK_VALUES_DICT.keys():
+                print(value)
+                values_list += f"* {value}\n"
+            llm_response = await filter_by_values(message_to_be_filtered.content)
+            filtered_message = f"```{values_list}``````Message: {message_to_be_filtered.content}\n\nMessage author: {message_to_be_filtered.author}```\n> **LLM Analysis:** {llm_response}"
     return filtered_message
 
 
@@ -1505,8 +1542,7 @@ async def show_governance_status(ctx):
     """
     Display overall governance inputs
     """
-    await display_culture_status(ctx)
-    await display_decision_status(ctx)
+    await display_module_status(ctx)
 
 
 async def clear_decision_input_values(ctx):
@@ -1518,6 +1554,18 @@ async def clear_decision_input_values(ctx):
     for decision_module in DECISION_MODULES:
         DECISION_MODULES[decision_module]["input_value"] = 0
     print("Decision input values set to 0")
+
+
+@bot.command()
+async def list_values(ctx):
+    message_content = "Our collectively defined values + definitions:\n\n"
+    for (
+        value,
+        description,
+    ) in MOCK_VALUES_DICT.items():
+        message_content += f"{value}:\n{description}\n\n"
+    message = f"```{message_content}```"
+    await ctx.send(message)
 
 
 async def update_module_decision(context, new_decision_module):
@@ -1603,55 +1651,36 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                     <= INPUT_SPECTRUM["threshold"]
                 ):
                     CULTURE_MODULES[module]["input_value"] = INPUT_SPECTRUM["scale"]
-                    await display_culture_status(context)
+                    await display_module_status(context)
 
 
-async def display_decision_status(context):
-    """
-    Display the current status of decision input values
-    """
-    embed = discord.Embed(
-        title="Decision Display Status",
-        color=discord.Color.green(),
-    )
-
-    for decision_module in DECISION_MODULES:
-        input_value = DECISION_MODULES[decision_module]["input_value"]
-        input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
-        input_empty = INPUT_SPECTRUM["scale"] - input_filled
-
-        progress_bar = "🟦" * input_filled + "🟨" * input_empty
-
-        embed.add_field(
-            name=f"{decision_module.capitalize()}",
-            value=f"{progress_bar}",
-            inline=False,
-        )
-
-    await context.send(embed=embed)
-    await calculate_module_inputs(context)
-
-
-async def display_culture_status(context):
+async def display_module_status(context, module_dict):
     """
     Display the current status of culture input values
     """
-    embed = discord.Embed(
-        title="Culture Display Status",
-        color=discord.Color.green(),
-    )
+    if module_dict == CULTURE_MODULES:
+        embed = discord.Embed(
+            title="Culture Display Status",
+            color=discord.Color.green(),
+        )
+    else:
+        embed = discord.Embed(
+            title="Decision Display Status",
+            color=discord.Color.green(),
+        )
 
-    for module in CULTURE_MODULES:
-        input_value = CULTURE_MODULES[module]["input_value"]
+    for module in module_dict:
+        input_value = module_dict[module]["input_value"]
         input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
         input_empty = INPUT_SPECTRUM["scale"] - input_filled
 
         progress_bar = "🟦" * input_filled + "🟨" * input_empty
-        progress_bar = (
-            progress_bar[: INPUT_SPECTRUM["threshold"]]
-            + "📍"
-            + progress_bar[INPUT_SPECTRUM["threshold"] :]
-        )
+        if module_dict == CULTURE_MODULES:
+            progress_bar = (
+                progress_bar[: INPUT_SPECTRUM["threshold"]]
+                + "📍"
+                + progress_bar[INPUT_SPECTRUM["threshold"] :]
+            )
 
         embed.add_field(
             name=f"{module.capitalize()}",
@@ -1685,7 +1714,7 @@ async def on_message(message):
             await bot.process_commands(message)
             return
 
-        # This symbold ensures webhook messages don't loop
+        # This symbol ensures webhook messages don't loop
         if message.content.startswith("※"):
             return
 
@@ -1704,7 +1733,7 @@ async def on_message(message):
                             )
                             return
                         await process_decision_input(context, module)
-                        await display_decision_status(context)
+                        await display_module_status(context, DECISION_MODULES)
                         return
                     else:
                         return
@@ -1717,7 +1746,7 @@ async def on_message(message):
                         )
                         return
                     await process_culture_input(context, module)
-                    await display_culture_status(context)
+                    await display_module_status(context, CULTURE_MODULES)
                     return
 
         await process_message(context, message)
@@ -1726,7 +1755,7 @@ async def on_message(message):
         traceback_str = "".join(traceback.format_exception(type, value, tb))
         print(f"Unhandled exception:\n{traceback_str}")
         logging.error(f"Unhandled exception:\n{traceback_str}")
-        await message.context.send("An error occurred.")
+        await context.send("An error occurred.")
 
 
 async def process_decision_input(ctx, module):
