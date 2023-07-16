@@ -87,6 +87,12 @@ GOVERNANCE_TYPES = {
     "process": "d20_governance/governance_stacks/types/process.yaml",
     "structure": "d20_governance/governance_stacks/types/structure.yaml",
 }
+GOVERNANCE_SVG_ICONS = {
+    "culture": "assets/imgs/CommunityRule/icons/palette.svg",
+    "decision": "assets/imgs/CommunityRule/icons/thumb-up.svg",
+    "process": "assets/imgs/CommunityRule/icons/rotate.svg",
+    "structure": "assets/imgs/CommunityRule/icons/building.svg",
+}
 
 # FONTS
 FONT_PATH_BUBBLE = "assets/fonts/bubble_love_demo.otf"
@@ -115,6 +121,7 @@ ACTIVE_GLOBAL_CULTURE_MODULES = {}
 
 CULTURE_MODULES = {
     "obscurity": {
+        "module_string": "obscurity",
         "state": False,
         "mode": "scramble",
         "activated": False,
@@ -122,9 +129,11 @@ CULTURE_MODULES = {
         "activated_message": "Messages will be distored based on mode of obscurity.",
         "deactivated_message": "Messages will no longer be distored by obscurity.",
         "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
+        "icon": GOVERNANCE_SVG_ICONS["culture"],
         "input_value": 0,
     },
     "eloquence": {
+        "module_string": "eloquence",
         "state": False,
         "mode": None,
         "activated": False,
@@ -133,9 +142,11 @@ CULTURE_MODULES = {
         "activated_message": "Messages will now be process through an LLM.",
         "deactivated_message": "Messages will no longer be processed through an LLM.",
         "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png",
+        "icon": GOVERNANCE_SVG_ICONS["culture"],
         "input_value": 0,
     },
     "ritual": {
+        "module_string": "ritual",
         "state": False,
         "mode": None,
         "activated": False,
@@ -144,9 +155,11 @@ CULTURE_MODULES = {
         "activated_message": "A ritual of agreement permeates throughout the group.",
         "deactivated_message": "Automatic agreement has ended. But will the effects linger in practice?",
         "url": "",  # TODO: make ritual img
+        "icon": GOVERNANCE_SVG_ICONS["culture"],
         "input_value": 0,
     },
     "diversity": {
+        "module_string": "diversity",
         "state": False,
         "mode": None,
         "activated": False,
@@ -154,9 +167,11 @@ CULTURE_MODULES = {
         "activated_message": "A measure of diversity influences the distribution of power.",
         "deactivated_message": "Measurements of diversity continue, but no longer govern this environment's interactions.",
         "url": "",  # TODO: make ritual img
+        "icon": GOVERNANCE_SVG_ICONS["culture"],
         "input_value": 0,
     },
     "values": {
+        "module_string": "values",
         "state": False,
         "mode": None,
         "activated": False,
@@ -165,6 +180,7 @@ CULTURE_MODULES = {
         "activated_message": "A means of validating the cultural alignment of this online communiuty is now available. Respond to a message with check-values.",
         "deactivated_message": "Automatic measurement of values is no longer present, through an essence of the culture remains, and you can respond to messages with `check-values` to check value alignment.",
         "url": "",  # TODO: make ritual img
+        "icon": GOVERNANCE_SVG_ICONS["culture"],
         "input_value": 0,
     },
 }
@@ -174,19 +190,23 @@ ACTIVE_GLOBAL_DECISION_MODULES = {}
 
 DECISION_MODULES = {
     "majority": {
+        "module_string": "majority",
         "state": False,
         "activated": False,
         "activated_message": "Messages will be distored based on mode of obscurity.",
         "deactivated_message": "Messages will no longer be distored by obscurity.",
         "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
     },
     "consensus": {
+        "module_string": "consensus",
         "state": False,
         "activated": False,
         "activated_message": "Messages will now be process through an LLM.",
         "deactivated_message": "Messages will no longer be processed through an LLM.",
         "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
     },
 }

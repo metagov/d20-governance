@@ -1218,11 +1218,11 @@ async def submit_message(ctx, text: str, confirmation_message):
     if hasattr(bot, "quest"):
         bot.quest.add_submission(ctx, text)
         if bot.quest.mode != SIMULATIONS["josh_game"]:
-            await ctx.send(f"{ctx.author.name} {confirmation_message}")
+            await ctx.send(f"🎉  {ctx.author.name} {confirmation_message} 📮")
             return
         else:
             nickname = bot.quest.get_nickname(ctx.author.name)
-            await ctx.send(f"{nickname} {confirmation_message}")
+            await ctx.send(f"🎉  {nickname} {confirmation_message} 📮")
     else:
         await ctx.send(
             "Messages can only be submitted during simulations. Start a simulation by trying `/embark`."
@@ -1242,7 +1242,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"📜 **{player_name}**:\n🗣️  {submission}")
+        submissions.append(f"📜 **{player_name}**:\n   🗣️  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
@@ -1371,6 +1371,22 @@ async def test_img_generation(ctx, text="Obscurity"):
 
     # Clean up the image file
     os.remove("generated_image.png")
+
+
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
+    """
+    Test stability image generation
+    """
+    if module in module_dict:
+        module_string = module_dict[module]["module_string"]
+        print(module_string)
+        svg_icon = module_dict[module]["icon"]
+        print(svg_icon)
+        image = make_module_png(module_string, svg_icon)
+        print(image)
+    await ctx.send(file=discord.File(image))
 
 
 @bot.command(hidden=True)

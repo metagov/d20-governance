@@ -2,7 +2,7 @@ from typing import List
 import random
 import discord
 from d20_governance.utils.constants import CIRCLE_EMOJIS
-from d20_governance.utils.utils import Quest
+from d20_governance.utils.utils import Quest, get_module_png
 from d20_governance.utils.decisions import *
 
 # Voting functions
@@ -112,9 +112,24 @@ async def vote(
     # Define embed
     embed = discord.Embed(
         title=f"Vote: {question}",
-        description=f"Decision module: **{decision_module}**",
+        description="",
         color=discord.Color.dark_gold(),
     )
+    embed.add_field(
+        name="Decision Module:",
+        value="",
+        inline=True,
+    )
+
+    # Get module png
+    module_png = await get_module_png(decision_module)
+
+    # Add module png to vote embed
+    if module_png is not None:
+        print("Attaching module png to embed")
+        file = discord.File(module_png, filename="module.png")
+        embed.set_image(url=f"attachment://module.png")
+        print("Module png attached to embed")
 
     # Create list of options with emojis
     assigned_emojis = random.sample(CIRCLE_EMOJIS, len(options))
@@ -140,7 +155,7 @@ async def vote(
         )
 
     # Send embed message and view
-    await ctx.send(embed=embed, view=vote_view)
+    await ctx.send(embed=embed, file=file, view=vote_view)
     await vote_view.wait()
 
     # Calculate total votes per member interaction
