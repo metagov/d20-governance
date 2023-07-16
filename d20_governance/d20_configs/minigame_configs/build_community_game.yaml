@@ -30,7 +30,13 @@ stages:
 
         You have 2 minutes to submit an answer.
 
-        To submit your proposal, type `/submit [message]`
+        To submit your proposal, type `/submit` followed by your message.
+        
+        For example: `/submit this is my submission`
+
+        If you make a mistake or change your mine you can use `/resubmit` to change your submission.
+
+        See `/help submit` for more information.
     actions:
       - action: countdown 120 "until the next stage. Type /submit and your message now"
     progress_conditions: ["all_submissions_submitted", "timeout 120"]
@@ -51,6 +57,10 @@ stages:
       Review the answers and deliberate and discuss amongst yourselves. Which name do we most prefer?
 
         There will be a majority-based vote in 2 minutes.
+
+        Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
+        
+        Type `/help resubmit` for more information. 
     actions:
       - action: countdown 120 "until making a decision"
     progress_conditions: []
@@ -89,7 +99,13 @@ stages:
 
         You have 2 minutes to submit an answer.
 
-        Type `/submit [message]`
+        To submit your proposal, type `/submit` followed by your message.
+        
+        For example: `/submit this is my submission`
+
+        If you make a mistake or change your mine you can use `/resubmit` to change your submission.
+
+        See `/help submit` for more information.
     actions:
       - action: countdown 120 "until deliberation stage. Type /submit and your message now"
     progress_conditions: []
@@ -124,6 +140,10 @@ stages:
       Review the answers and deliberate amongst yourselves which goal this community should pursue. 
       
         What will animate your activities?
+
+        Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
+        
+        Type `/help resubmit` for more information. 
       
         There will be a majority based vote in 2 minutes.
     actions:
@@ -174,6 +194,14 @@ stages:
         🧠 Be mindful that **consensus** will need to be achieved among the community for an action to be approved.
       
         You have 2 minutes to submit an answer.
+
+        To submit your proposal, type `/submit` followed by your message.
+        
+        For example: `/submit this is my submission`
+
+        If you make a mistake or change your mine you can use `/resubmit` to change your submission.
+
+        See `/help submit` for more information.
     actions:
       - action: countdown 120 "until deliberation. Type /submit and your message now"
     progress_conditions: []
@@ -211,7 +239,11 @@ stages:
     message: >-
       Review the answers and deliberate amongst yourselves what the first goal of this community will be.
 
-       There will be a **consensus** based vote in 2 minutes
+        Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
+      
+        Type `/help resubmit` for more information. 
+
+        There will be a **consensus** based vote in 2 minutes
     actions:
       - action: countdown 120 "until making a decision"
     progress_conditions: []

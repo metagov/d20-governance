@@ -1180,16 +1180,53 @@ async def setcool(ctx, duration=0):
 async def submit(ctx, *, text: str):
     """
     Submit a message
+
+    To submit a message, type `/submit` followed by a space and your message.
+
+    For example: `/submit this is my submission`
+
+    See also `/help resubmit` for information on how to change your submission
     """
-    # delete the user's message
+    if text == None:
+        await ctx.send(
+            "To submit a message type `/submit` followed by a space and your message. For example: `/submit this is my submission`."
+        )
+    confirmation_message = "has made their submission!"
+    await submit_message(ctx, text, confirmation_message)
+
+
+@bot.command()
+@access_control()
+async def resubmit(ctx, *, text: str):
+    """
+    Resubmit/revise a message
+
+    To resubmit a message, type /resubmit followed by a space and your message.
+
+    For example: /resubmit this is my revised submission
+    """
+    if text == None:
+        await ctx.send(
+            "To resubmit and change your message type `/resubmit` followed by a space and your message. For example: `/resubmit this is my revised submission`."
+        )
+    confirmation_message = "has revised their submission!"
+    await submit_message(ctx, text, confirmation_message)
+
+
+async def submit_message(ctx, text: str, confirmation_message):
     await ctx.message.delete()
-    bot.quest.add_submission(ctx, text)
-    if bot.quest.mode != SIMULATIONS["josh_game"]:
-        await ctx.send(f"Added {ctx.author.name}'s submission to the list!")
-        return
+    if hasattr(bot, "quest"):
+        bot.quest.add_submission(ctx, text)
+        if bot.quest.mode != SIMULATIONS["josh_game"]:
+            await ctx.send(f"{ctx.author.name} {confirmation_message}")
+            return
+        else:
+            nickname = bot.quest.get_nickname(ctx.author.name)
+            await ctx.send(f"{nickname} {confirmation_message}")
     else:
-        nickname = bot.quest.get_nickname(ctx.author.name)
-        await ctx.send(f"Added {nickname}'s submission to the list!")
+        await ctx.send(
+            "Messages can only be submitted during simulations. Start a simulation by trying `/embark`."
+        )
 
 
 @bot.command(hidden=True)
@@ -1205,7 +1242,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"📜**{player_name}**:\n\n   🗣️ {submission}")
+        submissions.append(f"📜 **{player_name}**:\n🗣️  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
