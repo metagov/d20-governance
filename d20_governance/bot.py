@@ -222,7 +222,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                             and action.failure_message
                         ):
                             await game_channel_ctx.send(action.failure_message)
-                            await end(ctx, quest)
+                            await end(ctx)
                         raise Exception(
                             f"Failed to execute action {action.action}: {e}"
                         )
@@ -274,30 +274,28 @@ async def timeout(seconds: str):
     return True
 
 
-async def end(ctx, quest: Quest):
+async def end(ctx):
     """
     Archive the quest and channel
     """
     print("Archiving...")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
-    if quest.game_channel is not None:
-        await quest.game_channel.send(
-            "```👋👋👋\n\nThe game is over. This channel is now archived.```"
-        )
-        await quest.game_channel.edit(category=archive_category)
-        overwrites = {
-            ctx.guild.default_role: discord.PermissionOverwrite(
-                read_messages=True, send_messages=False
-            ),
-            ctx.guild.me: discord.PermissionOverwrite(
-                read_messages=True, send_messages=False
-            ),
-        }
-        await quest.game_channel.edit(overwrites=overwrites)
+    await ctx.send("```👋👋👋\n\nThe simulation is over. This channel is now archived.```")
+    await ctx.edit(category=archive_category)
+    overwrites = {
+        ctx.guild.default_role: discord.PermissionOverwrite(
+            read_messages=True, send_messages=False
+        ),
+        ctx.guild.me: discord.PermissionOverwrite(
+            read_messages=True, send_messages=False
+        ),
+        ctx.guild.bot: discord.PermissionOverwrite(
+            read_messages=True, send_messages=False
+        ),
+    }
+    await ctx.edit(overwrites=overwrites)
     print("Archived...")
-    return
-    # TODO: Prevent bot from being able to send messages to arcvhived channels
 
 
 # VIEWS
@@ -1060,6 +1058,30 @@ async def info(
 
 
 @bot.command()
+async def show_decisions(ctx):
+    """
+    Show a list of decisions made
+    """
+    title = "A record of our decisions:"
+    value = ""
+    for question, decision_data in DECISION_DICT.items():
+        decision = decision_data["decision"]
+        decision_module = decision_data["decision_module"]
+
+        value += f"🤔 **Question:** {question}\n✅ **Decision:** {decision}\n🎯 **Decision method:** {decision_module}\n\n"
+
+    embed = discord.Embed(
+        title=title, description=value, color=discord.Color.dark_gold()
+    )
+
+    # If the decision dictionary is not empty show decision list
+    if len(DECISION_DICT) > 0:
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("No decisions have been made yet.")
+
+
+@bot.command()
 async def nickname(ctx):
     """
     Display nickname
@@ -1242,7 +1264,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"📜 **{player_name}**:\n   🗣️  {submission}")
+        submissions.append(f"📜 **{player_name}**:\n          🗣️  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)

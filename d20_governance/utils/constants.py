@@ -191,6 +191,7 @@ ACTIVE_GLOBAL_DECISION_MODULES = {}
 DECISION_MODULES = {
     "majority": {
         "module_string": "majority",
+        "description": "Majority requires a simiple majority from the number of people who voteon the options.",
         "state": False,
         "activated": False,
         "activated_message": "Messages will be distored based on mode of obscurity.",
@@ -201,6 +202,7 @@ DECISION_MODULES = {
     },
     "consensus": {
         "module_string": "consensus",
+        "description": "Consensus requires everyone in the simulation to vote on the same option.",
         "state": False,
         "activated": False,
         "activated_message": "Messages will now be process through an LLM.",
@@ -210,6 +212,10 @@ DECISION_MODULES = {
         "input_value": 0,
     },
 }
+
+# DECISIONS LOG
+
+DECISION_DICT = {}
 
 # VALUES DEFINITION
 

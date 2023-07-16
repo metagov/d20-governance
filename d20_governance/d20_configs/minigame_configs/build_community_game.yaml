@@ -118,6 +118,7 @@ stages:
         Here are the proposed goals for our community.
     actions:
       - action: post_submissions
+      - action: eloquence
     progress_conditions: ["timeout 10"]
     image_path: "assets/imgs/pre_generated/submissions.png"
   
@@ -130,8 +131,7 @@ stages:
         Everything you type will be transformed in accord with a culture of eloquence and rhetorical speech.
         
         Despite this interuption, deliberation must now commence.
-    actions:
-      - action: eloquence
+    actions: []
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/interference.png"
   
@@ -214,6 +214,7 @@ stages:
         Here are a list of proposed first actions.
     actions:
       - action: post_submissions
+      - action: obscurity
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
   
@@ -230,8 +231,7 @@ stages:
         **Remember, you must all vote for the same option, otherwise you will fail the game!** 
         
         Good luck reaching consensus!
-    actions:
-      - action: obscurity
+    actions: []
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/interference.png"
   
@@ -284,6 +284,9 @@ stages:
        In future simulations or complete quests, you will explore how to self-govern by changing how you make decisions, the processes you follow when deliberating decisions, and how to deal with failed proposals.
 
        Thanks for playing.
-    actions: []
+    actions: 
+      - action: show_decisions
+      - action: countdown 240 "until this simulation auto-archives"
+      - action: end
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/end.png"
