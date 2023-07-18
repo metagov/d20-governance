@@ -251,6 +251,40 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
     await asyncio.gather(action_runner(), progress_checker())
 
 
+async def countdown(ctx, timeout_seconds, text: str = None):
+    """
+    Send an updating countdown display
+    """
+    if hasattr(bot, "quest") and bot.quest.fast_mode:
+        timeout_seconds = 7
+
+    # TODO: make this better
+    remaining_seconds = int(timeout_seconds)
+    sleep_interval = remaining_seconds / 5
+
+    send_new_message = True
+    message = None
+    seconds_elapsed = 0
+    while remaining_seconds > 0:
+        remaining_minutes = remaining_seconds / 60
+        new_message = f"```⏳ {remaining_minutes:.2f} minutes remaining {text}.```"
+        if seconds_elapsed >= 60:
+            send_new_message = True
+            seconds_elapsed = 0
+        if send_new_message:
+            message = await ctx.send(new_message)
+            send_new_message = False
+        else:
+            await message.edit(content=new_message)
+
+        remaining_seconds -= sleep_interval
+        seconds_elapsed += sleep_interval
+        await asyncio.sleep(sleep_interval)
+
+    await message.edit(content="```⏲️ Counting down finished.```")
+    print("⧗ Countdown finished.")
+
+
 async def all_submissions_submitted():
     """
     Check that all submissions are submited
@@ -666,42 +700,6 @@ async def make_game_channel(ctx, quest: Quest):
     )
 
 
-@bot.command(hidden=True)
-# @commands.check(lambda ctx: False)
-async def countdown(ctx, timeout_seconds, text: str = None):
-    """
-    Send an updating countdown display
-    """
-    if hasattr(bot, "quest") and bot.quest.fast_mode:
-        timeout_seconds = 7
-
-    # TODO: make this better
-    remaining_seconds = int(timeout_seconds)
-    sleep_interval = remaining_seconds / 5
-
-    send_new_message = True
-    message = None
-    seconds_elapsed = 0
-    while remaining_seconds > 0:
-        remaining_minutes = remaining_seconds / 60
-        new_message = f"```⏳ {remaining_minutes:.2f} minutes remaining {text}.```"
-        if seconds_elapsed >= 60:
-            send_new_message = True
-            seconds_elapsed = 0
-        if send_new_message:
-            message = await ctx.send(new_message)
-            send_new_message = False
-        else:
-            await message.edit(content=new_message)
-
-        remaining_seconds -= sleep_interval
-        seconds_elapsed += sleep_interval
-        await asyncio.sleep(sleep_interval)
-
-    await message.edit(content="```⏲️ Counting down finished.```")
-    print("⧗ Countdown finished.")
-
-
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def transparency(ctx):
@@ -744,218 +742,55 @@ async def autonomy(ctx):
     await ctx.send(embed=embed)
 
 
-async def turn_culture_module_on(ctx, channel_culture_modules, module_name):
-    """
-    Turn on culture module and append to the list of channel culture modules
-    """
-    channel_culture_modules.append(module_name)
-    ACTIVE_GLOBAL_CULTURE_MODULES[ctx.channel] = channel_culture_modules
-
-    embed = discord.Embed(
-        title=f"Culture: {module_name.upper()}", color=discord.Color.dark_gold()
-    )
-    embed.set_thumbnail(url=CULTURE_MODULES[module_name]["url"])
-    embed.add_field(
-        name="ACTIVATED",
-        value=CULTURE_MODULES[module_name]["activated_message"],
-        inline=False,
-    )
-    if CULTURE_MODULES[module_name]["mode"] is not None:
-        embed.add_field(
-            name="Mode:",
-            value=CULTURE_MODULES[module_name]["mode"],
-            inline=False,
-        )
-    if CULTURE_MODULES[module_name]["llm_altered"]:
-        embed.add_field(
-            name="LLM Prompt:",
-            value=CULTURE_MODULES[module_name]["llm_disclosure"],
-            inline=False,
-        )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modules)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def turn_culture_module_off(ctx, channel_culture_modules, module_name):
-    """
-    Turn off culture module and remove to the list of channel culture modules
-    """
-    channel_culture_modules.remove(module_name)
-    ACTIVE_GLOBAL_CULTURE_MODULES[ctx.channel] = channel_culture_modules
-
-    embed = discord.Embed(
-        title=f"Culture: {module_name.upper()}", color=discord.Color.dark_gold()
-    )
-    embed.set_thumbnail(url=CULTURE_MODULES[module_name]["url"])
-    embed.add_field(
-        name="DEACTIVATED",
-        value=CULTURE_MODULES[module_name]["deactivated_message"],
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modules)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def toggle_culture_module(
-    ctx, state, timeout, module_name, channel_culture_modules, mode=None
-):
-    """
-    Toggle culture module globally
-    """
-    # Turn on culture modude if not activated
-    if state is True:
-        if module_name not in channel_culture_modules:
-            await turn_culture_module_on(ctx, channel_culture_modules, module_name)
-        else:
-            return
-
-    # Turn off culture module if activated
-    elif state is False:
-        if timeout == None:
-            if module_name in channel_culture_modules:
-                await turn_culture_module_off(ctx, channel_culture_modules, module_name)
-            else:
-                return
-        if timeout is not None:
-            if module_name in channel_culture_modules:
-                CULTURE_MODULES[module_name]["state"] = None
-                await turn_culture_module_off(ctx, channel_culture_modules, module_name)
-                countdown_message = f"until {module_name} turns back on"
-                await countdown(ctx, timeout, countdown_message)
-            if not CULTURE_MODULES[module_name]["activated"]:
-                CULTURE_MODULES[module_name]["state"] = True
-                await turn_culture_module_on(ctx, channel_culture_modules, module_name)
-            else:
-                return
-
-    # Toggle culture module and set global state
-    elif state is None:
-        if mode is None:
-            if module_name not in channel_culture_modules:
-                CULTURE_MODULES[module_name]["state"] = True
-                await turn_culture_module_on(ctx, channel_culture_modules, module_name)
-            else:
-                CULTURE_MODULES[module_name]["state"] = False
-                await turn_culture_module_off(ctx, channel_culture_modules, module_name)
-        else:
-            if module_name not in channel_culture_modules:
-                CULTURE_MODULES[module_name]["state"] = True
-                await turn_culture_module_on(ctx, channel_culture_modules, module_name)
-            else:
-                CULTURE_MODULES[module_name]["state"] = False
-                await turn_culture_module_off(ctx, channel_culture_modules, module_name)
-
-
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def obscurity(ctx, mode: str = None, state: bool = None, timeout: int = None):
+async def obscurity(ctx, mode: str = None):
     """
     Control obscurity module
     """
-    channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(ctx.channel, [])
     available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
+    module = CULTURE_MODULES.get("obscurity", None)
+    if module is None:
+        return
+
+    if mode is None:
+        await module.toggle_global_state(ctx)
     if mode not in available_modes:
         embed = discord.Embed(
             title=f"Error - The mode '{mode}' is not available.",
             color=discord.Color.red(),
         )
     else:
-        CULTURE_MODULES["obscurity"]["mode"] = mode
-    await toggle_culture_module(
-        ctx,
-        state=state,
-        timeout=timeout,
-        module_name="obscurity",
-        channel_culture_modules=channel_culture_modules,
-        mode=mode,
-    )
-
-
-async def turn_eloquence_on(ctx, channel_culture_modes):
-    channel_culture_modes.append("ELOQUENCE")
-    ACTIVE_GLOBAL_CULTURE_MODULES[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-    )
-    embed.add_field(
-        name="ACTIVATED:",
-        value="Messages will now be process through an LLM.",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    embed.add_field(
-        name="LLM Prompt:",
-        value="`You are from the Shakespearean era. Please rewrite the following text in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent: [your message]`",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def turn_eloquence_off(ctx, channel_culture_modes):
-    channel_culture_modes.remove("ELOQUENCE")
-    ACTIVE_GLOBAL_CULTURE_MODULES[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: Eloquence", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-    )
-    embed.add_field(
-        name="DEACTIVATED",
-        value="Messages will no longer be processed through an LLM",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
+        module.config["mode"] = mode
+        await module.toggle_global_state(ctx)
 
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def eloquence(ctx, state: bool = None, timeout: int = None):
+async def eloquence(ctx):
     """
     Trigger eloquence module
+
+    Defaults to toggling culture module unless true or false are passed to set global state
     """
-    channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(ctx.channel, [])
-    await toggle_culture_module(
-        ctx,
-        state=state,
-        timeout=timeout,
-        module_name="eloquence",
-        channel_culture_modules=channel_culture_modules,
-    )
+    module = CULTURE_MODULES.get("eloquence", None)
+    if module is None:
+        return
+
+    await module.toggle_global_state(ctx)
 
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def values(ctx, state: bool = None, timeout: int = None):
+async def values(ctx):
     """
     Trigger values module
     """
-    channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(ctx.channel, [])
-    await toggle_culture_module(
-        ctx,
-        state=state,
-        timeout=timeout,
-        module_name="values",
-        channel_culture_modules=channel_culture_modules,
-    )
+    module = CULTURE_MODULES.get("values", None)
+    if module is None:
+        return
+
+    await module.toggle_global_state(ctx)
 
 
 @bot.command()
@@ -964,6 +799,18 @@ async def diversity(ctx):
     """
     Trigger diversity module
     """
+    module = CULTURE_MODULES.get("diversity", None)
+    if module is None:
+        return
+
+    await module.toggle_global_state(ctx)
+
+    # Display the diversity counts if global state is true
+    if module.is_global_state_active():
+        await display_diversity(ctx)
+
+
+async def display_diversity(ctx):
     # Display the message count for each user
     message = "Message count by user:\n"
 
@@ -975,23 +822,20 @@ async def diversity(ctx):
     for user_id, count in sorted_user_message_count:
         user = await ctx.guild.fetch_member(user_id)
         message += f"{user.name}: {count}\n"
-    await ctx.send(message)
+    await ctx.send(f"```{message}```")
 
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def ritual(ctx, state: bool = None, timeout: int = None):
+async def ritual(ctx):
     """
     Trigger ritual module.
     """
-    channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(ctx.channel, [])
-    await toggle_culture_module(
-        ctx,
-        state=state,
-        timeout=timeout,
-        module_name="ritual",
-        channel_culture_modules=channel_culture_modules,
-    )
+    module = CULTURE_MODULES.get("ritual", None)
+    if module is None:
+        return
+
+    await module.toggle_global_state(ctx)
 
 
 @bot.command(hidden=True)
@@ -1493,124 +1337,6 @@ async def on_error(event):
     logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
 
 
-# MESSAGE PROCESSING
-async def create_webhook(channel):
-    """
-    Create webhooks for having player avatars passed through to bot avatar
-    """
-    global WEBHOOK_LIST
-    webhook = None
-    for wh in WEBHOOK_LIST:
-        if wh.channel.id == channel.id:
-            webhook = wh
-
-    if not webhook:
-        webhook = await channel.create_webhook(name="InternalWebhook")
-        WEBHOOK_LIST.append(webhook)
-
-    return webhook
-
-
-async def send_webhook_message(webhook, message, filtered_message):
-    """
-    Use webhook to transform avatar of bot to user avatar
-    """
-    payload = {
-        "content": f"※ {filtered_message}",
-        "username": message.author.name,
-        "avatar_url": message.author.avatar.url if message.author.avatar else None,
-    }
-    await webhook.send(**payload)
-
-
-async def process_message(context, message):
-    """
-    Process messages from on_message
-    """
-    # Increment message count for the user (for /diversity)
-    user_id = message.author.id
-    if user_id not in USER_MESSAGE_COUNT:
-        USER_MESSAGE_COUNT[user_id] = 0
-    USER_MESSAGE_COUNT[user_id] += 1
-
-    if IS_QUIET and not message.author.bot:
-        await message.delete()
-    else:
-        # Check if any modes are active deleted the original message
-        channel_culture_modules = ACTIVE_GLOBAL_CULTURE_MODULES.get(message.channel, [])
-        if channel_culture_modules:
-            if message.content != "check-values":
-                message_to_be_filtered = message
-                await message.delete()
-            else:
-                if message.reference:
-                    referenced_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
-                    if referenced_message.author.bot:
-                        await context.send("Cannot check values of messages from bot")
-                        return
-                    else:
-                        message_to_be_filtered = referenced_message
-                        print(
-                            f"Original Message Contnet: {message_to_be_filtered.content}, posted by {message.author}"
-                        )
-            filtered_message = await apply_culture_modes(
-                modules=channel_culture_modules,
-                message=message,
-                message_to_be_filtered=message_to_be_filtered,
-            )
-            webhook = await create_webhook(message.channel)
-            await send_webhook_message(webhook, message, filtered_message)
-
-
-async def apply_culture_modes(modules, message, message_to_be_filtered):
-    """
-    Filter messages based on culture modules
-
-    Filtering is cumulative
-
-    Order of application is derived from the active_global_culture_modules list
-    """
-    for module in modules:
-        if module == "diversity":
-            pass
-        if module == "ritual":
-            # Get the most recently posted message in the channel that isn't from a bot
-            async for msg in message.channel.history(limit=100):
-                if msg.id == message.id:
-                    continue
-                if msg.author.bot:
-                    continue
-                if msg.content.startswith("/"):
-                    continue
-                previous_message = msg.content
-                break
-            filtered_message = await initialize_ritual_agreement(
-                previous_message, message_to_be_filtered.content
-            )
-        if module == "obscurity":
-            obscure_function = Obscurity(message_to_be_filtered.content)
-            if CULTURE_MODULES["obscurity"]["mode"] == "scramble":
-                filtered_message = obscure_function.scramble()
-            if CULTURE_MODULES["obscurity"]["mode"] == "replace_vowels":
-                filtered_message = obscure_function.replace_vowels()
-            if CULTURE_MODULES["obscurity"]["mode"] == "pig_latin":
-                filtered_message = obscure_function.pig_latin()
-            if CULTURE_MODULES["obscurity"]["mode"] == "camel_case":
-                filtered_message = obscure_function.camel_case()
-        if module == "eloquence":
-            filtered_message = await filter_eloquence(message_to_be_filtered.content)
-        if module == "values":
-            values_list = f"Community Defined Values:\n\n"
-            for value in MOCK_VALUES_DICT.keys():
-                print(value)
-                values_list += f"* {value}\n"
-            llm_response = await filter_by_values(message_to_be_filtered.content)
-            filtered_message = f"```{values_list}``````Message: {message_to_be_filtered.content}\n\nMessage author: {message_to_be_filtered.author}```\n> **LLM Analysis:** {llm_response}"
-    return filtered_message
-
-
 # GOVERNANCE INPUT
 @bot.command()
 async def show_governance_status(ctx):
@@ -1692,41 +1418,64 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                 await context.send(f"```{max_keys[0]} mode activated!```")
 
     # Calculate culture inputs
-    for module in CULTURE_MODULES:
+    async def evaluate_module_state(module_name):
+        module = CULTURE_MODULES.get(module_name, None)
+        if module is None:
+            return
+
+        # Toggle local and global state of modules based on input values
+        # If local state not true and input value passes threshold
         if (
-            not CULTURE_MODULES[module]["activated"]
-            and CULTURE_MODULES[module]["input_value"] > INPUT_SPECTRUM["threshold"]
+            not module.is_local_state_active()
+            and module.config["input_value"] > INPUT_SPECTRUM["threshold"]
         ):
-            CULTURE_MODULES[module]["activated"] = True
-            if not CULTURE_MODULES[module]["state"]:
-                function_to_call = globals().get(module)
-                await function_to_call(context, state=True)
-            if CULTURE_MODULES[module]["state"]:
+            module.activate_local_state()
+            # If global state is true let user know that module is already activated
+            if module.is_global_state_active():
+                # already on
                 await context.send(
-                    f"```{module.capitalize()} mode already activated!```"
+                    f"```{module_name.capitalize()} module is already activated!```"
                 )
-            if CULTURE_MODULES[module]["state"] == None:
-                function_to_call = globals().get(module)
-                await function_to_call(context)
-        elif (
-            CULTURE_MODULES[module]["activated"]
-            and CULTURE_MODULES[module]["input_value"] <= INPUT_SPECTRUM["threshold"]
-        ):
-            CULTURE_MODULES[module]["activated"] = False
-            if not CULTURE_MODULES[module]["state"]:
-                function_to_call = globals().get(module)
-                await function_to_call(context, state=False)
             else:
-                function_to_call = globals().get(module)
-                await function_to_call(context, state=False, timeout=20)
-                if not CULTURE_MODULES[module]["activated"]:
-                    CULTURE_MODULES[module]["activated"] = True
-                if (
-                    CULTURE_MODULES[module]["input_value"]
-                    <= INPUT_SPECTRUM["threshold"]
-                ):
-                    CULTURE_MODULES[module]["input_value"] = INPUT_SPECTRUM["scale"]
-                    await display_module_status(context)
+                # Otherwiseactivate the global module
+                await module.activate_global_state(context)
+
+        # If local state is true and value is equales or gos under threshold
+        elif (
+            module.is_local_state_active()
+            and module.config["input_value"] <= INPUT_SPECTRUM["threshold"]
+        ):
+            # Turn off local state
+            module.deactivate_local_state()
+            # If global state is false remove module from active modules list
+            # TODO: There is still a logical knot in here that needs to be unwound
+            # If global state is false, the next step shouldn't be to deactivate the global state
+            if not module.is_global_state_active():
+                await module.deactivate_global_state(context)
+
+            # If global state is true
+            else:
+                # TODO: This is practically it's own function and can be made more modular in the future
+                # Turn off global state based on timeout value
+                timeout = 20
+                await module.deactivate_global_state(context, timeout)
+                # Send a countdown message to user letting them know the module they turned off will turn back on
+                countdown_message = f"until {module_name} turns back on"
+                await countdown(context, timeout, countdown_message)
+                # If local state is false after timeout
+                if not module.is_local_state_active():
+                    # Reactivate the local state
+                    module.activate_local_state()
+                    # If value is less than or equal to threshold after timeout set input value to spectrum max
+                    if module.config["input_value"] <= INPUT_SPECTRUM["threshold"]:
+                        module.config["input_value"] = INPUT_SPECTRUM["scale"]
+                        await display_module_status(context, CULTURE_MODULES)
+                        await context.send(
+                            f"```{module.config['module_string'].capitalize()} has been turned back on and set to the max!```"
+                        )
+
+    for module_name in CULTURE_MODULES.keys():
+        await evaluate_module_state(module_name)
 
 
 async def display_module_status(context, module_dict):
@@ -1744,8 +1493,9 @@ async def display_module_status(context, module_dict):
             color=discord.Color.green(),
         )
 
-    for module in module_dict:
-        input_value = module_dict[module]["input_value"]
+    for module_name in module_dict:
+        module = CULTURE_MODULES[module_name]
+        input_value = module.config["input_value"]
         input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
         input_empty = INPUT_SPECTRUM["scale"] - input_filled
 
@@ -1758,13 +1508,151 @@ async def display_module_status(context, module_dict):
             )
 
         embed.add_field(
-            name=f"{module.capitalize()}",
+            name=f"{module.config['module_string'].capitalize()}",
             value=f"{progress_bar}",
             inline=False,
         )
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
+
+
+# MESSAGE PROCESSING
+async def create_webhook(channel):
+    """
+    Create webhooks for having player avatars passed through to bot avatar
+    """
+    global WEBHOOK_LIST
+    webhook = None
+    for wh in WEBHOOK_LIST:
+        if wh.channel.id == channel.id:
+            webhook = wh
+
+    if not webhook:
+        webhook = await channel.create_webhook(name="InternalWebhook")
+        WEBHOOK_LIST.append(webhook)
+
+    return webhook
+
+
+async def send_webhook_message(webhook, message, filtered_message):
+    """
+    Use webhook to transform avatar of bot to user avatar
+    """
+    payload = {
+        "content": f"※ {filtered_message}",
+        "username": message.author.name,
+        "avatar_url": message.author.avatar.url if message.author.avatar else None,
+    }
+    await webhook.send(**payload)
+
+
+async def process_message(context, message):
+    """
+    Process messages from on_message
+    """
+    if IS_QUIET and not message.author.bot:
+        await message.delete()
+    else:
+        # Check if any modes are active deleted the original message
+        active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL.get(
+            str(message.channel), ListSet()
+        )
+        if active_modules_by_channel:
+            reference_message = None
+            filtered_message = None
+            if message.content != "check-values":
+                filtered_message = message.content
+                await message.delete()
+            else:
+                if message.reference:
+                    reference_message = await message.channel.fetch_message(
+                        message.reference.message_id
+                    )
+                    if (
+                        reference_message.author.bot
+                        and not reference_message.content.startswith(
+                            "※"
+                        )  # This condition lets webhook messages to be checked
+                    ):
+                        await context.send("Cannot check values of messages from bot")
+                        return
+                    else:
+                        print(
+                            f"Original Message Content: {reference_message.content}, posted by {message.author}"
+                        )
+            filtered_message = await apply_culture_modes(
+                modules=active_modules_by_channel,
+                message=message,
+                filtered_message=filtered_message,
+                reference_message=reference_message,
+            )
+            webhook = await create_webhook(message.channel)
+            await send_webhook_message(webhook, message, filtered_message)
+        else:
+            return
+
+
+async def apply_culture_modes(
+    modules, message, filtered_message=None, reference_message=None
+):
+    """
+    Filter messages based on culture modules
+
+    Filtering is cumulative
+
+    Order of application is derived from the active_global_culture_modules list
+    """
+    context = await bot.get_context(message)
+
+    # Increment message count for the user (for /diversity)
+    user_id = message.author.id
+    if user_id not in USER_MESSAGE_COUNT:
+        USER_MESSAGE_COUNT[user_id] = 0
+    USER_MESSAGE_COUNT[user_id] += 1
+
+    for module_name in modules:
+        module = CULTURE_MODULES[module_name]
+        if module_name == "diversity":
+            await display_diversity(context)
+        if module_name == "ritual":
+            # Get the most recently posted message in the channel that isn't from a bot
+            # TODO: Consider revising this to also take messages process as webhooks
+            # Otherwise, this function can end up referencing very old messaged during periods of high cultural activity
+            async for msg in message.channel.history(limit=100):
+                if msg.id == message.id:
+                    continue
+                if msg.author.bot:
+                    continue
+                if msg.content.startswith("/"):
+                    continue
+                previous_message = msg.content
+                break
+            filtered_message = await initialize_ritual_agreement(
+                previous_message, filtered_message
+            )
+        if module_name == "obscurity":
+            obscure_function = Obscurity(filtered_message)
+            if module.config["mode"] == "scramble":
+                filtered_message = obscure_function.scramble()
+            if module.config["mode"] == "replace_vowels":
+                filtered_message = obscure_function.replace_vowels()
+            if module.config["mode"] == "pig_latin":
+                filtered_message = obscure_function.pig_latin()
+            if module.config["mode"] == "camel_case":
+                filtered_message = obscure_function.camel_case()
+        if module_name == "eloquence":
+            filtered_message = await filter_eloquence(filtered_message)
+        if module_name == "values":
+            if reference_message == None:
+                pass
+            else:
+                values_list = f"Community Defined Values:\n\n"
+                for value in MOCK_VALUES_DICT.keys():
+                    values_list += f"* {value}\n"
+                llm_response = await filter_by_values(reference_message.content)
+                filtered_message = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **LLM Analysis:** {llm_response}"
+    return filtered_message
 
 
 # ON MESSAGE
@@ -1793,12 +1681,13 @@ async def on_message(message):
         if message.content.startswith("※"):
             return
 
-        for module in DECISION_MODULES.keys() | CULTURE_MODULES.keys():
+        for module_name in DECISION_MODULES.keys() | CULTURE_MODULES.keys():
             if (
-                message.content.lower() == f"{module} +1"
-                or message.content.lower() == f"{module} -1"
+                message.content.lower() == f"{module_name} +1"
+                or message.content.lower() == f"{module_name} -1"
             ):
-                if module in DECISION_MODULES:
+                change = 1 if message.content.lower().endswith("+1") else -1
+                if module_name in DECISION_MODULES:
                     if VOTE_RETRY:
                         decision_bucket = cooldowns["decisions"].get_bucket(message)
                         retry_after = decision_bucket.update_rate_limit()
@@ -1807,12 +1696,13 @@ async def on_message(message):
                                 f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
                             )
                             return
-                        await process_decision_input(context, module)
+
+                        DECISION_MODULES[module_name]["input_value"] += change
                         await display_module_status(context, DECISION_MODULES)
                         return
                     else:
                         return
-                elif module in CULTURE_MODULES:
+                elif module_name in CULTURE_MODULES:
                     culture_bucket = cooldowns["cultures"].get_bucket(message)
                     retry_after = culture_bucket.update_rate_limit()
                     if retry_after:
@@ -1820,7 +1710,9 @@ async def on_message(message):
                             f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
                         )
                         return
-                    await process_culture_input(context, module)
+
+                    module = CULTURE_MODULES[module_name]
+                    module.config["input_value"] += change
                     await display_module_status(context, CULTURE_MODULES)
                     return
 
@@ -1831,47 +1723,3 @@ async def on_message(message):
         print(f"Unhandled exception:\n{traceback_str}")
         logging.error(f"Unhandled exception:\n{traceback_str}")
         await context.send("An error occurred.")
-
-
-async def process_decision_input(ctx, module):
-    """
-    Route decision module inputs to +1 or -1
-    """
-    if module in DECISION_MODULES:
-        if ctx.message.content.endswith("+1"):
-            await plus_one_input(module=module, modules_dict=DECISION_MODULES)
-        if ctx.message.content.endswith("-1"):
-            await minus_one_input(module=module, modules_dict=DECISION_MODULES)
-    else:
-        await ctx.send("Invalid module input")
-
-
-async def process_culture_input(ctx, module):
-    """
-    Route culture module inputs to +1 or -1
-    """
-    if module in CULTURE_MODULES:
-        if ctx.message.content.endswith("+1"):
-            await plus_one_input(module=module, modules_dict=CULTURE_MODULES)
-        if ctx.message.content.endswith("-1"):
-            await minus_one_input(module=module, modules_dict=CULTURE_MODULES)
-    else:
-        await ctx.send("Invalid mpdule input")
-
-
-async def plus_one_input(module, modules_dict):
-    """
-    Increment input value by 1
-    """
-    if module in modules_dict:
-        if modules_dict[module]["input_value"] < 10:
-            modules_dict[module]["input_value"] += 1
-
-
-async def minus_one_input(module, modules_dict):
-    """
-    Decrement input value by 1
-    """
-    if module in modules_dict:
-        if modules_dict[module]["input_value"] > 0:
-            modules_dict[module]["input_value"] -= 1
