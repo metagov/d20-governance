@@ -261,13 +261,19 @@ async def countdown(ctx, timeout_seconds, text: str = None):
     # TODO: make this better
     remaining_seconds = int(timeout_seconds)
     sleep_interval = remaining_seconds / 5
+    remaining_minutes = remaining_seconds / 60
+
+    first_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
+    await ctx.send(first_message)
 
     send_new_message = True
     message = None
     seconds_elapsed = 0
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
-        new_message = f"```⏳ {remaining_minutes:.2f} minutes remaining {text}.```"
+        new_message = (
+            f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
+        )
         if seconds_elapsed >= 60:
             send_new_message = True
             seconds_elapsed = 0
@@ -315,8 +321,9 @@ async def end(ctx):
     print("Archiving...")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
+    print(ctx)
     await ctx.send("```👋👋👋\n\nThe simulation is over. This channel is now archived.```")
-    await ctx.edit(category=archive_category)
+    await ctx.channel.edit(category=archive_category)
     overwrites = {
         ctx.guild.default_role: discord.PermissionOverwrite(
             read_messages=True, send_messages=False
@@ -324,11 +331,8 @@ async def end(ctx):
         ctx.guild.me: discord.PermissionOverwrite(
             read_messages=True, send_messages=False
         ),
-        ctx.guild.bot: discord.PermissionOverwrite(
-            read_messages=True, send_messages=False
-        ),
     }
-    await ctx.edit(overwrites=overwrites)
+    await ctx.channel.edit(overwrites=overwrites)
     print("Archived...")
 
 
@@ -1493,25 +1497,48 @@ async def display_module_status(context, module_dict):
             color=discord.Color.green(),
         )
 
-    for module_name in module_dict:
-        module = CULTURE_MODULES[module_name]
-        input_value = module.config["input_value"]
-        input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
-        input_empty = INPUT_SPECTRUM["scale"] - input_filled
+    if module_dict == CULTURE_MODULES:
+        for module_name in module_dict:
+            module = CULTURE_MODULES[module_name]
+            input_value = module.config["input_value"]
+            module_name_field = module.config["module_string"].capitalize()
+            input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
+            input_empty = INPUT_SPECTRUM["scale"] - input_filled
 
-        progress_bar = "🟦" * input_filled + "🟨" * input_empty
-        if module_dict == CULTURE_MODULES:
-            progress_bar = (
-                progress_bar[: INPUT_SPECTRUM["threshold"]]
-                + "📍"
-                + progress_bar[INPUT_SPECTRUM["threshold"] :]
+            progress_bar = "🟦" * input_filled + "🟨" * input_empty
+            if module_dict == CULTURE_MODULES:
+                progress_bar = (
+                    progress_bar[: INPUT_SPECTRUM["threshold"]]
+                    + "📍"
+                    + progress_bar[INPUT_SPECTRUM["threshold"] :]
+                )
+
+            embed.add_field(
+                name=module_name_field,
+                value=f"{progress_bar}",
+                inline=False,
             )
+    else:
+        for module_name in module_dict:
+            module = module_dict[module_name]["module_string"]
+            input_value = module_dict[module_name]["input_value"]
+            module_name_field = module.capitalize()
+            input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
+            input_empty = INPUT_SPECTRUM["scale"] - input_filled
 
-        embed.add_field(
-            name=f"{module.config['module_string'].capitalize()}",
-            value=f"{progress_bar}",
-            inline=False,
-        )
+            progress_bar = "🟦" * input_filled + "🟨" * input_empty
+            if module_dict == CULTURE_MODULES:
+                progress_bar = (
+                    progress_bar[: INPUT_SPECTRUM["threshold"]]
+                    + "📍"
+                    + progress_bar[INPUT_SPECTRUM["threshold"] :]
+                )
+
+            embed.add_field(
+                name=module_name_field,
+                value=f"{progress_bar}",
+                inline=False,
+            )
 
     await context.send(embed=embed)
     await calculate_module_inputs(context)
