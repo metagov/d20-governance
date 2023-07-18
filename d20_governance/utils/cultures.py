@@ -84,6 +84,18 @@ async def filter_eloquence(text):
     return chain.run(text)
 
 
+async def filter_amplify(text):
+    """
+    A LLM filter for messages during the /eloquence command/function
+    """
+    llm = OpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+    prompt = PromptTemplate(
+        input_variables=["input_text"],
+        template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain.run(text)
+
 async def send_msg_to_random_player(game_channel):
     print("Sending random DM...")
     players = [member for member in game_channel.members if not member.bot]
@@ -104,6 +116,45 @@ def initialize_ritual_agreement(previous_message, new_message):
     response = chain.run(previous_message=previous_message, new_message=new_message)
     return response
 
+async def turn_amplify_on(ctx, channel_culture_modes):
+    channel_culture_modes.append("AMPLIFY")
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: AMPLIFY", color=discord.Color.dark_gold())
+
+    embed.add_field(
+        name="ACTIVATED:",
+        value="Messages will now be process through an LLM.",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    embed.add_field(
+        name="LLM Prompt:",
+        value="Using the provided input text, analyze the original sentiment and then generate a revised version that amplifies the identified sentiment to a greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone.",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
+
+async def turn_amplify_off(ctx, channel_culture_modes):
+    channel_culture_modes.remove("AMPLIFY")
+    active_global_culture_modules[ctx.channel] = channel_culture_modes
+
+    embed = discord.Embed(title="Culture: AMPLIFY", color=discord.Color.dark_gold())
+    embed.add_field(
+        name="DEACTIVATED",
+        value="Messages will no longer be processed through an LLM",
+        inline=False,
+    )
+    embed.add_field(
+        name="ACTIVE CULTURE MODES:",
+        value=f"{', '.join(channel_culture_modes)}",
+        inline=False,
+    )
+    await ctx.send(embed=embed)
 
 async def turn_eloquence_on(ctx, channel_culture_modes):
     channel_culture_modes.append("ELOQUENCE")

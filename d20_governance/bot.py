@@ -794,6 +794,21 @@ async def obscurity(ctx, mode: str = None, state: bool = None, timeout: int = No
             if "OBSCURITY" not in channel_culture_modes:
                 await turn_obscurity_on(ctx, channel_culture_modes)
 
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def amplify(ctx):
+    """
+    Control amplify module
+    """
+    global AMPLIFY
+
+    channel_culture_modes = active_global_culture_modules.get(ctx.channel, [])
+
+    # Turn on eloquence mode if not activated
+    if "AMPLIFY" not in channel_culture_modes:
+            await turn_amplify_on(ctx, channel_culture_modes)
+    else: 
+        await turn_amplify_off(ctx, channel_culture_modes)
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -1372,8 +1387,9 @@ async def apply_culture_modes(modes, message, filtered_message):
                 filtered_message = obscure_function.camel_case()
         if mode == "ELOQUENCE":
             filtered_message = await filter_eloquence(filtered_message)
+        if mode == "AMPLIFY":
+            filtered_message = await filter_amplify(filtered_message)
     return filtered_message
-
 
 # GOVERNANCE INPUT
 @bot.command()
