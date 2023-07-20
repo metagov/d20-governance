@@ -190,6 +190,7 @@ USER_MESSAGE_COUNT = {}  # Stores the number of messages sent by each user
 
 # MISC LISTS
 WEBHOOK_LIST = []  # stores webhooks
+ARCHIVED_CHANNELS = []
 
 # JOSH GAME # todo: move this out to game-specific file
 JOSH_NICKNAMES = [

@@ -54,6 +54,26 @@ class Action:
         )
 
 
+class Progress_Condition:
+    def __init__(
+        self,
+        progress_condition: str,
+        arguments: list,
+    ):
+        self.progress_condition = progress_condition
+        self.arguments = arguments
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        progress_condition_string = data.get("progress_condition", "")
+        tokens = shlex.split(progress_condition_string)
+        progress_condition, *arguments = tokens
+        return cls(
+            progress_condition=progress_condition,
+            arguments=arguments,
+        )
+
+
 class Stage:
     def __init__(self, name, message, actions, progress_conditions, image_path=None):
         self.name = name
@@ -77,6 +97,9 @@ class Quest:
         self.fast_mode = fast_mode
         self.game_channel = None
         self.solo_mode = solo_mode
+
+        # game progression vars
+        self.progress_completed = False  # used to interupt action_runner in process_stage if progression condition complete
 
         # josh game specific # TODO: find a more general solution
         self.players_to_submissions = {}
@@ -170,8 +193,7 @@ def access_control():
 
 
 # Context Utils
-async def get_channel_context(bot, game_channel):
-    message_obj = None
+async def get_channel_context(bot, game_channel, message_obj: None):
     attempts = 0
     max_attempts = 3  # Number of attempts to fetch the message
     while message_obj is None and attempts < max_attempts:

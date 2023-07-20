@@ -4,15 +4,20 @@ stages:
     message: >-
       Welcome to the Build a Community Governance Simulator!
       
-        You are tasked with building a new community from scratch and have three questions to collectively answer. 
+        You are tasked with building a new community from scratch and have three questions to collectively answer:
+
+        1️⃣ What is your name?
+        2️⃣ What is your animating purpose?
+        3️⃣ What is your first action in this strange world?
         
         However, this simulation takes place in the future, after a 🤔 **new confusion** 🤔 has set in. Deliberation on the internet is now randomly subjected to communication collapses 😱.
         
         While things may at first appear normal, over time you will experience new challenges in making decisions. 
         
         Be prepared to adapt or risk remaining in the new confusion for forever!"
-    actions: []
-    progress_conditions: ["timeout 10"]
+    actions:
+      - action: pause 5
+    progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
   
   - stage: Community Name
@@ -20,8 +25,9 @@ stages:
       The first step in building a community and making sense of our situation is to give it a name.
 
         What should we call ourselves?
-    actions: []
-    progress_conditions: ["timeout 10"]
+    actions:
+      - action: pause 5
+    progress_conditions: []
     image_path: "assets/imgs/pre_generated/name.png"
   
   - stage: 'Submit Answers: Community Name'
@@ -39,7 +45,9 @@ stages:
         See `/help submit` for more information.
     actions:
       - action: countdown 120 "until the next stage. Type /submit and your message now"
-    progress_conditions: ["all_submissions_submitted", "timeout 120"]
+    progress_conditions: 
+      - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 120
     image_path: "assets/imgs/pre_generated/proposals.png"
   
   - stage: 'Proposals: Community Name'
@@ -49,7 +57,8 @@ stages:
         Here are the proposed names for our community.
     actions:
       - action: post_submissions
-    progress_conditions: ["timeout 15"]
+      - action: pause 5
+    progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
   
   - stage: 'Deliberation: Community Name'
@@ -70,31 +79,32 @@ stages:
     message: >-
       Deliberation ends and the voting period begins.
 
-        You have 30 seconds to vote on your community name.
+        You have 1 minute to vote on your community name.
     actions:
       - action: post_submissions
       - action: set_global_decision_module "majority"
-      - action: vote_submissions 'What should we call ourselves?' 30
+      - action: vote_submissions 'What should we call ourselves?' 60
         retries: 2
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
-      - action: countdown 30 "until the next stage"
+      - action: countdown 10 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/vote.png"
   
-  - stage: Community Goal
+  - stage: Community Purpose
     message: >-
-      Now that we have a name, we need to decide on our community's goal. 
+      Now that we have a name, we need to decide on our community's mission. 
       
         What is our animating purpose?
     actions:
       - action: clear_decision_input_values
-    progress_conditions: ["timeout 15"]
+      - action: pause 5
+    progress_conditions: []
     image_path: "assets/imgs/pre_generated/goal.png"
   
-  - stage: 'Submit Answers: Community Goal'
+  - stage: 'Submit Answers: Community Purpose'
     message: >-
-      Take a moment to submit a proposal to the question: `What should the goal
+      Take a moment to submit a proposal to the question: `What should the purpose
       of our community be?`.
 
         You have 2 minutes to submit an answer.
@@ -108,7 +118,9 @@ stages:
         See `/help submit` for more information.
     actions:
       - action: countdown 120 "until deliberation stage. Type /submit and your message now"
-    progress_conditions: []
+    progress_conditions: 
+      - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 120
     image_path: "assets/imgs/pre_generated/proposals.png"
   
   - stage: 'Proposals: Community Goal'
@@ -118,8 +130,9 @@ stages:
         Here are the proposed goals for our community.
     actions:
       - action: post_submissions
+      - action: pause 5
       - action: eloquence
-    progress_conditions: ["timeout 10"]
+    progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
   
   - stage: Simulation Interference
@@ -131,13 +144,14 @@ stages:
         Everything you type will be transformed in accord with a culture of eloquence and rhetorical speech.
         
         Despite this interuption, deliberation must now commence.
-    actions: []
+    actions: 
+      - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/interference.png"
   
-  - stage: 'Deliberation: Community Goal'
+  - stage: 'Deliberation: Community Purpose'
     message: >-
-      Review the answers and deliberate amongst yourselves which goal this community should pursue. 
+      Review the answers and deliberate amongst yourselves which purpose this community should pursue. 
       
         What will animate your activities?
 
@@ -151,15 +165,15 @@ stages:
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
-  - stage: 'Vote: Community Goal'
+  - stage: 'Vote: Community Purpose'
     message: >-
       Deliberation ends and votes are cast.
 
-        We have 30 seconds to vote on our community goal.
+        You have 1 minute to vote on your community purpose.
     actions:
       - action: post_submissions
       - action: set_global_decision_module "majority"
-      - action: vote_submissions 'What should be the goal of our community?' 30
+      - action: vote_submissions 'What should be the purpose of our community?' 60
         retries: 2
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"        
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
@@ -176,14 +190,16 @@ stages:
         A semblance of normalcy returns.
     actions:
       - action: eloquence
+      - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
   
   - stage: First Action
     message: >-
-      Now that we have a goal, what should our first action be in this strange new world?
+      Now that we have an animating purpose, what should our first action be in this strange new world?
     actions:
       - action: clear_decision_input_values
+      - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/first_action.png"
   
@@ -204,7 +220,9 @@ stages:
         See `/help submit` for more information.
     actions:
       - action: countdown 120 "until deliberation. Type /submit and your message now"
-    progress_conditions: []
+    progress_conditions: 
+      - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 120
     image_path: "assets/imgs/pre_generated/proposals.png"
   
   - stage: 'Proposals: First Action'
@@ -214,6 +232,7 @@ stages:
         Here are a list of proposed first actions.
     actions:
       - action: post_submissions
+      - action: pause 5
       - action: obscurity
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
@@ -231,7 +250,8 @@ stages:
         **Remember, you must all vote for the same option, otherwise you will fail the game!** 
         
         Good luck reaching consensus!
-    actions: []
+    actions: 
+      - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/interference.png"
   
@@ -253,11 +273,11 @@ stages:
     message: >-
       Deliberation ends and votes are cast.
 
-       We have 30 seconds to vote.
+       We have 1 minute to vote.
     actions:
       - action: post_submissions
       - action: set_global_decision_module "consensus"
-      - action: vote_submissions 'What should our first action be?' 30
+      - action: vote_submissions 'What should our first action be?' 60
         retries: 2
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"        
         failure_message: "```Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over.```"
@@ -272,6 +292,7 @@ stages:
         A decision has been made. A semblance of normalcy returns.
     actions:
       - action: obscurity
+      - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
   
@@ -286,7 +307,7 @@ stages:
        Thanks for playing.
     actions: 
       - action: show_decisions
-      - action: countdown 240 "until this simulation auto-archives"
+      - action: countdown 60 "until this simulation auto-archives"
       - action: end
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/end.png"

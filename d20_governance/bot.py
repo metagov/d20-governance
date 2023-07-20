@@ -5,6 +5,7 @@ import asyncio
 import logging
 import traceback
 import sys
+import time
 
 from discord.ext import commands
 from d20_governance.utils.utils import *
@@ -79,6 +80,17 @@ async def start_quest(ctx, quest: Quest):
     """
     Sets up a new quest
     """
+    embed = discord.Embed(
+        title="Welcome",
+        description="Your simulation is loading ...",
+        color=discord.Color.dark_orange(),
+    )
+
+    # Send and store a message object as an initial message for the new quest game channel
+    message_obj = await quest.game_channel.send(embed=embed)
+
+    # Sleep for 3 seconds to give time for users to get to the channel and avoid possible latency issues in fetching the message_object
+    await asyncio.sleep(3)
 
     if quest.mode == SIMULATIONS["llm_mode"]:
         llm_agent = get_llm_agent()
@@ -90,27 +102,38 @@ async def start_quest(ctx, quest: Quest):
 
     else:  # yaml mode
         for stage in quest.stages:
+            # reset progress_completed to False at start of each stage
+            await asyncio.sleep(0.5)
+            quest.progress_completed = False
             actions = [
                 Action.from_dict(action_dict)
                 for action_dict in stage[QUEST_ACTIONS_KEY]
+            ]
+            progress_conditions = [
+                Progress_Condition.from_dict(progress_condition_dict)
+                for progress_condition_dict in stage[QUEST_PROGRESS_CONDITIONS_KEY]
             ]
             stage = Stage(
                 name=stage[QUEST_NAME_KEY],
                 message=stage[QUEST_MESSAGE_KEY],
                 actions=actions,
-                progress_conditions=stage[QUEST_PROGRESS_CONDITIONS_KEY],
+                progress_conditions=progress_conditions,
                 image_path=stage.get(QUEST_IMAGE_PATH_KEY),
             )
 
             print(f"↷ Processing stage {stage.name}")
 
-            await process_stage(ctx, stage, quest)
+            await process_stage(ctx, stage, quest, message_obj)
 
 
-async def process_stage(ctx, stage: Stage, quest: Quest):
+async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Message):
     """
     Run stages from yaml config
     """
+    game_channel_ctx = await get_channel_context(bot, quest.game_channel, message_obj)
+
+    if game_channel_ctx.channel in ARCHIVED_CHANNELS:
+        return
 
     if quest.gen_audio:
         loop = asyncio.get_event_loop()
@@ -140,14 +163,14 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
     image.save("generated_image.png")  # Save the image to a file
 
     # Post the image to the Discord channel
-    await quest.game_channel.send(file=discord.File("generated_image.png"))
+    await game_channel_ctx.send(file=discord.File("generated_image.png"))
     os.remove("generated_image.png")  # Clean up the image file
 
     if quest.gen_audio:
         # Post audio file
         with open(audio_filename, "rb") as f:
             audio = discord.File(f)
-            await quest.game_channel.send(file=audio)
+            await game_channel_ctx.send(file=audio)
         os.remove(audio_filename)
 
     embed = discord.Embed(
@@ -159,7 +182,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
     # Stream message
     if quest.fast_mode:
         # embed
-        await quest.game_channel.send(embed=embed)
+        await game_channel_ctx.send(embed=embed)
     else:
         await stream_message(quest.game_channel, stage.message, embed)
 
@@ -169,13 +192,15 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
 
     async def action_runner():
         for action in actions:
-            game_channel_ctx = await get_channel_context(bot, quest.game_channel)
             command_name = action.action
             if command_name is None:
                 raise Exception(f"Command {command_name} not found.")
             args = action.arguments
             command = globals().get(command_name)
             retries = action.retries if hasattr(action, "retries") else 0
+            if bot.quest.progress_completed == True:
+                print("submission_state = complete")
+                break
             while retries >= 0:
                 try:
                     await execute_action(game_channel_ctx, command, args)
@@ -222,7 +247,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
                             and action.failure_message
                         ):
                             await game_channel_ctx.send(action.failure_message)
-                            await end(ctx)
+                            await end(game_channel_ctx)
                         raise Exception(
                             f"Failed to execute action {action.action}: {e}"
                         )
@@ -231,15 +256,20 @@ async def process_stage(ctx, stage: Stage, quest: Quest):
         if progress_conditions == None or len(progress_conditions) == 0:
             return
         while True:
+            if bot.quest.progress_completed == True:
+                print("At least one progress condition met")
+                break
             tasks = []
-            for condition in progress_conditions:
-                tokens = shlex.split(condition)
-                func_name, *args = tokens
-                func = globals()[func_name]
+            for progress_condition in progress_conditions:
+                function_name = progress_condition.progress_condition
+                if function_name is None:
+                    raise Exception(f"Function {function_name} not found.")
+                function = globals().get(function_name)
+                args = progress_condition.arguments
+                tasks.append(function(game_channel_ctx, *args))
                 print(
-                    f"⁂ Invoked: `{func_name}` in channel `{quest.game_channel}` with arguments {args}. Channel ID: {quest.game_channel.id}"
+                    f"+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list"
                 )  # Debugging line
-                tasks.append(func(*args))
             for future in asyncio.as_completed(tasks):
                 condition_result = await future
                 if condition_result:
@@ -260,57 +290,94 @@ async def countdown(ctx, timeout_seconds, text: str = None):
 
     # TODO: make this better
     remaining_seconds = int(timeout_seconds)
-    sleep_interval = remaining_seconds / 5
+
+    # Set new message interval
+    message_interval_seconds = 60
+    next_message_time = time.time() + message_interval_seconds
+
     remaining_minutes = remaining_seconds / 60
 
     first_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
-    await ctx.send(first_message)
+    message = await ctx.send(first_message)
 
-    send_new_message = True
-    message = None
-    seconds_elapsed = 0
     while remaining_seconds > 0:
         remaining_minutes = remaining_seconds / 60
         new_message = (
             f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
         )
-        if seconds_elapsed >= 60:
-            send_new_message = True
-            seconds_elapsed = 0
-        if send_new_message:
-            message = await ctx.send(new_message)
-            send_new_message = False
-        else:
-            await message.edit(content=new_message)
+        if time.time() >= next_message_time:
+            new_message = await ctx.send(new_message)
+            next_message_time = (
+                time.time() + message_interval_seconds
+            )  # schedule next message
 
-        remaining_seconds -= sleep_interval
-        seconds_elapsed += sleep_interval
-        await asyncio.sleep(sleep_interval)
+        if bot.quest.progress_completed == True:  # check if all submissions are done
+            print("Stopping countdown")
+            if time.time() >= next_message_time:
+                await new_message.edit(
+                    content="```⏲️ All submissions submitted. Countdown finished.```"
+                )
+            else:
+                await message.edit(
+                    content="```⏲️ All submissions submitted. Countdown finished.```"
+                )
+            break
 
-    await message.edit(content="```⏲️ Counting down finished.```")
+        remaining_seconds -= 1
+        await asyncio.sleep(1)
+
+    if remaining_seconds <= 0:  # send this message if time runs out
+        await message.edit(content="```⏲️ Counting down finished.```")
     print("⧗ Countdown finished.")
 
 
-async def all_submissions_submitted():
+async def all_submissions_submitted(ctx):
     """
     Check that all submissions are submited
     """
     while True:
+        if bot.quest.progress_completed == True:
+            break
         joined_players = bot.quest.joined_players
         players_to_submissions = bot.quest.players_to_submissions
         if len(joined_players) == len(players_to_submissions):
             print("All submissions submitted.")
+            bot.quest.progress_completed = True
             return True
         print("⧗ Waiting for all submissions to be submitted.")
         await asyncio.sleep(1)  # Wait for a second before checking again
 
 
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def timeout(seconds: str):
-    if not bot.quest.fast_mode:
-        print(f"Sleeping for {seconds} seconds...")
+async def pause(ctx, seconds: str):
+    """
+    Simulation pauses
+
+    Used by in simulation yaml to add pauses in the simulations
+    """
+    if bot.quest.fast_mode:
+        seconds = 1
+        print(f"Pausing for {seconds} seconds...")
         await asyncio.sleep(int(seconds))
+    else:
+        print(f"Pausing for {seconds} seconds...")
+        await asyncio.sleep(int(seconds))
+    return True
+
+
+async def progress_timeout(ctx, seconds: str):
+    """
+    Progression timeout
+
+    Used in simulation yamls to define limits for progression checks
+    """
+    if bot.quest.fast_mode:
+        seconds = 7
+        print(f"Progression timeout in {seconds} seconds...")
+        await asyncio.sleep(int(seconds))
+    else:
+        print(f"Progression timeout in {seconds} seconds...")
+        await asyncio.sleep(int(seconds))
+    bot.quest.progress_completed = True
     return True
 
 
@@ -321,9 +388,10 @@ async def end(ctx):
     print("Archiving...")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
-    print(ctx)
+
     await ctx.send("```👋👋👋\n\nThe simulation is over. This channel is now archived.```")
     await ctx.channel.edit(category=archive_category)
+
     overwrites = {
         ctx.guild.default_role: discord.PermissionOverwrite(
             read_messages=True, send_messages=False
@@ -333,6 +401,9 @@ async def end(ctx):
         ),
     }
     await ctx.channel.edit(overwrites=overwrites)
+
+    ARCHIVED_CHANNELS.append(ctx.channel)
+
     print("Archived...")
 
 
