@@ -1225,18 +1225,6 @@ async def post_proposal_values(ctx):
     await ctx.send(f"```Proposed values: {TEMP_VALUES_DICT}```")
 
 
-@bot.tree.command(name="ping", description="send bot latency in ms")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Pong! {round(bot.latency * 1000)}ms.")
-
-
-@bot.tree.command(name="slash", description="test slash command")
-async def slash(interaction: discord.Interaction, number: int, string: str):
-    await interaction.response.send_message(
-        f"Modify {number=} {string=}", ephemeral=True
-    )
-
-
 @bot.tree.command(
     name="propose_value",
     description="propose and define a value that will govern your interactions",
