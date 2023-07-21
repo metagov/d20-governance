@@ -7,6 +7,10 @@ import traceback
 import sys
 import time
 
+# import interactions
+# from interactions import slash_command, SlashContext
+from discord.app_commands import command as slash_command
+
 from discord.ext import commands
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
@@ -24,7 +28,7 @@ intents.dm_messages = True
 intents.messages = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="/", description=description, intents=intents)
+bot = commands.Bot(command_prefix="-", description=description, intents=intents)
 bot.remove_command("help")
 
 
@@ -199,7 +203,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
             command = globals().get(command_name)
             retries = action.retries if hasattr(action, "retries") else 0
             if bot.quest.progress_completed == True:
-                print("submission_state = complete")
+                print("Rrogress condition met. Ending action_runner")
                 break
             while retries >= 0:
                 try:
@@ -248,6 +252,12 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                         ):
                             await game_channel_ctx.send(action.failure_message)
                             await end(game_channel_ctx)
+                        # if a vote fails and there is a soft failure action, the soft failure message is sent and the while loop exited
+                        elif hasattr(action, "soft_failure") and action.soft_failure:
+                            await game_channel_ctx.send(action.soft_failure)
+                            # TODO: Instead of breaking out of the action_runner, return to next vote
+                            # Might need to do this in the Vote function
+                            break
                         raise Exception(
                             f"Failed to execute action {action.action}: {e}"
                         )
@@ -286,7 +296,7 @@ async def countdown(ctx, timeout_seconds, text: str = None):
     Send an updating countdown display
     """
     if hasattr(bot, "quest") and bot.quest.fast_mode:
-        timeout_seconds = 7
+        timeout_seconds = 15
 
     # TODO: make this better
     remaining_seconds = int(timeout_seconds)
@@ -653,6 +663,7 @@ async def on_ready():
     """
     Event handler for when the bot has logged in and is ready to start interacting with Discord
     """
+    await bot.tree.sync()
     logging.basicConfig(
         filename="logs/bot.log",
         level=logging.INFO,
@@ -663,6 +674,7 @@ async def on_ready():
         f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     for guild in bot.guilds:
+        await bot.tree.sync(guild=guild)
         await setup_server(guild)
         await delete_all_webhooks(guild)
 
@@ -1116,9 +1128,9 @@ async def setcool(ctx, duration=0):
     await ctx.send(f"Global cooloff duration set to {timeouts['cooldown']}")
 
 
-@bot.command()
+@bot.tree.command(name="submit", description="Make a submission.")
 @access_control()
-async def submit(ctx, *, text: str):
+async def submit(interaction: discord.Interaction, submission: str):
     """
     Submit a message
 
@@ -1128,17 +1140,13 @@ async def submit(ctx, *, text: str):
 
     See also `/help resubmit` for information on how to change your submission
     """
-    if text == None:
-        await ctx.send(
-            "To submit a message type `/submit` followed by a space and your message. For example: `/submit this is my submission`."
-        )
     confirmation_message = "has made their submission!"
-    await submit_message(ctx, text, confirmation_message)
+    await submit_message(interaction, submission, confirmation_message)
 
 
-@bot.command()
+@bot.tree.command(name="resubmit", description="Change your last submission.")
 @access_control()
-async def resubmit(ctx, *, text: str):
+async def resubmit(interaction: discord.Interaction, submission: str):
     """
     Resubmit/revise a message
 
@@ -1146,26 +1154,28 @@ async def resubmit(ctx, *, text: str):
 
     For example: /resubmit this is my revised submission
     """
-    if text == None:
-        await ctx.send(
-            "To resubmit and change your message type `/resubmit` followed by a space and your message. For example: `/resubmit this is my revised submission`."
-        )
     confirmation_message = "has revised their submission!"
-    await submit_message(ctx, text, confirmation_message)
+    await submit_message(interaction, submission, confirmation_message)
 
 
-async def submit_message(ctx, text: str, confirmation_message):
-    await ctx.message.delete()
+async def submit_message(
+    interaction: discord.Interaction, text: str, confirmation_message
+):
+    # await ctx.message.delete()
     if hasattr(bot, "quest"):
-        bot.quest.add_submission(ctx, text)
+        bot.quest.add_submission(interaction, text)
         if bot.quest.mode != SIMULATIONS["josh_game"]:
-            await ctx.send(f"🎉  {ctx.author.name} {confirmation_message} 📮")
+            await interaction.response.send_message(
+                f"🎉  {interaction.user.name} {confirmation_message} 📮"
+            )
             return
         else:
-            nickname = bot.quest.get_nickname(ctx.author.name)
-            await ctx.send(f"🎉  {nickname} {confirmation_message} 📮")
+            nickname = bot.quest.get_nickname(interaction.user.name)
+            await interaction.response.send_message(
+                f"🎉  {nickname} {confirmation_message} 📮"
+            )
     else:
-        await ctx.send(
+        await interaction.response.send_message(
             "Messages can only be submitted during simulations. Start a simulation by trying `/embark`."
         )
 
@@ -1208,6 +1218,52 @@ async def vote_submissions(ctx, question: str, timeout="20"):
     await vote(ctx, quest, question, contenders, int(timeout))
     # Reset the players_to_submissions dictionary for the next round
     bot.quest.reset_submissions()
+
+
+@bot.command()
+async def post_proposal_values(ctx):
+    await ctx.send(f"```Proposed values: {TEMP_VALUES_DICT}```")
+
+
+@bot.tree.command(name="ping", description="send bot latency in ms")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Pong! {round(bot.latency * 1000)}ms.")
+
+
+@bot.tree.command(name="slash", description="test slash command")
+async def slash(interaction: discord.Interaction, number: int, string: str):
+    await interaction.response.send_message(
+        f"Modify {number=} {string=}", ephemeral=True
+    )
+
+
+@bot.tree.command(
+    name="propose_value",
+    description="propose and define a value that will govern your interactions",
+)
+async def propose_value(interaction: discord.Interaction, name: str, definition: str):
+    TEMP_VALUES_DICT[name] = definition
+    print(TEMP_VALUES_DICT)
+    await interaction.response.send_message(
+        f"**{interaction.user.name} proposed a new value:**\n* **{name}:** {definition}"
+    )
+
+
+@bot.command(hidden=True)
+# @commands.check(lambda ctx: False)
+async def vote_on_values(ctx, question: str, timeout="20"):
+    """
+    Call vote on all submissions from /submit and reset submission list
+    """
+    # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
+    contenders = list(TEMP_VALUES_DICT.values())
+    print(contenders)
+    quest = bot.quest
+    for value in contenders:
+        contender = [value]
+        await vote(ctx, quest, question, contender, int(timeout))
+    # Reset the players_to_submissions dictionary for the next round
+    TEMP_VALUES_DICT.clear()
 
 
 # CLEANING COMMANDS
@@ -1745,8 +1801,9 @@ async def apply_culture_modes(
             if reference_message == None:
                 pass
             else:
+                current_values_dict = VALUES_DICT if VALUES_DICT else MOCK_VALUES_DICT
                 values_list = f"Community Defined Values:\n\n"
-                for value in MOCK_VALUES_DICT.keys():
+                for value in current_values_dict.keys():
                     values_list += f"* {value}\n"
                 llm_response = await filter_by_values(reference_message.content)
                 filtered_message = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **LLM Analysis:** {llm_response}"
@@ -1765,13 +1822,18 @@ async def on_message(message):
         if message.author == bot.user:  # Ignore messages sent by the bot itself
             return
 
-        # Allow the "/help" command to run without channel checks
-        if message.content.startswith("/help"):
+        # Allow the "-help" command to run without channel checks
+        if message.content.startswith("-help"):
             await bot.process_commands(message)
             return
 
-        # If message is a command, proceed directly to processing
+        # If message is a slash command, proceed directly to processing
         if message.content.startswith("/"):
+            await bot.process_commands(message)
+            return
+
+        # If message is a regular command, proceed directly to processing
+        if message.content.startswith("-"):
             await bot.process_commands(message)
             return
 

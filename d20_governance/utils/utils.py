@@ -33,12 +33,14 @@ class Action:
         retries: int,
         retry_message: str,
         failure_message: str,
+        soft_failure: str,
     ):
         self.action = action
         self.arguments = arguments
         self.retries = retries
         self.retry_message = retry_message
         self.failure_message = failure_message
+        self.soft_failure = soft_failure
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -51,6 +53,7 @@ class Action:
             retries=int(data.get("retries", 0)),
             retry_message=data.get("retry_message", ""),
             failure_message=data.get("failure_message", ""),
+            soft_failure=data.get("soft_failure", ""),
         )
 
 
@@ -139,9 +142,9 @@ class Quest:
             # Remove the nickname from the list so it can't be used again
             JOSH_NICKNAMES.remove(nickname)
 
-    def add_submission(self, ctx, text):
+    def add_submission(self, interaction: discord.Interaction, text):
         # get the name of the user invoking the command
-        player_name = str(ctx.message.author.name)
+        player_name = str(interaction.user.name)
         # get the nickname of the user invoking the command
         if self.mode == SIMULATIONS["josh_game"]:
             player_name = self.players_to_nicknames.get(player_name)
@@ -373,16 +376,18 @@ async def stream_message(ctx, text, original_embed):
 
 
 def chunk_text(text):
-    words = text.split()
+    lines = text.split("\n")
     chunks = []
-    i = 0
-    min = 10
-    max = 14
-    while i < len(words):
-        chunk_size = min if random.random() < 0.6 else max
-        chunk = " ".join(words[i : i + chunk_size])
-        chunks.append(chunk)
-        i += chunk_size
+    for line in lines:
+        words = line.split()
+        i = 0
+        min = 10
+        max = 14
+        while i < len(words):
+            chunk_size = min if random.random() < 0.6 else max
+            chunk = " ".join(words[i : i + chunk_size])
+            chunks.append(chunk)
+            i += chunk_size
     return chunks
 
 

@@ -328,15 +328,16 @@ async def filter_by_values(text):
     """
     llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
     template = f"You hold and maintain a set of mutually agreed-upon values. Let's analyze the message '{text}' in terms of the values you hold:\n\n"
+    current_values_dict = VALUES_DICT if VALUES_DICT else MOCK_VALUES_DICT
     for (
         value,
         description,
-    ) in MOCK_VALUES_DICT.items():
+    ) in current_values_dict.items():
         template += f"- {value}: {description}\n"
     template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
     prompt = PromptTemplate.from_template(template=template)
     chain = LLMChain(llm=llm, prompt=prompt)
-    return chain.run({"text": text, "mock_values_dict": MOCK_VALUES_DICT})
+    return chain.run({"text": text, "mock_values_dict": current_values_dict})
 
 
 async def send_msg_to_random_player(game_channel):

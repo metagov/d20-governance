@@ -1,7 +1,7 @@
 from typing import List
 import random
 import discord
-from d20_governance.utils.constants import CIRCLE_EMOJIS
+from d20_governance.utils.constants import CIRCLE_EMOJIS, TEMP_VALUES_DICT
 from d20_governance.utils.utils import Quest, get_module_png
 from d20_governance.utils.decisions import *
 
@@ -100,14 +100,15 @@ async def vote(
         channel_decision_modules = await set_global_decision_module(ctx)
 
     decision_module = channel_decision_modules[0]
+
     print(f"A vote has been triggered. The decision module is: {decision_module}")
 
     if not options:
         raise Exception("No options were provided for voting.")
 
-    if len(options) > 10 or (not quest.solo_mode and len(options) < 2):
-        await ctx.send("Error: A poll must have between 2 and 10 options.")
-        return
+    # if len(options) > 10 or (not quest.solo_mode and len(options) < 2):
+    #     await ctx.send("Error: A poll must have between 2 and 10 options.")
+    #     return
 
     # Define embed
     embed = discord.Embed(
@@ -177,6 +178,8 @@ async def vote(
     if winning_option is not None:
         decision_data = {"decision": winning_option, "decision_module": decision_module}
         DECISION_DICT[question] = decision_data
+        if TEMP_VALUES_DICT:
+            VALUES_DICT.update(TEMP_VALUES_DICT)
 
     # If retries are configured, voting will be repeated
     if winning_option is None:

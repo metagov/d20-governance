@@ -150,6 +150,9 @@ DECISION_DICT = {}
 
 # VALUES DEFINITION
 
+TEMP_VALUES_DICT = {}
+VALUES_DICT = {}
+
 MOCK_VALUES_LIST = [
     "respect",
     "divisiveness",
