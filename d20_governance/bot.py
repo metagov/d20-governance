@@ -1222,7 +1222,7 @@ async def vote_submissions(ctx, question: str, timeout="20"):
 
 @bot.command()
 async def post_proposal_values(ctx):
-    await ctx.send(f"```Proposed values: {TEMP_VALUES_DICT}```")
+    await ctx.send(f"```Proposed values: {PROPOSED_VALUES_DICT}```")
 
 
 @bot.tree.command(
@@ -1230,12 +1230,11 @@ async def post_proposal_values(ctx):
     description="propose and define a value that will govern your interactions",
 )
 async def propose_value(interaction: discord.Interaction, name: str, definition: str):
-    TEMP_VALUES_DICT[name] = definition
-    print(TEMP_VALUES_DICT)
+    PROPOSED_VALUES_DICT[name] = definition
+    print(PROPOSED_VALUES_DICT)
     await interaction.response.send_message(
         f"**{interaction.user.name} proposed a new value:**\n* **{name}:** {definition}"
     )
-
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
@@ -1244,15 +1243,16 @@ async def vote_on_values(ctx, question: str, timeout="20"):
     Call vote on all submissions from /submit and reset submission list
     """
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-    contenders = list(TEMP_VALUES_DICT.values())
+    contenders = list(PROPOSED_VALUES_DICT.values())
     print(contenders)
     quest = bot.quest
-    for value in contenders:
-        contender = [value]
-        await vote(ctx, quest, question, contender, int(timeout))
+    # for value in contenders:
+    #     contender = [value]
+    #     await vote(ctx, quest, question, contender, int(timeout))
+    global VALUES_DICT
+    VALUES_DICT = await consent(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
     # Reset the players_to_submissions dictionary for the next round
-    TEMP_VALUES_DICT.clear()
-
+    PROPOSED_VALUES_DICT.clear()
 
 # CLEANING COMMANDS
 @bot.command(hidden=True)

@@ -11,7 +11,7 @@ from collections import defaultdict
 
 
 # This is a custom List that tracks order or append and removal as well as groups of channels through sets
-class ListSet(object):
+class ListSet:
     def __init__(self):
         self.set = set()
         self.list = []

@@ -125,8 +125,8 @@ DECISION_MODULES = {
         "description": "Majority requires a simiple majority from the number of people who voteon the options.",
         "state": False,
         "activated": False,
-        "activated_message": "Messages will be distored based on mode of obscurity.",
-        "deactivated_message": "Messages will no longer be distored by obscurity.",
+        "activated_message": "",
+        "deactivated_message": "",
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
@@ -136,8 +136,19 @@ DECISION_MODULES = {
         "description": "Consensus requires everyone in the simulation to vote on the same option.",
         "state": False,
         "activated": False,
-        "activated_message": "Messages will now be process through an LLM.",
-        "deactivated_message": "Messages will no longer be processed through an LLM.",
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+    },
+    "consent": {
+        "module_string": "consent",
+        "description": "Consent decision-making allows options to pass by default unless they are objected to.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
@@ -150,7 +161,7 @@ DECISION_DICT = {}
 
 # VALUES DEFINITION
 
-TEMP_VALUES_DICT = {}
+PROPOSED_VALUES_DICT = {}
 VALUES_DICT = {}
 
 MOCK_VALUES_LIST = [
