@@ -343,7 +343,23 @@ def add_module_to_stack(module):
     return module
 
 
-# Text Utils
+def chunk_text(text):
+    lines = text.split("\n")
+    chunks = []
+    for line in lines:
+        words = line.split()
+        i = 0
+        min = 10
+        max = 14
+        while i < len(words):
+            chunk_size = min if random.random() < 0.6 else max
+            chunk = " ".join(words[i : i + chunk_size])
+            chunks.append(chunk)
+            i += chunk_size
+        # Add a newline as a separate chunk at the end of each line
+        chunks.append("\n")
+    return chunks
+
 async def stream_message(ctx, text, original_embed):
     embed = original_embed.copy()
     embed.description = "[...]"
@@ -354,9 +370,12 @@ async def stream_message(ctx, text, original_embed):
         for chunk in chunks:
             # Use the typing context manager to simulate typing
             async with ctx.typing():
-                joined_text.append(chunk)
-                # distorted_text = distort_text(joined_text)  # distorted text disabled
-                joined_text_str = " ".join(joined_text)
+                # Append chunk without adding a space if it's a newline
+                if chunk == "\n":
+                    joined_text.append(chunk)
+                else:
+                    joined_text.append(" " + chunk)
+                joined_text_str = "".join(joined_text)
                 embed.description = joined_text_str
                 await message_canvas.edit(embed=embed)
                 sleep_time = random.uniform(0.7, 1.2)
@@ -373,22 +392,6 @@ async def stream_message(ctx, text, original_embed):
         await message_canvas.edit(embed=embed)
     except Exception as e:
         print(e)
-
-
-def chunk_text(text):
-    lines = text.split("\n")
-    chunks = []
-    for line in lines:
-        words = line.split()
-        i = 0
-        min = 10
-        max = 14
-        while i < len(words):
-            chunk_size = min if random.random() < 0.6 else max
-            chunk = " ".join(words[i : i + chunk_size])
-            chunks.append(chunk)
-            i += chunk_size
-    return chunks
 
 
 def distort_text(word_list):

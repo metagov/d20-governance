@@ -133,7 +133,7 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
 
 
     # Iterate over the non_objection_options dict and format the name and description for each
-    results_message = "\n".join(f"{name}: {description}" for name, description in non_objection_options.items())
+    results_message = "\n".join(f"**{name}:** {description}" for name, description in non_objection_options.items())
 
     # Display results
     embed = discord.Embed(

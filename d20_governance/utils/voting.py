@@ -213,7 +213,7 @@ def get_results_message(results, winning_option):
     if winning_option:
         message += f"**Winning option:** `{winning_option}`\n\n"
         message += (
-            "A record of all decisions can be displayed by typing `/show_decisions`"
+            "A record of all decisions can be displayed by typing `-show_decisions`"
         )
     else:
         message += "No winner was found.\n\n"

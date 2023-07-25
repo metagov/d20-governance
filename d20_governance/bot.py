@@ -1704,6 +1704,8 @@ async def process_message(context, message):
             reference_message = None
             filtered_message = None
             if message.content != "check-values":
+                if len(active_modules_by_channel) == 1 and "values" in active_modules_by_channel:
+                    return # we don't want to filter messages if it's just values on; TODO: fix this hack
                 filtered_message = message.content
                 await message.delete()
             else:
