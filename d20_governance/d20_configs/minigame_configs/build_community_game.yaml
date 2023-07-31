@@ -30,7 +30,7 @@ stages:
     actions: 
       - action: countdown 120 "until the next stage. Propose a value using `/propose_value` now"
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/interference.png"
+    image_path: "assets/imgs/pre_generated/temple.png"
 
   - stage: Vote on Values
     message: |

@@ -1222,8 +1222,11 @@ async def vote_submissions(ctx, question: str, timeout="20"):
 
 @bot.command()
 async def post_proposal_values(ctx):
-    await ctx.send(f"```Proposed values: {PROPOSED_VALUES_DICT}```")
-
+    message = "Proposed values:\n"
+    for key, value in PROPOSED_VALUES_DICT.items():
+        # Format the key as bold and add the value
+        message += f"**{key}**: {value}\n"
+    await ctx.send(message)
 
 @bot.tree.command(
     name="propose_value",
