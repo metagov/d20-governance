@@ -19,7 +19,19 @@ stages:
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
-  
+    
+  - stage: CHaOs MOde iNtrOduCTiON
+    message: |
+      But PlOt tWISt: WeLCOME tO the 🌀🔥ChaOS MODe🔥🌀! WheRe predictaBility iS 🎲🎲 THroWn out the windOW! 🚪💨
+
+      ALL CulTURE mOdULES 💿💽🧩📀 are aVAIlable noW, each wiTH its oWn uNique TWISt.
+
+      TyPE "-help" 🆘 to find out about the AvaiLable CUltURE modules. ReMEmbER, adaptabiliTy and a GooD Sense Of hUMOr arE KEy in ThiS CHaotic LANDscAPE! 
+    actions:
+      - action: pause 5
+    progress_conditions: []
+    image_path: "assets/imgs/pre_generated/chaos_mode.png"
+
   - stage: Community Values
     message: |
       The first step in building a community and making sense of our situation is to define our values.

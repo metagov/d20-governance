@@ -830,7 +830,7 @@ async def autonomy(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def obscurity(ctx, mode: str = None):
     """
     Control obscurity module
@@ -853,7 +853,7 @@ async def obscurity(ctx, mode: str = None):
 
 
 @bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def eloquence(ctx):
     """
     Trigger eloquence module
@@ -868,7 +868,7 @@ async def eloquence(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def values(ctx):
     """
     Trigger values module
@@ -882,7 +882,7 @@ async def values(ctx):
 
 # TODO: it would be nice to not have this toggled by default
 @bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def diversity(ctx):
     """
     Trigger diversity module
@@ -899,7 +899,7 @@ async def diversity(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def ritual(ctx):
     """
     Trigger ritual module.
