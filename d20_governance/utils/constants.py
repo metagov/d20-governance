@@ -121,7 +121,7 @@ ACTIVE_GLOBAL_DECISION_MODULES = {}
 
 DECISION_MODULES = {
     "majority": {
-        "module_string": "majority",
+        "name": "majority",
         "description": "Majority requires a simiple majority from the number of people who voteon the options.",
         "state": False,
         "activated": False,
@@ -132,7 +132,7 @@ DECISION_MODULES = {
         "input_value": 0,
     },
     "consensus": {
-        "module_string": "consensus",
+        "name": "consensus",
         "description": "Consensus requires everyone in the simulation to vote on the same option.",
         "state": False,
         "activated": False,
@@ -143,7 +143,7 @@ DECISION_MODULES = {
         "input_value": 0,
     },
     "consent": {
-        "module_string": "consent",
+        "name": "consent",
         "description": "Consent decision-making allows options to pass by default unless they are objected to.",
         "state": False,
         "activated": False,
@@ -164,16 +164,7 @@ DECISION_DICT = {}
 PROPOSED_VALUES_DICT = {}
 VALUES_DICT = {}
 
-MOCK_VALUES_LIST = [
-    "respect",
-    "divisiveness",
-    "support",
-    "exploitation",
-    "trust",
-    "domination",
-]
-
-MOCK_VALUES_DICT = {
+DEFAULT_VALUES_DICT = {
     "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
     "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
     "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",

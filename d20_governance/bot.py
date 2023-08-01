@@ -880,13 +880,14 @@ async def values(ctx):
     await module.toggle_global_state(ctx)
 
 
+# TODO: it would be nice to not have this toggled by default
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def diversity(ctx):
     """
     Trigger diversity module
     """
-    module = CULTURE_MODULES.get("diversity", None)
+    module: Diversity = CULTURE_MODULES.get("diversity", None)
     if module is None:
         return
 
@@ -894,22 +895,7 @@ async def diversity(ctx):
 
     # Display the diversity counts if global state is true
     if module.is_global_state_active():
-        await display_diversity(ctx)
-
-
-async def display_diversity(ctx):
-    # Display the message count for each user
-    message = "Message count by user:\n"
-
-    # Sort the user_message_count dictionary by message count in descending order
-    sorted_user_message_count = sorted(
-        USER_MESSAGE_COUNT.items(), key=lambda x: x[1], reverse=True
-    )
-
-    for user_id, count in sorted_user_message_count:
-        user = await ctx.guild.fetch_member(user_id)
-        message += f"{user.name}: {count}\n"
-    await ctx.send(f"```{message}```")
+        await module.display_info(ctx)
 
 
 @bot.command()
@@ -1368,11 +1354,11 @@ async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
     Test stability image generation
     """
     if module in module_dict:
-        module_string = module_dict[module]["module_string"]
-        print(module_string)
+        module_name = module_dict[module]["name"]
+        print(module_name)
         svg_icon = module_dict[module]["icon"]
         print(svg_icon)
-        image = make_module_png(module_string, svg_icon)
+        image = make_module_png(module_name, svg_icon)
         print(image)
     await ctx.send(file=discord.File(image))
 
@@ -1485,7 +1471,7 @@ async def list_values(ctx):
     for (
         value,
         description,
-    ) in MOCK_VALUES_DICT.items():
+    ) in DEFAULT_VALUES_DICT.items():
         message_content += f"{value}:\n{description}\n\n"
     message = f"```{message_content}```"
     await ctx.send(message)
@@ -1593,7 +1579,7 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                         module.config["input_value"] = INPUT_SPECTRUM["scale"]
                         await display_module_status(context, CULTURE_MODULES)
                         await context.send(
-                            f"```{module.config['module_string'].capitalize()} has been turned back on and set to the max!```"
+                            f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
                         )
 
     for module_name in CULTURE_MODULES.keys():
@@ -1619,7 +1605,7 @@ async def display_module_status(context, module_dict):
         for module_name in module_dict:
             module = CULTURE_MODULES[module_name]
             input_value = module.config["input_value"]
-            module_name_field = module.config["module_string"].capitalize()
+            module_name_field = module.config["name"].capitalize()
             input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
             input_empty = INPUT_SPECTRUM["scale"] - input_filled
 
@@ -1638,7 +1624,7 @@ async def display_module_status(context, module_dict):
             )
     else:
         for module_name in module_dict:
-            module = module_dict[module_name]["module_string"]
+            module = module_dict[module_name]["name"]
             input_value = module_dict[module_name]["input_value"]
             module_name_field = module.capitalize()
             input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
@@ -1692,7 +1678,7 @@ async def send_webhook_message(webhook, message, filtered_message):
     await webhook.send(**payload)
 
 
-async def process_message(context, message):
+async def process_message(ctx, message):
     """
     Process messages from on_message
     """
@@ -1701,47 +1687,42 @@ async def process_message(context, message):
     else:
         # Check if any modes are active deleted the original message
         active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL.get(
-            str(message.channel), ListSet()
+            str(message.channel), OrderedSet()
         )
         if active_modules_by_channel:
-            reference_message = None
-            filtered_message = None
-            if message.content != "check-values":
-                if len(active_modules_by_channel) == 1 and "values" in active_modules_by_channel:
-                    return # we don't want to filter messages if it's just values on; TODO: fix this hack
-                filtered_message = message.content
+            message_content = message.content
+            if message_content == "check-values" and "values" in active_modules_by_channel:
+                module_name: Values = CULTURE_MODULES["values"]
+                await module_name.check_values(ctx, message)
+                return 
+            
+            message_content = message.content
+            delete_message = False
+            for module_name in active_modules_by_channel:
+                module: CultureModule = CULTURE_MODULES[module_name]
+                if module.config["message_alter_mode"] != None: # Not all culture modules filter messages; we only want to delete message and replace with webhook when we know it will be filtered 
+                    delete_message = True
+                    break
+            
+            # We delete message before filtering because filtering has latency.
+            if delete_message:
                 await message.delete()
-            else:
-                if message.reference:
-                    reference_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
-                    if (
-                        reference_message.author.bot
-                        and not reference_message.content.startswith(
-                            "※"
-                        )  # This condition lets webhook messages to be checked
-                    ):
-                        await context.send("Cannot check values of messages from bot")
-                        return
-                    else:
-                        print(
-                            f"Original Message Content: {reference_message.content}, posted by {message.author}"
-                        )
-            filtered_message = await apply_culture_modes(
-                modules=active_modules_by_channel,
+
+            filtered_message = await apply_culture_modules(
+                ctx,
+                active_modules=active_modules_by_channel,
                 message=message,
-                filtered_message=filtered_message,
-                reference_message=reference_message,
+                message_content=message_content,
             )
-            webhook = await create_webhook(message.channel)
-            await send_webhook_message(webhook, message, filtered_message)
+
+            if delete_message:
+                webhook = await create_webhook(message.channel)
+                await send_webhook_message(webhook, message, filtered_message)
         else:
             return
 
-
-async def apply_culture_modes(
-    modules, message, filtered_message=None, reference_message=None
+# TODO: write tests for culture module filtering
+async def apply_culture_modules(ctx, active_modules, message, message_content: str
 ):
     """
     Filter messages based on culture modules
@@ -1750,57 +1731,15 @@ async def apply_culture_modes(
 
     Order of application is derived from the active_global_culture_modules list
     """
-    context = await bot.get_context(message)
 
-    # Increment message count for the user (for /diversity)
+    # Increment message count for the user (for diversity module)
     user_id = message.author.id
-    if user_id not in USER_MESSAGE_COUNT:
-        USER_MESSAGE_COUNT[user_id] = 0
-    USER_MESSAGE_COUNT[user_id] += 1
+    USER_MESSAGE_COUNT[user_id] = USER_MESSAGE_COUNT.get(user_id, 0) + 1
 
-    for module_name in modules:
-        module = CULTURE_MODULES[module_name]
-        if module_name == "diversity":
-            await display_diversity(context)
-        if module_name == "ritual":
-            # Get the most recently posted message in the channel that isn't from a bot
-            # TODO: Consider revising this to also take messages process as webhooks
-            # Otherwise, this function can end up referencing very old messaged during periods of high cultural activity
-            async for msg in message.channel.history(limit=100):
-                if msg.id == message.id:
-                    continue
-                if msg.author.bot:
-                    continue
-                if msg.content.startswith("/"):
-                    continue
-                previous_message = msg.content
-                break
-            filtered_message = await initialize_ritual_agreement(
-                previous_message, filtered_message
-            )
-        if module_name == "obscurity":
-            obscure_function = Obscurity(filtered_message)
-            if module.config["mode"] == "scramble":
-                filtered_message = obscure_function.scramble()
-            if module.config["mode"] == "replace_vowels":
-                filtered_message = obscure_function.replace_vowels()
-            if module.config["mode"] == "pig_latin":
-                filtered_message = obscure_function.pig_latin()
-            if module.config["mode"] == "camel_case":
-                filtered_message = obscure_function.camel_case()
-        if module_name == "eloquence":
-            filtered_message = await filter_eloquence(filtered_message)
-        if module_name == "values":
-            if reference_message == None:
-                pass
-            else:
-                current_values_dict = VALUES_DICT if VALUES_DICT else MOCK_VALUES_DICT
-                values_list = f"Community Defined Values:\n\n"
-                for value in current_values_dict.keys():
-                    values_list += f"* {value}\n"
-                llm_response = await filter_by_values(reference_message.content)
-                filtered_message = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **LLM Analysis:** {llm_response}"
-    return filtered_message
+    for module_name in active_modules:
+        module: CultureModule = CULTURE_MODULES[module_name] # TODO: active_modules list should be the modules themselves, not their names
+        message_content = await module.filter_message(ctx, message, message_content)
+    return message_content
 
 
 # ON MESSAGE

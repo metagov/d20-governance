@@ -90,7 +90,7 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
         timeout = 7
 
     # Send introduction embed
-        embed = discord.Embed(
+    embed = discord.Embed(
         title=f"Vote: {question}",
         description="**Decision Module:** Consent",
         color=discord.Color.dark_gold(),
@@ -105,7 +105,6 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
         embed.set_image(url=f"attachment://module.png")
         file = discord.File(module_png, filename="module.png")
         print("Module png attached to embed")
-
 
     # Add a description of how decisions are made based on decision module
     embed.add_field(

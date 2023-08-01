@@ -378,7 +378,7 @@ async def stream_message(ctx, text, original_embed):
                 joined_text_str = "".join(joined_text)
                 embed.description = joined_text_str
                 await message_canvas.edit(embed=embed)
-                sleep_time = random.uniform(0.7, 1.2)
+                sleep_time = random.uniform(0.3, 0.7)
                 for word in chunk.split():
                     if "," in word:
                         sleep_time += 0.7
@@ -770,9 +770,9 @@ async def get_module_png(module):
     modules = {**DECISION_MODULES, **CULTURE_MODULES}
 
     if module in modules:
-        module_string = modules[module]["module_string"]
+        name = modules[module]["name"]
         svg_icon = modules[module]["icon"]
-        image_url = await make_module_png(module_string, svg_icon)
+        image_url = await make_module_png(name, svg_icon)
         return image_url
     else:
         print(f"Module {module} not found in module dictionaries")
