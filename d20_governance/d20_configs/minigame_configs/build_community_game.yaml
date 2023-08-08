@@ -96,9 +96,24 @@ stages:
     actions:
       - action: post_submissions
       - action: pause 5
+      - action: amplify
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
   
+  - stage: Simulation Interference
+    message: |
+      🔊 SIMULATION INTERFERENCE: AMPLIFY 🔊
+        
+        Unexpectedly, the simulator has cranked up the volume in this community. 
+
+        Every word you type will echo with intensity, as if shouted from the mountaintops.
+
+        Let not this enhancement deter you, for now, the discussion must rise in decibel and determination.
+    actions: 
+      - action: pause 5
+    progress_conditions: []
+    image_path: "assets/imgs/pre_generated/amplify.png"
+
   - stage: 'Deliberation: Community Name'
     message: |
       Review the answers and deliberate and discuss amongst yourselves. Which name do we most prefer?
@@ -128,6 +143,19 @@ stages:
       - action: countdown 10 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/vote.png"
+
+  - stage: Simulation Reset
+    message: |
+      👾 SIMULATION RESET 👾
+      
+      A decision has been made.
+    
+      A semblance of normalcy returns.
+    actions:
+      - action: amplify
+      - action: pause 5
+    progress_conditions: []
+    image_path: "assets/imgs/pre_generated/online_community.png"
   
   - stage: Community Purpose
     message: |
