@@ -130,7 +130,6 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
     # Determine the options that had no objections
     non_objection_options = {view.option: options[view.option] for view in views if not view.objections}
 
-
     # Iterate over the non_objection_options dict and format the name and description for each
     results_message = "\n".join(f"**{name}:** {description}" for name, description in non_objection_options.items())
 

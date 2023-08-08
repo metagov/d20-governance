@@ -221,11 +221,11 @@ class Values(CultureModule):
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
-            llm_response = await self.analyze_values(reference_message.content)
+            llm_response = await self.llm_analyze_values(reference_message.content)
             message_content = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}"
             await ctx.send(message_content)
 
-    async def analyze_values(self, text):
+    async def llm_analyze_values(self, text):
         """
         Analyze message content based on values
         """
@@ -270,7 +270,7 @@ async def toggle_culture_module(ctx, module_name, state):
     else:
         active_modules_by_channel.remove(module_name)
 
-
+# TODO: what does the variable "state" mean?
 async def display_culture_module_state(ctx, module_name, state):
     """
     Send an embed displaying state of active culture moduled by channel
