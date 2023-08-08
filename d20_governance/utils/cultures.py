@@ -156,6 +156,19 @@ class Diversity(CultureModule):
             message += f"{user.name}: {count}\n"
         await ctx.send(f"```{message}```")
 
+class Amplify(CultureModule):
+    async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
+        """
+        A LLM filter for messages during the /eloquence command/function
+        """
+        llm = OpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+        prompt = PromptTemplate(
+            input_variables=["input_text"],
+            template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
+        )
+        chain = LLMChain(llm=llm, prompt=prompt)
+        return chain.run(message_string)
+
 
 class Ritual(CultureModule):
     async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
@@ -375,6 +388,22 @@ CULTURE_MODULES = {
             "message_alter_mode": None,
             "activated_message": "A measure of diversity influences the distribution of power.",
             "deactivated_message": "Measurements of diversity continue, but no longer govern this environment's interactions.",
+            "url": "",  # TODO: make ritual img
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "amplify": Amplify(
+        {
+            "name": "amplify",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": "llm",
+            "llm_disclosure": "Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone.",
+            "activated_message": "Sentiment amplification abounds.",
+            "deactivated_message": "Sentiment amplification has ceased.",
             "url": "",  # TODO: make ritual img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,

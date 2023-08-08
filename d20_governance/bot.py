@@ -898,6 +898,20 @@ async def diversity(ctx):
         await module.display_info(ctx)
 
 
+# TODO: it would be nice to not have this toggled by default
+@bot.command()
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def amplify(ctx):
+    """
+    Trigger amplify module
+    """
+    module: Amplify = CULTURE_MODULES.get("amplify", None)
+    if module is None:
+        return
+
+    await module.toggle_global_state(ctx)
+
+
 @bot.command()
 # @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def ritual(ctx):
