@@ -259,7 +259,7 @@ ACTIVE_MODULES_BY_CHANNEL = defaultdict(OrderedSet)
 
 async def toggle_culture_module(ctx, module_name, state):
     """
-    If state is True, turnon the culture module
+    If state is True, turn on the culture module
     if state is False, turn off the culture module
     """
     channel_name = str(ctx.channel) # TODO: add the modules, not just the channel name to this list
