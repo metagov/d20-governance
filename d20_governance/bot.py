@@ -6,18 +6,13 @@ import logging
 import traceback
 import sys
 import time
-
-# import interactions
-# from interactions import slash_command, SlashContext
 from discord.app_commands import command as slash_command
-
 from discord.ext import commands
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
-
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -31,10 +26,8 @@ intents.guilds = True
 bot = commands.Bot(command_prefix="-", description=description, intents=intents)
 bot.remove_command("help")
 
-
 def run_bot():
     bot.run(token=DISCORD_TOKEN)
-
 
 @bot.command()
 async def help(ctx, command: str = None):
@@ -203,14 +196,16 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
             command = globals().get(command_name)
             retries = action.retries if hasattr(action, "retries") else 0
             if bot.quest.progress_completed == True:
-                print("Rrogress condition met. Ending action_runner")
+                print("Progress condition met. Ending action_runner")
                 break
             while retries >= 0:
                 try:
                     await execute_action(game_channel_ctx, command, args)
                     break
+                # TODO: Add more specific exceptions
                 except Exception as e:
                     if retries > 0:
+                        # TODO: how can we avoid the global
                         global VOTE_RETRY
                         VOTE_RETRY = True
                         print(f"Number of retries remaining: {retries}")
@@ -227,6 +222,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                                 "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
                             )
                             loop_count = 0
+                            # TODO: fixup this loop
                             while True:
                                 condition_result = await calculate_module_inputs(
                                     game_channel_ctx, retry=True, tally=False
@@ -321,6 +317,7 @@ async def countdown(ctx, timeout_seconds, text: str = None):
                 time.time() + message_interval_seconds
             )  # schedule next message
 
+        # TODO: can we avoid this check
         if bot.quest.progress_completed == True:  # check if all submissions are done
             print("Stopping countdown")
             if time.time() >= next_message_time:
@@ -345,6 +342,7 @@ async def all_submissions_submitted(ctx):
     """
     Check that all submissions are submited
     """
+    # TODO: can we avoid the progress_completed check
     while True:
         if bot.quest.progress_completed == True:
             break
@@ -357,6 +355,7 @@ async def all_submissions_submitted(ctx):
         print("⧗ Waiting for all submissions to be submitted.")
         await asyncio.sleep(1)  # Wait for a second before checking again
 
+# TODO: what's the difference between pause / progress_timeout, can they be collapsed
 
 async def pause(ctx, seconds: str):
     """
@@ -372,7 +371,6 @@ async def pause(ctx, seconds: str):
         print(f"Pausing for {seconds} seconds...")
         await asyncio.sleep(int(seconds))
     return True
-
 
 async def progress_timeout(ctx, seconds: str):
     """
@@ -880,13 +878,14 @@ async def values(ctx):
     await module.toggle_global_state(ctx)
 
 
+# TODO: it would be nice to not have this toggled when displaying the info, maybe have a different command for display diversity info
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def diversity(ctx):
     """
     Trigger diversity module
     """
-    module = CULTURE_MODULES.get("diversity", None)
+    module: Diversity = CULTURE_MODULES.get("diversity", None)
     if module is None:
         return
 
@@ -894,22 +893,20 @@ async def diversity(ctx):
 
     # Display the diversity counts if global state is true
     if module.is_global_state_active():
-        await display_diversity(ctx)
+        await module.display_info(ctx)
 
 
-async def display_diversity(ctx):
-    # Display the message count for each user
-    message = "Message count by user:\n"
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def amplify(ctx):
+    """
+    Trigger amplify module
+    """
+    module: Amplify = CULTURE_MODULES.get("amplify", None)
+    if module is None:
+        return
 
-    # Sort the user_message_count dictionary by message count in descending order
-    sorted_user_message_count = sorted(
-        USER_MESSAGE_COUNT.items(), key=lambda x: x[1], reverse=True
-    )
-
-    for user_id, count in sorted_user_message_count:
-        user = await ctx.guild.fetch_member(user_id)
-        message += f"{user.name}: {count}\n"
-    await ctx.send(f"```{message}```")
+    await module.toggle_global_state(ctx)
 
 
 @bot.command()
@@ -918,7 +915,7 @@ async def ritual(ctx):
     """
     Trigger ritual module.
     """
-    module = CULTURE_MODULES.get("ritual", None)
+    module: Ritual = CULTURE_MODULES.get("ritual", None)
     if module is None:
         return
 
@@ -935,6 +932,7 @@ async def secret_message(ctx):
     await send_msg_to_random_player(bot.quest.game_channel)
 
 
+#TODO: I think we can probably remove this? 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: False)
 async def vote_governance(ctx, governance_type: str):
@@ -1047,7 +1045,7 @@ async def quit(ctx):
     await ctx.send(f"{ctx.author.name} has quit the game!")
     # TODO: Implement the logic for quitting the game and ending it for the user
 
-
+# TODO: combine dissolve and end into one command
 @bot.command(hidden=True)
 async def dissolve(ctx):
     """
@@ -1086,7 +1084,7 @@ async def update_bot_icon(ctx):
 
     await bot.user.edit(avatar=image_bytes)
 
-
+# TODO: reconcile the two quiet mode commands
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def is_quiet(ctx):
@@ -1205,7 +1203,7 @@ async def post_submissions(ctx):
     # Send the formatted submissions to the context
     await ctx.send(embed=embed)
 
-
+# TODO: can we reconcile this with vote_on_values? 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
 async def vote_submissions(ctx, question: str, timeout="20"):
@@ -1222,20 +1220,22 @@ async def vote_submissions(ctx, question: str, timeout="20"):
 
 @bot.command()
 async def post_proposal_values(ctx):
-    await ctx.send(f"```Proposed values: {TEMP_VALUES_DICT}```")
-
+    message = "Proposed values:\n"
+    for key, value in PROPOSED_VALUES_DICT.items():
+        # Format the key as bold and add the value
+        message += f"**{key}**: {value}\n"
+    await ctx.send(message)
 
 @bot.tree.command(
     name="propose_value",
     description="propose and define a value that will govern your interactions",
 )
 async def propose_value(interaction: discord.Interaction, name: str, definition: str):
-    TEMP_VALUES_DICT[name] = definition
-    print(TEMP_VALUES_DICT)
+    PROPOSED_VALUES_DICT[name] = definition
+    print(PROPOSED_VALUES_DICT)
     await interaction.response.send_message(
         f"**{interaction.user.name} proposed a new value:**\n* **{name}:** {definition}"
     )
-
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
@@ -1244,15 +1244,12 @@ async def vote_on_values(ctx, question: str, timeout="20"):
     Call vote on all submissions from /submit and reset submission list
     """
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-    contenders = list(TEMP_VALUES_DICT.values())
-    print(contenders)
+    contenders = list(PROPOSED_VALUES_DICT.values())
     quest = bot.quest
-    for value in contenders:
-        contender = [value]
-        await vote(ctx, quest, question, contender, int(timeout))
-    # Reset the players_to_submissions dictionary for the next round
-    TEMP_VALUES_DICT.clear()
-
+    global VALUES_DICT
+    VALUES_DICT = await consent(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
+    # Reset the values submissions dict for the next round
+    PROPOSED_VALUES_DICT.clear()
 
 # CLEANING COMMANDS
 @bot.command(hidden=True)
@@ -1317,7 +1314,7 @@ async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]):
     await ctx.send(embed=embed)
     await start_quest(ctx, quest)
 
-
+# TODO: can we remove? 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_randomize_snapshot(ctx):
@@ -1327,7 +1324,7 @@ async def test_randomize_snapshot(ctx):
     shuffle_modules()
     make_governance_snapshot()
 
-
+# TODO: can we remove? 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_png_creation(ctx):
@@ -1339,7 +1336,7 @@ async def test_png_creation(ctx):
         png_file = discord.File(f, "output.svg")
         await ctx.send(file=png_file)
 
-
+# TODO: can we remove? 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_img_generation(ctx, text="Obscurity"):
@@ -1357,7 +1354,7 @@ async def test_img_generation(ctx, text="Obscurity"):
     # Clean up the image file
     os.remove("generated_image.png")
 
-
+# TODO: can we remove? 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
 async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
@@ -1365,41 +1362,13 @@ async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
     Test stability image generation
     """
     if module in module_dict:
-        module_string = module_dict[module]["module_string"]
-        print(module_string)
+        module_name = module_dict[module]["name"]
+        print(module_name)
         svg_icon = module_dict[module]["icon"]
         print(svg_icon)
-        image = make_module_png(module_string, svg_icon)
+        image = make_module_png(module_name, svg_icon)
         print(image)
     await ctx.send(file=discord.File(image))
-
-
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_culture(ctx):
-    """
-    A way to test and demo the culture messaging functionality
-    """
-    await vote_governance(ctx, "culture")
-
-
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_decision(ctx):
-    """
-    Test and demo the decision message functionality
-    """
-    await vote_governance(ctx, "decision")
-
-
-@bot.command(hidden=True)
-@access_control()
-async def ping(ctx):
-    """
-    A ping command for testing
-    """
-    await ctx.send("Pong!")
-
 
 # COMMAND MANAGEMENT
 @bot.command(hidden=True)
@@ -1482,13 +1451,13 @@ async def list_values(ctx):
     for (
         value,
         description,
-    ) in MOCK_VALUES_DICT.items():
+    ) in DEFAULT_VALUES_DICT.items():
         message_content += f"{value}:\n{description}\n\n"
     message = f"```{message_content}```"
     await ctx.send(message)
 
 
-async def update_module_decision(context, new_decision_module):
+async def update_decision_module(context, new_decision_module):
     """
     Update the active_global_decision_modules list by appending the new decision module
 
@@ -1523,7 +1492,7 @@ async def calculate_module_inputs(context, retry=None, tally=None):
 
         if not tally:
             if max_value == INPUT_SPECTRUM["scale"] and len(max_keys) == 1:
-                await update_module_decision(context, max_keys[0])
+                await update_decision_module(context, max_keys[0])
                 await context.send(f"```{max_keys[0]} mode activated!```")
                 return True
 
@@ -1533,7 +1502,7 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                     f"```Poll resulted in tie. Previous decision module kept.```"
                 )
             else:
-                await update_module_decision(context, max_keys[0])
+                await update_decision_module(context, max_keys[0])
                 await context.send(f"```{max_keys[0]} mode activated!```")
 
     # Calculate culture inputs
@@ -1590,13 +1559,13 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                         module.config["input_value"] = INPUT_SPECTRUM["scale"]
                         await display_module_status(context, CULTURE_MODULES)
                         await context.send(
-                            f"```{module.config['module_string'].capitalize()} has been turned back on and set to the max!```"
+                            f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
                         )
 
     for module_name in CULTURE_MODULES.keys():
         await evaluate_module_state(module_name)
 
-
+# TODO: reconcile redundant code here
 async def display_module_status(context, module_dict):
     """
     Display the current status of culture input values
@@ -1616,7 +1585,7 @@ async def display_module_status(context, module_dict):
         for module_name in module_dict:
             module = CULTURE_MODULES[module_name]
             input_value = module.config["input_value"]
-            module_name_field = module.config["module_string"].capitalize()
+            module_name_field = module.config["name"].capitalize()
             input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
             input_empty = INPUT_SPECTRUM["scale"] - input_filled
 
@@ -1635,7 +1604,7 @@ async def display_module_status(context, module_dict):
             )
     else:
         for module_name in module_dict:
-            module = module_dict[module_name]["module_string"]
+            module = module_dict[module_name]["name"]
             input_value = module_dict[module_name]["input_value"]
             module_name_field = module.capitalize()
             input_filled = int(min(input_value, INPUT_SPECTRUM["scale"]))
@@ -1689,7 +1658,7 @@ async def send_webhook_message(webhook, message, filtered_message):
     await webhook.send(**payload)
 
 
-async def process_message(context, message):
+async def process_message(ctx, message):
     """
     Process messages from on_message
     """
@@ -1698,45 +1667,39 @@ async def process_message(context, message):
     else:
         # Check if any modes are active deleted the original message
         active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL.get(
-            str(message.channel), ListSet()
+            str(message.channel), OrderedSet()
         )
         if active_modules_by_channel:
-            reference_message = None
-            filtered_message = None
-            if message.content != "check-values":
-                filtered_message = message.content
+            message_content = message.content
+            if message_content == "check-values" and "values" in active_modules_by_channel:
+                module_name: Values = CULTURE_MODULES["values"]
+                await module_name.check_values(ctx, message)
+                return 
+            
+            message_content = message.content
+            delete_message = False
+            for module_name in active_modules_by_channel:
+                module: CultureModule = CULTURE_MODULES[module_name]
+                if module.config["message_alter_mode"]: # Not all culture modules filter messages; we only want to delete message and replace with webhook when we know it will be filtered 
+                    delete_message = True
+                    break
+            
+            # We delete message before filtering because filtering has latency.
+            if delete_message:
                 await message.delete()
-            else:
-                if message.reference:
-                    reference_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
-                    if (
-                        reference_message.author.bot
-                        and not reference_message.content.startswith(
-                            "※"
-                        )  # This condition lets webhook messages to be checked
-                    ):
-                        await context.send("Cannot check values of messages from bot")
-                        return
-                    else:
-                        print(
-                            f"Original Message Content: {reference_message.content}, posted by {message.author}"
-                        )
-            filtered_message = await apply_culture_modes(
-                modules=active_modules_by_channel,
-                message=message,
-                filtered_message=filtered_message,
-                reference_message=reference_message,
-            )
-            webhook = await create_webhook(message.channel)
-            await send_webhook_message(webhook, message, filtered_message)
-        else:
-            return
 
+                filtered_message = await apply_culture_modules(
+                    ctx,
+                    active_modules=active_modules_by_channel,
+                    message=message,
+                    message_content=message_content,
+                )
 
-async def apply_culture_modes(
-    modules, message, filtered_message=None, reference_message=None
+                webhook = await create_webhook(message.channel)
+                await send_webhook_message(webhook, message, filtered_message)
+
+# TODO: write tests for culture module filtering
+async def apply_culture_modules(ctx, active_modules, message, message_content: str
 ):
     """
     Filter messages based on culture modules
@@ -1745,57 +1708,15 @@ async def apply_culture_modes(
 
     Order of application is derived from the active_global_culture_modules list
     """
-    context = await bot.get_context(message)
 
-    # Increment message count for the user (for /diversity)
+    # Increment message count for the user (for diversity module)
     user_id = message.author.id
-    if user_id not in USER_MESSAGE_COUNT:
-        USER_MESSAGE_COUNT[user_id] = 0
-    USER_MESSAGE_COUNT[user_id] += 1
+    USER_MESSAGE_COUNT[user_id] = USER_MESSAGE_COUNT.get(user_id, 0) + 1
 
-    for module_name in modules:
-        module = CULTURE_MODULES[module_name]
-        if module_name == "diversity":
-            await display_diversity(context)
-        if module_name == "ritual":
-            # Get the most recently posted message in the channel that isn't from a bot
-            # TODO: Consider revising this to also take messages process as webhooks
-            # Otherwise, this function can end up referencing very old messaged during periods of high cultural activity
-            async for msg in message.channel.history(limit=100):
-                if msg.id == message.id:
-                    continue
-                if msg.author.bot:
-                    continue
-                if msg.content.startswith("/"):
-                    continue
-                previous_message = msg.content
-                break
-            filtered_message = await initialize_ritual_agreement(
-                previous_message, filtered_message
-            )
-        if module_name == "obscurity":
-            obscure_function = Obscurity(filtered_message)
-            if module.config["mode"] == "scramble":
-                filtered_message = obscure_function.scramble()
-            if module.config["mode"] == "replace_vowels":
-                filtered_message = obscure_function.replace_vowels()
-            if module.config["mode"] == "pig_latin":
-                filtered_message = obscure_function.pig_latin()
-            if module.config["mode"] == "camel_case":
-                filtered_message = obscure_function.camel_case()
-        if module_name == "eloquence":
-            filtered_message = await filter_eloquence(filtered_message)
-        if module_name == "values":
-            if reference_message == None:
-                pass
-            else:
-                current_values_dict = VALUES_DICT if VALUES_DICT else MOCK_VALUES_DICT
-                values_list = f"Community Defined Values:\n\n"
-                for value in current_values_dict.keys():
-                    values_list += f"* {value}\n"
-                llm_response = await filter_by_values(reference_message.content)
-                filtered_message = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **LLM Analysis:** {llm_response}"
-    return filtered_message
+    for module_name in active_modules:
+        module: CultureModule = CULTURE_MODULES[module_name] # TODO: active_modules list should be the modules themselves, not their names
+        message_content = await module.filter_message(ctx, message, message_content)
+    return message_content
 
 
 # ON MESSAGE

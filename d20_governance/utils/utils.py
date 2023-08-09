@@ -343,38 +343,6 @@ def add_module_to_stack(module):
     return module
 
 
-# Text Utils
-async def stream_message(ctx, text, original_embed):
-    embed = original_embed.copy()
-    embed.description = "[...]"
-    message_canvas = await ctx.send(embed=embed)
-    try:
-        chunks = chunk_text(text)
-        joined_text = []
-        for chunk in chunks:
-            # Use the typing context manager to simulate typing
-            async with ctx.typing():
-                joined_text.append(chunk)
-                # distorted_text = distort_text(joined_text)  # distorted text disabled
-                joined_text_str = " ".join(joined_text)
-                embed.description = joined_text_str
-                await message_canvas.edit(embed=embed)
-                sleep_time = random.uniform(0.7, 1.2)
-                for word in chunk.split():
-                    if "," in word:
-                        sleep_time += 0.7
-                    if "." in word:
-                        sleep_time += 1.2
-                    else:
-                        pass
-                await asyncio.sleep(sleep_time)
-        final_message = "".join(joined_text_str) + " ✨"
-        embed.description = final_message
-        await message_canvas.edit(embed=embed)
-    except Exception as e:
-        print(e)
-
-
 def chunk_text(text):
     lines = text.split("\n")
     chunks = []
@@ -388,7 +356,42 @@ def chunk_text(text):
             chunk = " ".join(words[i : i + chunk_size])
             chunks.append(chunk)
             i += chunk_size
+        # Add a newline as a separate chunk at the end of each line
+        chunks.append("\n")
     return chunks
+
+async def stream_message(ctx, text, original_embed):
+    embed = original_embed.copy()
+    embed.description = "[...]"
+    message_canvas = await ctx.send(embed=embed)
+    try:
+        chunks = chunk_text(text)
+        joined_text = []
+        for chunk in chunks:
+            # Use the typing context manager to simulate typing
+            async with ctx.typing():
+                # Append chunk without adding a space if it's a newline
+                if chunk == "\n":
+                    joined_text.append(chunk)
+                else:
+                    joined_text.append(" " + chunk)
+                joined_text_str = "".join(joined_text)
+                embed.description = joined_text_str
+                await message_canvas.edit(embed=embed)
+                sleep_time = random.uniform(0.3, 0.7)
+                for word in chunk.split():
+                    if "," in word:
+                        sleep_time += 0.7
+                    if "." in word:
+                        sleep_time += 1.2
+                    else:
+                        pass
+                await asyncio.sleep(sleep_time)
+        final_message = "".join(joined_text_str) + " ✨"
+        embed.description = final_message
+        await message_canvas.edit(embed=embed)
+    except Exception as e:
+        print(e)
 
 
 def distort_text(word_list):
@@ -767,9 +770,9 @@ async def get_module_png(module):
     modules = {**DECISION_MODULES, **CULTURE_MODULES}
 
     if module in modules:
-        module_string = modules[module]["module_string"]
+        name = modules[module]["name"]
         svg_icon = modules[module]["icon"]
-        image_url = await make_module_png(module_string, svg_icon)
+        image_url = await make_module_png(name, svg_icon)
         return image_url
     else:
         print(f"Module {module} not found in module dictionaries")

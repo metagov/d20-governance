@@ -121,23 +121,34 @@ ACTIVE_GLOBAL_DECISION_MODULES = {}
 
 DECISION_MODULES = {
     "majority": {
-        "module_string": "majority",
+        "name": "majority",
         "description": "Majority requires a simiple majority from the number of people who voteon the options.",
         "state": False,
         "activated": False,
-        "activated_message": "Messages will be distored based on mode of obscurity.",
-        "deactivated_message": "Messages will no longer be distored by obscurity.",
+        "activated_message": "",
+        "deactivated_message": "",
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
     },
     "consensus": {
-        "module_string": "consensus",
+        "name": "consensus",
         "description": "Consensus requires everyone in the simulation to vote on the same option.",
         "state": False,
         "activated": False,
-        "activated_message": "Messages will now be process through an LLM.",
-        "deactivated_message": "Messages will no longer be processed through an LLM.",
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+    },
+    "consent": {
+        "name": "consent",
+        "description": "Consent decision-making allows options to pass by default unless they are objected to.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
@@ -150,19 +161,10 @@ DECISION_DICT = {}
 
 # VALUES DEFINITION
 
-TEMP_VALUES_DICT = {}
+PROPOSED_VALUES_DICT = {}
 VALUES_DICT = {}
 
-MOCK_VALUES_LIST = [
-    "respect",
-    "divisiveness",
-    "support",
-    "exploitation",
-    "trust",
-    "domination",
-]
-
-MOCK_VALUES_DICT = {
+DEFAULT_VALUES_DICT = {
     "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
     "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
     "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",

@@ -1,7 +1,7 @@
 from typing import List
 import random
 import discord
-from d20_governance.utils.constants import CIRCLE_EMOJIS, TEMP_VALUES_DICT
+from d20_governance.utils.constants import CIRCLE_EMOJIS, PROPOSED_VALUES_DICT
 from d20_governance.utils.utils import Quest, get_module_png
 from d20_governance.utils.decisions import *
 
@@ -18,7 +18,6 @@ consensus = (
 )
 
 VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
-
 
 async def set_global_decision_module(ctx, decision_module: str = None):
     channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
@@ -106,6 +105,7 @@ async def vote(
     if not options:
         raise Exception("No options were provided for voting.")
 
+    # TODO: fix
     # if len(options) > 10 or (not quest.solo_mode and len(options) < 2):
     #     await ctx.send("Error: A poll must have between 2 and 10 options.")
     #     return
@@ -178,11 +178,11 @@ async def vote(
     if winning_option is not None:
         decision_data = {"decision": winning_option, "decision_module": decision_module}
         DECISION_DICT[question] = decision_data
-        if TEMP_VALUES_DICT:
-            VALUES_DICT.update(TEMP_VALUES_DICT)
+        if PROPOSED_VALUES_DICT:
+            VALUES_DICT.update(PROPOSED_VALUES_DICT)
 
-    # If retries are configured, voting will be repeated
-    if winning_option is None:
+    else:
+        # If retries are configured, voting will be repeated
         raise Exception("No winner was found.")
 
     await ctx.send(embed=embed)
@@ -214,7 +214,7 @@ def get_results_message(results, winning_option):
     if winning_option:
         message += f"**Winning option:** `{winning_option}`\n\n"
         message += (
-            "A record of all decisions can be displayed by typing `/show_decisions`"
+            "A record of all decisions can be displayed by typing `-show_decisions`"
         )
     else:
         message += "No winner was found.\n\n"

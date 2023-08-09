@@ -1,46 +1,46 @@
 title: 'Governance Game: Build a Community'
 stages:
   - stage: Introduction
-    message: >-
-      Welcome to the Build a Community Governance Simulator!\n
+    message: |
+      Welcome to the Build a Community Governance Simulator!
       
-        You are tasked with building a new community from scratch and have three questions to collectively answer:\n
+      You are tasked with building a new community from scratch and have three questions to collectively answer:
 
-        1️⃣ What is your name?\n
-        2️⃣ What is your animating purpose?\n
-        3️⃣ What is your first action in this strange world?\n
-        
-        However, this simulation takes place in the future, after a 🤔 **new confusion** 🤔 has set in. Deliberation on the internet is now randomly subjected to communication collapses 😱.\n
-        
-        While things may at first appear normal, over time you will experience new challenges in making decisions.\n
-        
-        Be prepared to adapt or risk remaining in the new confusion for forever!"\n
+      1️⃣ What is your name?
+      2️⃣ What is your animating purpose?
+      3️⃣ What is your first action in this strange world?
+      
+      However, this simulation takes place in the future, after a 🤔 **new confusion** 🤔 has set in. Deliberation on the internet is now randomly subjected to communication collapses 😱.
+      
+      While things may at first appear normal, over time you will experience new challenges in making decisions.
+      
+      Be prepared to adapt or risk remaining in the new confusion for forever!"
     actions:
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
-  
+    
   - stage: Community Values
-    message: >-
+    message: |
       The first step in building a community and making sense of our situation is to define our values.
 
-        What do we value, and how do we define those values?
+      What do we value, and how do we define those values?
 
-        Use `/propose_value` to submit a proposal value
+      Use `/propose_value` to submit a proposal value
     actions: 
       - action: countdown 120 "until the next stage. Propose a value using `/propose_value` now"
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/interference.png"
+    image_path: "assets/imgs/pre_generated/temple.png"
 
   - stage: Vote on Values
-    message: >-
+    message: |
       This is the moment we collectively define our values. 
       
-        Each value will be presented for decision.
+      Each value will be presented for decision.
     actions:
       - action: post_proposal_values
       - action: set_global_decision_module "majority"
-      - action: vote_on_values "Should we adopt this value?" 30
+      - action: vote_on_values "Which values should we adopt?" 30
         soft_failure: "```No decision was made.```"
       - action: countdown 30 "until the next stage"
       - action: values
@@ -49,38 +49,38 @@ stages:
     image_path: "assets/imgs/pre_generated/interference.png"
  
   - stage: Values defined
-    message: >-
+    message: |
       Our values are now defined and can be used to check if our posting aligns with our values. 
 
-        Reply to a message and type `check-values` to check alignment.
+      Reply to a message and type `check-values` to check alignment.
     actions:
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/interference.png"
  
   - stage: Community Name
-    message: >-
+    message: |
       Now that our vlaues are defined, let's making sense of our situation by giving our community a name.
 
-        What should we call ourselves?
+      What should we call ourselves?
     actions:
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/name.png"
   
   - stage: 'Submit Answers: Community Name'
-    message: >-
+    message: |
       Take a moment to submit a proposal to the question: `What should we call ourselves?`.
 
-        You have 2 minutes to submit an answer.
+      You have 2 minutes to submit an answer.
 
-        To submit your proposal, type `/submit` followed by your message.
-        
-        For example: `/submit this is my submission`
+      To submit your proposal, type `/submit` followed by your message.
+      
+      For example: `/submit this is my submission`
 
-        If you make a mistake or change your mine you can use `/resubmit` to change your submission.
+      If you make a mistake or change your mine you can use `/resubmit` to change your submission.
 
-        See `/help submit` for more information.
+      See `/help submit` for more information.
     actions:
       - action: countdown 120 "until the next stage. Type /submit and your message now"
     progress_conditions: 
@@ -89,35 +89,50 @@ stages:
     image_path: "assets/imgs/pre_generated/proposals.png"
   
   - stage: 'Proposals: Community Name'
-    message: >-
+    message: |
       This nascent community has spoken. 
       
-        Here are the proposed names for our community.
+      Here are the proposed names for our community.
     actions:
       - action: post_submissions
       - action: pause 5
+      - action: amplify
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/submissions.png"
   
+  - stage: Simulation Interference
+    message: |
+      🔊 SIMULATION INTERFERENCE: AMPLIFY 🔊
+        
+        Unexpectedly, the simulator has cranked up the volume in this community. 
+
+        Every word you type will echo with intensity, as if shouted from the mountaintops.
+
+        Let not this enhancement deter you, for now, the discussion must rise in decibel and determination.
+    actions: 
+      - action: pause 5
+    progress_conditions: []
+    image_path: "assets/imgs/pre_generated/amplify.png"
+
   - stage: 'Deliberation: Community Name'
-    message: >-
+    message: |
       Review the answers and deliberate and discuss amongst yourselves. Which name do we most prefer?
 
-        There will be a majority-based vote in 2 minutes.
+      There will be a majority-based vote in 2 minutes.
 
-        Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
-        
-        Type `/help resubmit` for more information. 
+      Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
+      
+      Type `/help resubmit` for more information. 
     actions:
       - action: countdown 120 "until making a decision"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
 
   - stage: 'Vote: Community Name'
-    message: >-
+    message: |
       Deliberation ends and the voting period begins.
 
-        You have 1 minute to vote on your community name.
+      You have 1 minute to vote on your community name.
     actions:
       - action: post_submissions
       - action: set_global_decision_module "majority"
@@ -128,12 +143,25 @@ stages:
       - action: countdown 10 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/vote.png"
+
+  - stage: Simulation Reset
+    message: |
+      👾 SIMULATION RESET 👾
+      
+      A decision has been made.
+    
+      A semblance of normalcy returns.
+    actions:
+      - action: amplify
+      - action: pause 5
+    progress_conditions: []
+    image_path: "assets/imgs/pre_generated/online_community.png"
   
   - stage: Community Purpose
-    message: >-
+    message: |
       Now that we have a name, we need to decide on our community's mission. 
       
-        What is our animating purpose?
+      What is our animating purpose?
     actions:
       - action: clear_decision_input_values
       - action: pause 5
@@ -141,19 +169,19 @@ stages:
     image_path: "assets/imgs/pre_generated/goal.png"
   
   - stage: 'Submit Answers: Community Purpose'
-    message: >-
+    message: |
       Take a moment to submit a proposal to the question: `What should the purpose
       of our community be?`.
 
-        You have 2 minutes to submit an answer.
+      You have 2 minutes to submit an answer.
 
-        To submit your proposal, type `/submit` followed by your message.
-        
-        For example: `/submit this is my submission`
+      To submit your proposal, type `/submit` followed by your message.
+      
+      For example: `/submit this is my submission`
 
-        If you make a mistake or change your mine you can use `/resubmit` to change your submission.
+      If you make a mistake or change your mine you can use `/resubmit` to change your submission.
 
-        See `/help submit` for more information.
+      See `/help submit` for more information.
     actions:
       - action: countdown 120 "until deliberation stage. Type /submit and your message now"
     progress_conditions: 
@@ -162,10 +190,10 @@ stages:
     image_path: "assets/imgs/pre_generated/proposals.png"
   
   - stage: 'Proposals: Community Goal'
-    message: >-
+    message: |
       This developing community has spoken. 
       
-        Here are the proposed goals for our community.
+      Here are the proposed goals for our community.
     actions:
       - action: post_submissions
       - action: pause 5
@@ -174,7 +202,7 @@ stages:
     image_path: "assets/imgs/pre_generated/submissions.png"
   
   - stage: Simulation Interference
-    message: >-
+    message: |
       👾 SIMULATION INTERFERENCE: ELOQUENCE 👾
         
         Out of no where, the simulator has imposed a culture of eloquence upon this community. 
@@ -188,26 +216,26 @@ stages:
     image_path: "assets/imgs/pre_generated/interference.png"
   
   - stage: 'Deliberation: Community Purpose'
-    message: >-
+    message: |
       Review the answers and deliberate amongst yourselves which purpose this community should pursue. 
       
-        What will animate your activities?
+      What will animate your activities?
 
-        Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
-        
-        Type `/help resubmit` for more information. 
+      Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
       
-        There will be a majority based vote in 2 minutes.
+      Type `/help resubmit` for more information. 
+    
+      There will be a majority based vote in 2 minutes.
     actions:
       - action: countdown 120 "until making a decision"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
   - stage: 'Vote: Community Purpose'
-    message: >-
+    message: |
       Deliberation ends and votes are cast.
 
-        You have 1 minute to vote on your community purpose.
+      You have 1 minute to vote on your community purpose.
     actions:
       - action: post_submissions
       - action: set_global_decision_module "majority"
@@ -220,12 +248,12 @@ stages:
     image_path: "assets/imgs/pre_generated/goal.png"
   
   - stage: Simulation Reset
-    message: >-
+    message: |
       👾 SIMULATION RESET 👾
       
-        A decision has been made.
-      
-        A semblance of normalcy returns.
+      A decision has been made.
+    
+      A semblance of normalcy returns.
     actions:
       - action: eloquence
       - action: pause 5
@@ -233,7 +261,7 @@ stages:
     image_path: "assets/imgs/pre_generated/online_community.png"
   
   - stage: First Action
-    message: >-
+    message: |
       Now that we have an animating purpose, what should our first action be in this strange new world?
     actions:
       - action: clear_decision_input_values
@@ -242,20 +270,20 @@ stages:
     image_path: "assets/imgs/pre_generated/first_action.png"
   
   - stage: 'Submit Answers: First Action'
-    message: >-
+    message: |
       Take a moment to submit a proposal to the question: `What should our first action be?`.
+  
+      🧠 Be mindful that **consensus** will need to be achieved among the community for an action to be approved.
     
-        🧠 Be mindful that **consensus** will need to be achieved among the community for an action to be approved.
+      You have 2 minutes to submit an answer.
+
+      To submit your proposal, type `/submit` followed by your message.
       
-        You have 2 minutes to submit an answer.
+      For example: `/submit this is my submission`
 
-        To submit your proposal, type `/submit` followed by your message.
-        
-        For example: `/submit this is my submission`
+      If you make a mistake or change your mine you can use `/resubmit` to change your submission.
 
-        If you make a mistake or change your mine you can use `/resubmit` to change your submission.
-
-        See `/help submit` for more information.
+      See `/help submit` for more information.
     actions:
       - action: countdown 120 "until deliberation. Type /submit and your message now"
     progress_conditions: 
@@ -264,10 +292,10 @@ stages:
     image_path: "assets/imgs/pre_generated/proposals.png"
   
   - stage: 'Proposals: First Action'
-    message: >- 
+    message: |
       The community has spoken. 
       
-        Here are a list of proposed first actions.
+      Here are a list of proposed first actions.
     actions:
       - action: post_submissions
       - action: pause 5
@@ -276,7 +304,7 @@ stages:
     image_path: "assets/imgs/pre_generated/submissions.png"
   
   - stage: Simulation Interference
-    message: >-
+    message: |
       👾 SIMULATION INTERFERENCE: OBSCURITY 👾
       
         The simulator has returned to interfere with the deliberation process. This time, a culture of obscurity is in place.
@@ -294,24 +322,24 @@ stages:
     image_path: "assets/imgs/pre_generated/interference.png"
   
   - stage: 'Deliberation: First Action'
-    message: >-
+    message: |
       Review the answers and deliberate amongst yourselves what the first goal of this community will be.
 
-        Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
-      
-        Type `/help resubmit` for more information. 
+      Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
+    
+      Type `/help resubmit` for more information. 
 
-        There will be a **consensus** based vote in 2 minutes
+      There will be a **consensus** based vote in 2 minutes
     actions:
       - action: countdown 120 "until making a decision"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/deliberate.png"
   
   - stage: 'Vote: First Action'
-    message: >-
+    message: |
       Deliberation ends and votes are cast.
 
-       We have 1 minute to vote.
+      We have 1 minute to vote.
     actions:
       - action: post_submissions
       - action: set_global_decision_module "consensus"
@@ -324,7 +352,7 @@ stages:
     image_path: "assets/imgs/pre_generated/vote.png"
   
   - stage: Simulation Reset
-    message: >-
+    message: |
       👾 SIMULATION RESET 👾
       
         A decision has been made. A semblance of normalcy returns.
@@ -335,7 +363,7 @@ stages:
     image_path: "assets/imgs/pre_generated/online_community.png"
   
   - stage: End
-    message: >-
+    message: |
       Congratulations on completing this first experience in online governance in this new world.
 
        This simulation was  meant to demonstrate the types of ways communication might be affected in this game, how those distortions impact the baility to deliberate, and how decisions might be made.
