@@ -60,7 +60,7 @@ stages:
  
   - stage: Community Name
     message: |
-      Now that our vlaues are defined, let's making sense of our situation by giving our community a name.
+      Now that our values are defined, let's making sense of our situation by giving our community a name.
 
       What should we call ourselves?
     actions:

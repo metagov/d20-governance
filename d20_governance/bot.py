@@ -1408,13 +1408,16 @@ async def on_command(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send('That command does not exist.')
+    else:
+        await ctx.send("An error occurred.")
     traceback_text = "".join(
         traceback.format_exception(type(error), error, error.__traceback__)
     )
     error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
     print(error_message)
     logging.error(error_message)
-    await ctx.send("An error occurred.")
 
 
 @bot.event
