@@ -161,7 +161,8 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
 
     # Post the image to the Discord channel
     await game_channel_ctx.send(file=discord.File("generated_image.png"))
-    os.remove("generated_image.png")  # Clean up the image file
+    if os.path.exists("generated_image.png"):
+        os.remove("generated_image.png")
 
     if quest.gen_audio:
         # Post audio file
@@ -490,7 +491,7 @@ class QuestBuilderView(discord.ui.View):
                     emoji="#️⃣",
                     value=str(n),
                 )
-                for n in range(2, 20)
+                for n in range(1, 20)
             ],
         )
         self.select3 = QuestBuilder(
@@ -579,6 +580,7 @@ class JoinLeaveView(discord.ui.View):
         self.ctx = ctx
         self.num_players = num_players
         self.quest = quest
+        self.lock = asyncio.Lock()
 
     async def update_embed(self, interaction):
         needed_players = self.num_players - len(self.quest.joined_players)
@@ -606,31 +608,34 @@ class JoinLeaveView(discord.ui.View):
     ):
         quest = self.quest
         player_name = interaction.user.name
-        if player_name not in quest.joined_players:
-            quest.add_player(player_name)
-            await interaction.response.send_message(
-                f"{player_name} has joined the quest!"
-            )
-            await self.update_embed(interaction)
 
-            if len(quest.joined_players) == self.num_players:
-                # remove join and leave buttons
-                await interaction.message.edit(view=None)
-                # create channel for game
-                await make_game_channel(self.ctx, quest)
-                embed = discord.Embed(
-                    title=f"{self.ctx.author.display_name}'s proposal to play has enough players, and is ready to play",
-                    description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
+        async with self.lock: # ensure that the player count gets updated synchronously, else we may end up creating multiple channels
+            if player_name not in quest.joined_players:
+                quest.add_player(player_name)
+                await interaction.response.send_message(
+                    f"{player_name} has joined the quest!"
                 )
-                await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx, self.quest)
+                await self.update_embed(interaction) 
+                if len(quest.joined_players) == self.num_players: 
+                    print(quest.joined_players)
+                    print(self.num_players)
 
-        else:
-            # Ephemeral means only the person who took the action will see this message
-            await interaction.response.send_message(
-                "You have already joined the quest. Wait until enough people have joined for the quest to start.",
-                ephemeral=True,
-            )
+                    # remove join and leave buttons
+                    await interaction.message.edit(view=None)
+                    # create channel for game
+                    await make_game_channel(self.ctx, quest)
+                    embed = discord.Embed(
+                        title=f"{self.ctx.author.display_name}'s proposal to play has enough players, and is ready to play",
+                        description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
+                    )
+                    await interaction.message.edit(embed=embed)
+                    await start_quest(self.ctx, self.quest)
+            else:
+                # Ephemeral means only the person who took the action will see this message
+                await interaction.response.send_message(
+                    "You have already joined the quest. Wait until enough people have joined for the quest to start.",
+                    ephemeral=True,
+                )
 
     @discord.ui.button(
         style=discord.ButtonStyle.red, label="Leave", custom_id="leave_button"
@@ -653,7 +658,6 @@ class JoinLeaveView(discord.ui.View):
                 "You can only leave a quest if you have already joined",
                 ephemeral=True,
             )
-
 
 # EVENTS
 @bot.event
@@ -728,7 +732,7 @@ async def embark(ctx, *args):
         return
     quest_mode, num_players, gen_images = selected_values
 
-    if not 2 <= num_players <= 20:
+    if not 1 <= num_players <= 20:
         await ctx.send("The game requires at least 2 and at most 20 players")
         return
 
@@ -1217,7 +1221,6 @@ async def vote_submissions(ctx, question: str, timeout="20"):
     # Reset the players_to_submissions dictionary for the next round
     bot.quest.reset_submissions()
 
-
 @bot.command()
 async def post_proposal_values(ctx):
     message = "Proposed values:\n"
@@ -1250,6 +1253,7 @@ async def vote_on_values(ctx, question: str, timeout="20"):
     VALUES_DICT = await consent(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
     # Reset the values submissions dict for the next round
     PROPOSED_VALUES_DICT.clear()
+    print(VALUES_DICT)
 
 # CLEANING COMMANDS
 @bot.command(hidden=True)

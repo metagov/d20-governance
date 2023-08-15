@@ -216,7 +216,7 @@ class Values(CultureModule):
                 print(
                     f"Original Message Content: {reference_message.content}, posted by {message.author}"
                 )
-            
+            print(VALUES_DICT)
             current_values_dict = VALUES_DICT if VALUES_DICT else DEFAULT_VALUES_DICT
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
