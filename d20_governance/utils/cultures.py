@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import random
 import discord
 import asyncio
-from d20_governance.utils.constants import *
+from d20_governance.utils.constants import VALUES_DICT, DEFAULT_VALUES_DICT, GOVERNANCE_SVG_ICONS, USER_MESSAGE_COUNT
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
@@ -199,7 +199,7 @@ class Ritual(CultureModule):
         return response
 
 class Values(CultureModule):
-    async def check_values(self, ctx, message: discord.Message):
+    async def check_values(self, bot, ctx, message: discord.Message):
         if message.reference:
             reference_message = await message.channel.fetch_message(
                 message.reference.message_id
@@ -216,26 +216,25 @@ class Values(CultureModule):
                 print(
                     f"Original Message Content: {reference_message.content}, posted by {message.author}"
                 )
-            print(VALUES_DICT)
-            current_values_dict = VALUES_DICT if VALUES_DICT else DEFAULT_VALUES_DICT
+            current_values_dict = bot.values_dict if bot.values_dict else DEFAULT_VALUES_DICT
+            print(current_values_dict)
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
-            llm_response = await self.llm_analyze_values(reference_message.content)
+            llm_response = await self.llm_analyze_values(current_values_dict, reference_message.content)
             message_content = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}"
             await ctx.send(message_content)
 
-    async def llm_analyze_values(self, text):
+    async def llm_analyze_values(self, values_dict, text):
         """
         Analyze message content based on values
         """
         llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
-        current_values_dict = VALUES_DICT if VALUES_DICT else DEFAULT_VALUES_DICT
         for (
             value,
             description,
-        ) in current_values_dict.items():
+        ) in values_dict.items():
             template += f"- {value}: {description}\n"
         template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
         prompt = PromptTemplate.from_template(template=template)

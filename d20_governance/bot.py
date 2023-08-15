@@ -9,7 +9,7 @@ import time
 from discord.app_commands import command as slash_command
 from discord.ext import commands
 from d20_governance.utils.utils import *
-from d20_governance.utils.constants import *
+from d20_governance.utils.constants import VALUES_DICT
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
@@ -1247,13 +1247,10 @@ async def vote_on_values(ctx, question: str, timeout="20"):
     Call vote on all submissions from /submit and reset submission list
     """
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-    contenders = list(PROPOSED_VALUES_DICT.values())
     quest = bot.quest
-    global VALUES_DICT
-    VALUES_DICT = await consent(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
+    bot.values_dict = await consent(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
     # Reset the values submissions dict for the next round
     PROPOSED_VALUES_DICT.clear()
-    print(VALUES_DICT)
 
 # CLEANING COMMANDS
 @bot.command(hidden=True)
@@ -1263,7 +1260,6 @@ async def clean(ctx):
     Clean temporary files (called on bot shutdown, but sometimes useful to have while running)
     """
     clean_temp_files()
-
 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
@@ -1451,11 +1447,12 @@ async def clear_decision_input_values(ctx):
 
 @bot.command()
 async def list_values(ctx):
+    values = bot.values_dict if bot.values_dict else DEFAULT_VALUES_DICT
     message_content = "Our collectively defined values + definitions:\n\n"
     for (
         value,
         description,
-    ) in DEFAULT_VALUES_DICT.items():
+    ) in values.items():
         message_content += f"{value}:\n{description}\n\n"
     message = f"```{message_content}```"
     await ctx.send(message)
@@ -1677,7 +1674,7 @@ async def process_message(ctx, message):
             message_content = message.content
             if message_content == "check-values" and "values" in active_modules_by_channel:
                 module_name: Values = CULTURE_MODULES["values"]
-                await module_name.check_values(ctx, message)
+                await module_name.check_values(bot, ctx, message)
                 return 
             
             message_content = message.content
