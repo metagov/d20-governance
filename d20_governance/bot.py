@@ -788,6 +788,23 @@ async def make_game_channel(ctx, quest: Quest):
         overwrites=overwrites,
     )
 
+@bot.command(hidden=True)
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
+async def quiet(ctx, mode: string = None):
+    """
+    Enforce quiet mode; prevent posting
+    """
+    global IS_QUIET
+    if mode == None:
+        pass
+    if mode:
+        IS_QUIET = True
+        await ctx.send("```Quiet mode is on```")
+        print("Quiet mode is on.")
+    else:
+        IS_QUIET = False
+        await ctx.send("```Quiet mode is off```")
+        print("Quiet mode is off.")
 
 @bot.command()
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
