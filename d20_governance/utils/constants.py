@@ -142,9 +142,9 @@ DECISION_MODULES = {
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
     },
-    "consent": {
-        "name": "consent",
-        "description": "Consent decision-making allows options to pass by default unless they are objected to.",
+    "lazy_consensus": {
+        "name": "lazy_consensus",
+        "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",
         "state": False,
         "activated": False,
         "activated_message": "",

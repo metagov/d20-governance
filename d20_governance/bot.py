@@ -1248,7 +1248,7 @@ async def vote_on_values(ctx, question: str, timeout="20"):
     """
     # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
     quest = bot.quest
-    bot.values_dict = await consent(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
+    bot.values_dict = await lazy_consensus(ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout))
     # Reset the values submissions dict for the next round
     PROPOSED_VALUES_DICT.clear()
 
