@@ -234,7 +234,7 @@ async def setup_server(guild):
         else:
             pass
 
-    # Define the d20-agora channel
+    # Define the d20-agora channel and d20-values-space
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(
             read_messages=True, send_messages=True
@@ -242,6 +242,9 @@ async def setup_server(guild):
     }
     agora_category = discord.utils.get(guild.categories, name="d20-explore")
     agora_channel = discord.utils.get(guild.text_channels, name="d20-agora")
+    values_space_channel = discord.utils.get(
+        guild.text_channels, name="d20-values-space"
+    )
     if not agora_channel:
         # Create channel in the d20-explore category and apply permisions
         agora_channel = await guild.create_text_channel(
@@ -249,6 +252,14 @@ async def setup_server(guild):
         )
         logging.info(
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
+        )
+    if not values_space_channel:
+        # Create channel in the d20-explore category and apply permisions
+        values_space_channel = await guild.create_text_channel(
+            name="d20-values-space", overwrites=overwrites, category=agora_category
+        )
+        logging.info(
+            f"Created channel '{values_space_channel.name}' under category '{agora_category}'."
         )
     else:
         pass
@@ -359,6 +370,7 @@ def chunk_text(text):
         # Add a newline as a separate chunk at the end of each line
         chunks.append("\n")
     return chunks
+
 
 async def stream_message(ctx, text, original_embed):
     embed = original_embed.copy()

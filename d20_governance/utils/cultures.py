@@ -43,7 +43,9 @@ class CultureModule(ABC):
     def __init__(self, config):
         self.config = config  # This hold the configuration for the module
 
-    async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
+    async def filter_message(
+        self, ctx, message: discord.Message, message_string: str
+    ) -> str:
         return message_string
 
     # Methods to handle local state
@@ -91,16 +93,19 @@ class CultureModule(ABC):
             # if not
             self.activate_global_state()
 
+
 class Obscurity(CultureModule):
     # Message string may be pre-filtered by other modules
-    async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
+    async def filter_message(
+        self, ctx, message: discord.Message, message_string: str
+    ) -> str:
         # Get the method from the module based on the value of "mode"
         method = getattr(self, self.config["mode"])
 
         # Call the method
         filtered_message = method(message_string)
         return filtered_message
-        
+
     def scramble(self, message_string):
         words = message_string.split()
         scrambled_words = []
@@ -141,9 +146,10 @@ class Obscurity(CultureModule):
         camel_case_words = [word.capitalize() for word in words]
         return "".join(camel_case_words)
 
+
 class Diversity(CultureModule):
     async def display_info(self, ctx):
-            # Display the message count for each user
+        # Display the message count for each user
         message = "Message count by user:\n"
 
         # Sort the user_message_count dictionary by message count in descending order
@@ -156,8 +162,11 @@ class Diversity(CultureModule):
             message += f"{user.name}: {count}\n"
         await ctx.send(f"```{message}```")
 
+
 class Amplify(CultureModule):
-    async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
+    async def filter_message(
+        self, ctx, message: discord.Message, message_string: str
+    ) -> str:
         """
         A LLM filter for messages during the /eloquence command/function
         """
@@ -171,11 +180,15 @@ class Amplify(CultureModule):
 
 
 class Ritual(CultureModule):
-    async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
+    async def filter_message(
+        self, ctx, message: discord.Message, message_string: str
+    ) -> str:
         async for msg in message.channel.history(limit=100):
             if msg.id == message.id:
                 continue
-            if msg.author.bot and not msg.content.startswith("※"): # This condition lets webhook messages to be checked
+            if msg.author.bot and not msg.content.startswith(
+                "※"
+            ):  # This condition lets webhook messages to be checked
                 continue
             if msg.content.startswith("/") or msg.content.startswith("-"):
                 continue
@@ -187,7 +200,7 @@ class Ritual(CultureModule):
             previous_message, message_string
         )
         return filtered_message
-    
+
     async def initialize_ritual_agreement(self, previous_message, new_message):
         llm = OpenAI(temperature=0.9)
         prompt = PromptTemplate(
@@ -197,6 +210,7 @@ class Ritual(CultureModule):
         chain = LLMChain(llm=llm, prompt=prompt)
         response = chain.run(previous_message=previous_message, new_message=new_message)
         return response
+
 
 class Values(CultureModule):
     async def check_values(self, ctx, message: discord.Message):
@@ -216,7 +230,7 @@ class Values(CultureModule):
                 print(
                     f"Original Message Content: {reference_message.content}, posted by {message.author}"
                 )
-            
+
             current_values_dict = VALUES_DICT if VALUES_DICT else DEFAULT_VALUES_DICT
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
@@ -242,8 +256,11 @@ class Values(CultureModule):
         chain = LLMChain(llm=llm, prompt=prompt)
         return chain.run({"text": text})
 
+
 class Eloquence(CultureModule):
-    async def filter_message(self, ctx, message: discord.Message, message_string: str) -> str:
+    async def filter_message(
+        self, ctx, message: discord.Message, message_string: str
+    ) -> str:
         """
         A LLM filter for messages during the /eloquence command/function
         """
@@ -251,24 +268,31 @@ class Eloquence(CultureModule):
         prompt = PromptTemplate.from_template(
             template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
         )
-        prompt.format(input_text=message_string) # TODO: is both formatting and passing the message_string necessary?
+        prompt.format(
+            input_text=message_string
+        )  # TODO: is both formatting and passing the message_string necessary?
         chain = LLMChain(llm=llm, prompt=prompt)
-        return chain.run(message_string) 
+        return chain.run(message_string)
+
 
 ACTIVE_MODULES_BY_CHANNEL = defaultdict(OrderedSet)
+
 
 async def toggle_culture_module(ctx, module_name, state):
     """
     If state is True, turn on the culture module
     if state is False, turn off the culture module
     """
-    channel_name = str(ctx.channel) # TODO: add the modules, not just the channel name to this list
+    channel_name = str(
+        ctx.channel
+    )  # TODO: add the modules, not just the channel name to this list
     active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[channel_name]
 
     if state:
         active_modules_by_channel.add(module_name)
     else:
         active_modules_by_channel.remove(module_name)
+
 
 # TODO: what does the variable "state" mean?
 async def display_culture_module_state(ctx, module_name, state):
@@ -428,6 +452,7 @@ CULTURE_MODULES = {
     ),
 }
 
+
 async def send_msg_to_random_player(game_channel):
     print("Sending random DM...")
     players = [member for member in game_channel.members if not member.bot]
@@ -436,5 +461,3 @@ async def send_msg_to_random_player(game_channel):
     await dm_channel.send(
         "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
     )
-
-
