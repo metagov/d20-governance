@@ -216,8 +216,7 @@ class Values(CultureModule):
                 print(
                     f"Original Message Content: {reference_message.content}, posted by {message.author}"
                 )
-            current_values_dict = bot.values_dict if bot.values_dict else DEFAULT_VALUES_DICT
-            print(current_values_dict)
+            current_values_dict = getattr(bot, 'values_dict', DEFAULT_VALUES_DICT)
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
@@ -239,7 +238,7 @@ class Values(CultureModule):
         template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
         prompt = PromptTemplate.from_template(template=template)
         chain = LLMChain(llm=llm, prompt=prompt)
-        response = await chain.run({"text": text})
+        response = await chain.arun({"text": text})
         return response
 
 class Eloquence(CultureModule):

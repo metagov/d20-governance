@@ -97,7 +97,7 @@ async def lazy_consensus(ctx, quest: Quest, question, options, timeout: int = 60
     )
 
     # Get module png
-    module_png = await get_module_png("consent") # TODO: fix, reconcile with other modules
+    module_png = await get_module_png("lazy_consensus") # TODO: fix, reconcile with other modules
 
     # Add module png to vote embed
     if module_png is not None:

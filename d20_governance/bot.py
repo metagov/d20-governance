@@ -1467,7 +1467,7 @@ async def clear_decision_input_values(ctx):
 
 @bot.command()
 async def list_values(ctx):
-    values = bot.values_dict if bot.values_dict else DEFAULT_VALUES_DICT
+    values = getattr(bot, 'values_dict', DEFAULT_VALUES_DICT)
     message_content = "Our collectively defined values + definitions:\n\n"
     for (
         value,

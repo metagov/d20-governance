@@ -143,7 +143,7 @@ DECISION_MODULES = {
         "input_value": 0,
     },
     "lazy_consensus": {
-        "name": "lazy_consensus",
+        "name": "lazy consensus",
         "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",
         "state": False,
         "activated": False,
