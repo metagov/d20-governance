@@ -366,12 +366,8 @@ async def pause(ctx, seconds: str):
     """
     if bot.quest.fast_mode:
         seconds = 1
-        print(f"Pausing for {seconds} seconds...")
-        await asyncio.sleep(int(seconds))
-    else:
-        print(f"Pausing for {seconds} seconds...")
-        await asyncio.sleep(int(seconds))
-    return True
+    print(f"Pausing for {seconds} seconds...")
+    await asyncio.sleep(int(seconds))
 
 async def progress_timeout(ctx, seconds: str):
     """
@@ -1702,8 +1698,7 @@ async def process_message(ctx, message):
                 await send_webhook_message(webhook, message, filtered_message)
 
 # TODO: write tests for culture module filtering
-async def apply_culture_modules(ctx, active_modules, message, message_content: str
-):
+async def apply_culture_modules(ctx, active_modules, message, message_content: str):
     """
     Filter messages based on culture modules
 
