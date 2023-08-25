@@ -790,20 +790,25 @@ async def make_game_channel(ctx, quest: Quest):
 
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def quiet(ctx, mode: string = None):
+async def quiet(ctx, mode: str):
     """
     Enforce quiet mode; prevent posting
     """
     global IS_QUIET
-    if mode == None:
-        pass
-    if mode:
-        IS_QUIET = True
-        await ctx.send("```Quiet mode is on```")
+
+    if mode is None or mode.lower() not in ["true", "false"]:
+        error_msg = "```Invalid quiet mode. Please provide either 'True' or 'False'.```"
+        print(error_msg)
+        logging.error(error_msg)
+        return
+
+    IS_QUIET = mode.lower() == "true"
+
+    if IS_QUIET:
+        await ctx.send("```Quiet mode is on; no talking allowed.```")
         print("Quiet mode is on.")
     else:
-        IS_QUIET = False
-        await ctx.send("```Quiet mode is off```")
+        await ctx.send("```Quiet mode is off.```")
         print("Quiet mode is off.")
 
 @bot.command()
@@ -1104,29 +1109,6 @@ async def update_bot_icon(ctx):
         image_bytes = image_file.read()
 
     await bot.user.edit(avatar=image_bytes)
-
-# TODO: reconcile the two quiet mode commands
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def is_quiet(ctx):
-    """
-    Enforce quiet mode; prevent posting
-    """
-    global IS_QUIET
-    IS_QUIET = True
-    print("Quiet mode is on.")
-
-
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def is_not_quiet(ctx):
-    """
-    Turn off quiet mode
-    """
-    global IS_QUIET
-    IS_QUIET = False
-    print("Quiet mode is off.")
-
 
 # MISC COMMANDS
 @bot.command(hidden=True)
