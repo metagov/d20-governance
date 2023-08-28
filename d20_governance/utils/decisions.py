@@ -3,9 +3,18 @@ from d20_governance.utils.constants import *
 from d20_governance.utils.utils import *
 import random
 
+
+class VoteStateManager:
+    def __init__(self):
+        self.question = ""
+
+
+vote_state_manager = VoteStateManager()
+
+
 class DecisionModule(ABC):
     def __init__(self, config):
-        self.config = config 
+        self.config = config
 
     @property
     @abstractmethod
@@ -15,6 +24,7 @@ class DecisionModule(ABC):
     @abstractmethod
     def get_decision_result(self):
         pass
+
 
 class Majority(DecisionModule):
     def __init__(self, config):
@@ -26,9 +36,10 @@ class Majority(DecisionModule):
 
     def get_decision_result(self, results):
         if max(results.values()) > (sum(results.values()) / 2):
-            return max(results, key=results.get) 
+            return max(results, key=results.get)
         else:
             return None
+
 
 class Consensus(DecisionModule):
     def __init__(self, config):
@@ -44,9 +55,10 @@ class Consensus(DecisionModule):
         num_players = len(quest.joined_players)
         max_votes = max(results.values())
         if max_votes == num_votes and num_votes == num_players:
-            return max(results, key=results.get) 
+            return max(results, key=results.get)
         else:
             return None
+
 
 class ConsentView(discord.ui.View):
     def __init__(self, ctx, option, timeout=60):
@@ -58,10 +70,15 @@ class ConsentView(discord.ui.View):
     @discord.ui.button(
         style=discord.ButtonStyle.red, label="Object", custom_id="object_button"
     )
-    async def object_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def object_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         # Record the user's objection
         self.objections[interaction.user] = True
-        await interaction.response.send_message("Your objection has been recorded.", ephemeral=True)
+        await interaction.response.send_message(
+            "Your objection has been recorded.", ephemeral=True
+        )
+
 
 async def set_decision_module():
     # Set starting decision module if necessary
@@ -74,6 +91,7 @@ async def set_decision_module():
 
     return decision_module
 
+
 async def set_starting_decision_module():
     print("Randomly assigning a starting decision module")
     decision_modules = get_modules_for_type("decision")
@@ -85,9 +103,18 @@ async def set_starting_decision_module():
         raise ValueError("No decision modules available to choose from")
     add_module_to_stack(selected_module)
 
-async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
-    if quest.fast_mode:
-        timeout = 7
+
+async def consent(
+    ctx=None, channel=None, quest=None, question=None, options=None, timeout: int = 60
+):
+    if quest is not None:
+        if quest.fast_mode:
+            timeout = 7
+
+    if ctx is not None:
+        send_message = ctx.send
+    else:
+        send_message = channel.send
 
     # Send introduction embed
     embed = discord.Embed(
@@ -97,7 +124,9 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
     )
 
     # Get module png
-    module_png = await get_module_png("consent") # TODO: fix, reconcile with other modules
+    module_png = await get_module_png(
+        "consent"
+    )  # TODO: fix, reconcile with other modules
 
     # Add module png to vote embed
     if module_png is not None:
@@ -113,7 +142,7 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
         inline=False,
     )
 
-    await ctx.send(embed=embed, file=file)
+    await send_message(embed=embed, file=file)
 
     views = []
     for name, description in options.items():
@@ -122,16 +151,23 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
         views.append(view)
 
         # Display the option name, description and associated view to the user
-        await ctx.send(f"**Name:** {name}\n**Description:** {description}", view=view)
+        await send_message(
+            f"**Name:** {name}\n**Description:** {description}", view=view
+        )
 
     # Wait for all views to finish
     await asyncio.gather(*(view.wait() for view in views))
 
     # Determine the options that had no objections
-    non_objection_options = {view.option: options[view.option] for view in views if not view.objections}
+    non_objection_options = {
+        view.option: options[view.option] for view in views if not view.objections
+    }
 
     # Iterate over the non_objection_options dict and format the name and description for each
-    results_message = "\n".join(f"**{name}:** {description}" for name, description in non_objection_options.items())
+    results_message = "\n".join(
+        f"**{name}:** {description}"
+        for name, description in non_objection_options.items()
+    )
 
     # Display results
     embed = discord.Embed(
@@ -139,8 +175,7 @@ async def consent(ctx, quest: Quest, question, options, timeout: int = 60):
         description=results_message,
         color=discord.Color.dark_gold(),
     )
-    
-    await ctx.send(embed=embed)
+
+    await send_message(embed=embed)
 
     return non_objection_options
-

@@ -6,13 +6,15 @@ import logging
 import traceback
 import sys
 import time
+import random
 from discord.app_commands import command as slash_command
-from discord.ext import commands
+from discord.interactions import Interaction
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
+from discord import app_commands
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -85,10 +87,12 @@ async def start_quest(ctx, quest: Quest):
         color=discord.Color.dark_orange(),
     )
 
-    # await quiet(ctx, True)
-
     # Send and store a message object as an initial message for the new quest game channel
     message_obj = await quest.game_channel.send(embed=embed)
+
+    # TODO: WIP value inheritance from agora into quest
+    quest.quest_values = dict(value_revision_manager.values_dict)
+    await quest.game_channel.send(f"Inherited values = {quest.quest_values}")
 
     # Sleep for 3 seconds to give time for users to get to the channel and avoid possible latency issues in fetching the message_object
     await asyncio.sleep(3)
@@ -250,17 +254,23 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                             hasattr(action, "failure_message")
                             and action.failure_message
                         ):
-                            await game_channel_ctx.send(action.failure_message)
-                            await end(game_channel_ctx)
-                        # if a vote fails and there is a soft failure action, the soft failure message is sent and the while loop exited
-                        elif hasattr(action, "soft_failure") and action.soft_failure:
-                            await game_channel_ctx.send(action.soft_failure)
-                            # TODO: Instead of breaking out of the action_runner, return to next vote
-                            # Might need to do this in the Vote function
+                            options = list(bot.quest.players_to_submissions.values())
+
+                            winning_option = random.choice(options)
+
+                            embed = discord.Embed(
+                                title=f"Results for: `{vote_state_manager.question}`:",
+                                description=f"In absence of collective decision making, the bot as autocratically selected a result randomly. Result: {winning_option}",
+                                color=discord.Color.dark_gold(),
+                            )
+
+                            decision_data = {
+                                "decision": winning_option,
+                                "decision_module": "implicit_feudalism",
+                            }
+                            DECISION_DICT[vote_state_manager.question] = decision_data
+                            await game_channel_ctx.send(embed=embed)
                             break
-                        raise Exception(
-                            f"Failed to execute action {action.action}: {e}"
-                        )
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -662,6 +672,73 @@ class JoinLeaveView(discord.ui.View):
             )
 
 
+class SelectValue(discord.ui.Select):
+    def __init__(self, options):
+        super().__init__(
+            placeholder="Select a value to revise",
+            min_values=1,
+            max_values=1,
+            options=options,
+        )
+
+    async def callback(self, interaction):
+        value_revision_manager.selected_value = self.values[0]
+        await interaction.response.send_modal(NewValueModal())
+
+
+class NewValueModal(discord.ui.Modal, title="Propose new value"):
+    proposed_value_name = discord.ui.TextInput(
+        label="Propose a new value name",
+        style=discord.TextStyle.short,
+        placeholder="Proposed value name",
+        required=True,
+        max_length=20,
+    )
+    proposed_value_definition = discord.ui.TextInput(
+        label="Propose a new value definition",
+        style=discord.TextStyle.long,
+        placeholder="Proposed value definition",
+        required=True,
+        max_length=100,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        value_revision_manager.store_proposal(
+            self.proposed_value_name, self.proposed_value_definition
+        )
+
+        await interaction.response.send_message(
+            f"**{interaction.user.name} proposed a new value:**\n* **{self.proposed_value_name}:** {self.proposed_value_definition}"
+        )
+
+        await asyncio.sleep(2)
+        vote_result = await consent(
+            channel=interaction.channel,
+            question=f"Should we change the following value **{value_revision_manager.selected_value}** to the newly proposed value: **{self.proposed_value_name}: {self.proposed_value_definition}**?",
+            options=value_revision_manager.proposed_values_dict,
+            timeout=20,
+        )
+
+        value_revision_manager.update_values_dict(
+            value_revision_manager.selected_value, vote_result
+        )
+        value_revision_manager.clear_proposed_values()
+
+
+class ValueRevisionView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+
+        print(value_revision_manager.values_dict.items())
+
+        options = [
+            discord.SelectOption(label=name, description=value[:60], value=name)
+            for name, value in value_revision_manager.values_dict.items()
+        ]
+
+        self.add_item(SelectValue(options))
+
+
 # EVENTS
 @bot.event
 async def on_ready():
@@ -678,6 +755,7 @@ async def on_ready():
     with open(f"{LOGGING_PATH}/bot.log", "a") as f:
         f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    value_revision_manager.__init__()
     for guild in bot.guilds:
         await bot.tree.sync(guild=guild)
         await setup_server(guild)
@@ -710,48 +788,74 @@ async def on_reaction_add(reaction, user):
 
 
 # QUEST START AND PROGRESSION
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def embark(ctx, *args):
+@bot.tree.command(name="embark", description="Propose a quest to embark on")
+# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+@app_commands.choices(
+    quest_mode=[
+        app_commands.Choice(
+            name=f"{SIMULATIONS[quest]['emoji']} - {SIMULATIONS[quest]['name']}: {SIMULATIONS[quest]['description']}",
+            value=SIMULATIONS[quest]["file"],
+        )
+        for quest in SIMULATIONS
+    ]
+)
+@app_commands.choices(
+    number_of_players=[
+        app_commands.Choice(name="2️⃣ 2", value=2),
+        app_commands.Choice(name="3️⃣ 3", value=3),
+        app_commands.Choice(name="4️⃣ 4", value=4),
+        app_commands.Choice(name="5️⃣ 5", value=5),
+        app_commands.Choice(name="6️⃣ 6", value=6),
+        app_commands.Choice(name="7️⃣ 7", value=7),
+        app_commands.Choice(name="8️⃣ 8", value=8),
+    ]
+)
+@app_commands.choices(
+    generate_images=[
+        app_commands.Choice(name="🖼️ Yes", value="True"),
+        app_commands.Choice(name="🔲 No", value="False"),
+    ]
+)
+async def embark(
+    interaction: discord.Interaction,
+    quest_mode: app_commands.Choice[str],
+    number_of_players: app_commands.Choice[int],
+    generate_images: app_commands.Choice[str],
+):
     """
     Embark on a d20 governance quest
     """
-    # Parse argument flags
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-a", "--audio", action="store_true", help="Generate text-to-speech audio"
-    )
-    parser.add_argument("-f", "--fast", action="store_true", help="Turn on fast mode")
-    args = parser.parse_args(args)
-    gen_audio = args.audio
-    fast_mode = args.fast
+    # Get ctx
+    ctx = await bot.get_context(interaction)
 
     # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
-    view = QuestBuilderView()
-    selected_values = await view.wait_for_input(ctx)
-    if selected_values is None:
-        await ctx.send("The quest proposal timed out.", ephemeral=True)
-        return
-    quest_mode, num_players, gen_images = selected_values
 
-    if not 2 <= num_players <= 20:
+    if not 2 <= number_of_players.value <= 20:
         await ctx.send("The game requires at least 2 and at most 20 players")
         return
 
     # Quest setup
-    quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=False)
+    quest = setup_quest(
+        quest_mode.value,
+        generate_images.value,
+        gen_audio=None,
+        fast_mode=None,
+        solo_mode=False,
+    )
 
     # Create Join View
-    join_leave_view = JoinLeaveView(ctx, quest, num_players)
+    join_leave_view = JoinLeaveView(ctx, quest, number_of_players.value)
     embed = discord.Embed(
-        title=f"{ctx.author.display_name} has proposed a game for {num_players} players: Join or Leave"
+        title=f"{ctx.author.display_name} has proposed a game for {number_of_players.value} players: Join or Leave"
     )
     embed.add_field(
         name="**Current Players:**", value="", inline=False
     )  # Empty initial value.
     embed.add_field(
-        name="**Players needed to start:**", value=str(num_players), inline=False
+        name="**Players needed to start:**",
+        value=str(number_of_players.value),
+        inline=False,
     )  # Empty initial value.
 
     await ctx.send(embed=embed, view=join_leave_view)
@@ -785,11 +889,104 @@ async def make_game_channel(ctx, quest: Quest):
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
 
     # create and name the channel with the quest_name from the yaml file
-    # and add a number do distinguish channels
+    # and add a number to distinguish channels
     quest.game_channel = await quests_category.create_text_channel(
         name=f"d20-{quest.title}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
+
+
+# CULTURE MODULES
+# Community generated wildcard culture module
+@bot.tree.command(name="add_prompt", description="Add a new wildcard prompt.")
+async def add_prompt(
+    interaction: discord.Interaction, affiliation: str, purpose: str, prompt: str
+):
+    # assign prompt, affiliation, and purpose to the prompts dictionary
+    PROMPTS[prompt] = (affiliation, purpose)
+
+    # assign the prompt to the wildcard culture module config
+    module = CULTURE_MODULES.get("wildcard", None)
+    module.config["llm_disclosure"] = prompt
+
+    # construct the values list using either the default values dictionary
+    # or the values dictionary defined in the agora
+    values_list = ""
+    current_values_dict = value_revision_manager.values_dict
+    for key, value in current_values_dict.items():
+        values_list += f"* {key}: {value}\n\n"
+
+    # send a message detailing the name of the prompt,
+    # the community that defined it,
+    # the community's purpose,
+    # and the values they had when they made the prompt
+    await interaction.response.send_message(
+        f"New wildcard prompt added:\n```Prompt: {prompt}```\n* Prompt added by **{affiliation}**\n* With the following purpose: **{purpose}**\n* And the following values:\n```{values_list}```"
+    )
+
+
+@bot.command()
+async def select_random_culture_module(ctx):
+    """
+    Randomly select a culture module to turn on
+    """
+    culture_commands = ["eloquence", "obscurity", "ritual", "amplify"]
+    random_command_name = random.choice(culture_commands)
+    logging.info(f"Selected random culture module: {random_command_name}")
+
+    random_culture_module_manager.random_culture_module = random_command_name
+    random_command = bot.get_command(random_command_name)
+
+    if random_command:
+        try:
+            # Execute command
+            await random_command.invoke(ctx)
+        except Exception as e:
+            error_msg = f"Failed to execute command {random_command_name}: {e}"
+            print(error_msg)
+            logging.error(error_msg)
+    else:
+        error_msg = f"Command {random_command_name} not found."
+        print(error_msg)
+        logging.error(error_msg)
+
+
+@bot.command()
+async def turn_off_random_culture_module(ctx):
+    random_command_name = random_culture_module_manager.random_culture_module
+    random_command = bot.get_command(random_command_name)
+
+    if random_command:
+        try:
+            # Execute command
+            await random_command.invoke(ctx)
+            random_culture_module_manager.random_culture_module = ""
+        except Exception as e:
+            error_msg = f"Failed to execute command {random_command_name}: {e}"
+            print(error_msg)
+            logging.error(error_msg)
+    else:
+        error_msg = f"Command {random_command_name} not found."
+        print(error_msg)
+        logging.error(error_msg)
+
+
+@bot.command()
+@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+async def wildcard(ctx):
+    """
+    Toggle eloquence module
+
+    Defaults to toggling culture module unless true or false are passed to set global state
+    """
+
+    # get the wildcard module object
+    module = CULTURE_MODULES.get("wildcard", None)
+    if module is None:
+        return
+
+    # toggle the global state of the module
+    await module.toggle_global_state(ctx)
 
 
 @bot.command()
@@ -1171,21 +1368,33 @@ async def post_submissions(ctx):
 @bot.command(hidden=True)
 async def post_proposal_values(ctx):
     message = "Proposed values:\n"
-    for key, value in PROPOSED_VALUES_DICT.items():
+    for key, value in value_revision_manager.proposed_values_dict.items():
         # Format the key as bold and add the value
         message += f"```**{key}**: {value}\n```"
     await ctx.send(message)
 
 
+# TODO: Remove this function here and in yaml
 @bot.tree.command(
     name="propose_value",
     description="propose and define a value that will govern your interactions",
 )
 async def propose_value(interaction: discord.Interaction, name: str, definition: str):
-    PROPOSED_VALUES_DICT[name] = definition
-    print(PROPOSED_VALUES_DICT)
+    value_revision_manager.proposed_values_dict[name] = definition
+    print(value_revision_manager.proposed_values_dict)
     await interaction.response.send_message(
         f"**{interaction.user.name} proposed a new value:**\n* **{name}:** {definition}"
+    )
+
+
+@bot.tree.command(
+    name="propose_revision",
+    description="Press enter to select and propose a revision to the values list",
+)
+async def propose_revision(interaction: discord.Interaction):
+    view = ValueRevisionView()
+    await interaction.response.send_message(
+        f"Here are the current values:", view=view, ephemeral=True
     )
 
 
@@ -1195,20 +1404,115 @@ async def trigger_vote(ctx, question: str, timeout="20", type: str = None):
     """
     Call vote on values, submissions, etc
     """
+    vote_state_manager.question = question
     quest = bot.quest
     if type == "values":
-        contenders = list(PROPOSED_VALUES_DICT.values())
-        global VALUES_DICT
+        contenders = list(value_revision_manager.proposed_values_dict.values())
         non_objection_options = await consent(
-            ctx, quest, question, PROPOSED_VALUES_DICT, int(timeout)
+            ctx=ctx,
+            quest=quest,
+            question=question,
+            options=value_revision_manager.proposed_values_dict,
+            timeout=int(timeout),
         )
-        VALUES_DICT.update(non_objection_options)
+        value_revision_manager.values_dict.update(non_objection_options)
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
         contenders = list(bot.quest.players_to_submissions.values())
         await vote(ctx, quest, question, contenders, int(timeout))
         # Reset the players_to_submissions dictionary for the next round
         bot.quest.reset_submissions()
+
+
+# General purpose for agora and generalized abstraction for quests
+# TODO: WIP, need to convert to select > modal similar to propose_revision command
+@bot.tree.command(
+    name="propose", description="Propose an element of this group's constitution."
+)
+@app_commands.choices(
+    decision_method=[
+        app_commands.Choice(name="Majority", value="majority"),
+        app_commands.Choice(name="Consensus", value="consensus"),
+    ]
+)
+@app_commands.choices(
+    duration=[
+        app_commands.Choice(name="Short (20 seconds)", value=20),
+        app_commands.Choice(name="Medium (60 seconds)", value=60),
+        app_commands.Choice(name="Long (90 seconds)", value=90),
+    ]
+)
+@app_commands.choices(
+    category=[
+        app_commands.Choice(name="Value", value="value"),
+        app_commands.Choice(name="Article", value="article"),
+        app_commands.Choice(name="Goal", value="goal"),
+        app_commands.Choice(name="Amendment", value="amendment"),
+    ]
+)
+@access_control()
+async def propose(
+    interaction: discord.Interaction,
+    category: app_commands.Choice[str],
+    proposal: str,
+    duration: app_commands.Choice[int],
+    decision_method: app_commands.Choice[str],
+):
+    """
+    Call vote on values, submissions, etc
+    """
+    quest = bot.quest
+    options = ["Approve proposal", "Object proposal"]
+    print(decision_method.value)
+    print(options)
+    print(category)
+
+    if category.value == "value":
+        print("inside values category")
+        value_name = await prompt_user(interaction, "Enter the name of the value:")
+        value_definition = await prompt_user(
+            interaction, "Enter the definition of the value:"
+        )
+        value_example = await prompt_user(interaction, "Enter an example of the value:")
+
+        value_param = {
+            "name": value_name,
+            "definition": value_definition,
+            "example": value_example,
+        }
+
+    await vote(interaction, quest, proposal, options, duration, decision_method)
+
+
+async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> str:
+    await interaction.channel.send(prompt_message, ephemeral=True)
+    try:
+        message_interaction = await bot.wait_for(
+            "message", check=lambda m: m.author.id == interaction.user.id, timeout=60
+        )
+        return message_interaction.content
+    except asyncio.TimeoutError:
+        return None
+
+
+# STREAM OF DELIBERATION QUESTIONS
+@bot.command()
+async def send_deliberation_questions(ctx, questions):
+    if questions == "deliberation_questions_for_name":
+        questions = deliberation_questions_for_name
+
+    random.shuffle(questions)
+    asked_questions = []
+
+    for question in questions:
+        if question not in asked_questions:
+            embed = discord.Embed(
+                title="**Deliberation Question:**",
+                description=question,
+            )
+            await ctx.channel.send(embed=embed)
+            asked_questions.append(question)
+            await asyncio.sleep(20)
 
 
 # CLEANING COMMANDS
@@ -1242,7 +1546,7 @@ async def clean_category_channels(ctx, category_name="d20-quests"):
 # TEST COMMANDS
 @bot.command(hidden=True)
 @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]):
+async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]["file"]):
     """
     Solo quest
     """
@@ -1408,7 +1712,7 @@ async def list_values(ctx):
     for (
         value,
         description,
-    ) in VALUES_DICT.items():
+    ) in value_revision_manager.values_dict.items():
         message_content += f"{value}:\n{description}\n\n"
     message = f"```{message_content}```"
     await ctx.send(message)
@@ -1608,12 +1912,32 @@ async def send_webhook_message(webhook, message, filtered_message):
     """
     Use webhook to transform avatar of bot to user avatar
     """
-    payload = {
-        "content": f"※ {filtered_message}",
-        "username": message.author.name,
-        "avatar_url": message.author.avatar.url if message.author.avatar else None,
-    }
-    await webhook.send(**payload)
+    try:
+        if webhook is None:
+            # Handle the case when webhook is not available
+            return
+        payload = {
+            "content": f"※ {filtered_message}",
+            "username": message.author.name,
+            "avatar_url": message.author.avatar.url if message.author.avatar else None,
+        }
+        await webhook.send(**payload)
+    except (
+        discord.errors.NotFound,
+        discord.errors.Forbidden,
+        discord.errors.HTTPException,
+        discord.errors.InvalidData,
+        discord.errors.DiscordServerError,
+    ) as e:
+        # Handle specific Discord-related exceptions
+        error_msg = f"An error occurred while sending the webhook message: {e}"
+        print(error_msg)
+        logging.error(error_msg)
+    except Exception as e:
+        # Handle the case when the bot doesn't have permission to send a webhook message
+        error_msg = f"An unexpected error occurred: {e}"
+        print(error_msg)
+        logging.error(error_msg)
 
 
 async def process_message(ctx, message):
@@ -1652,18 +1976,25 @@ async def process_message(ctx, message):
                 await message.delete()
 
                 filtered_message = await apply_culture_modules(
-                    ctx,
                     active_modules=active_modules_by_channel,
                     message=message,
                     message_content=message_content,
                 )
 
                 webhook = await create_webhook(message.channel)
-                await send_webhook_message(webhook, message, filtered_message)
+                if module_name == "wildcard":
+                    get_module = CULTURE_MODULES.get("wildcard", None)
+                    llm_prompt = get_module.config["llm_disclosure"]
+                    affiliation, purpose = PROMPTS[llm_prompt]
+                    await ctx.send(
+                        f"{filtered_message}\n\n```Message made using prompt '{llm_prompt}' by {affiliation} with purpose:{purpose}```"
+                    )
+                else:
+                    await send_webhook_message(webhook, message, filtered_message)
 
 
 # TODO: write tests for culture module filtering
-async def apply_culture_modules(ctx, active_modules, message, message_content: str):
+async def apply_culture_modules(active_modules, message, message_content: str):
     """
     Filter messages based on culture modules
 
@@ -1680,7 +2011,7 @@ async def apply_culture_modules(ctx, active_modules, message, message_content: s
         module: CultureModule = CULTURE_MODULES[
             module_name
         ]  # TODO: active_modules list should be the modules themselves, not their names
-        message_content = await module.filter_message(ctx, message, message_content)
+        message_content = await module.filter_message(message, message_content)
     return message_content
 
 

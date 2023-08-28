@@ -1,9 +1,10 @@
 from typing import List
 import random
 import discord
-from d20_governance.utils.constants import CIRCLE_EMOJIS, PROPOSED_VALUES_DICT
+from d20_governance.utils.constants import CIRCLE_EMOJIS
 from d20_governance.utils.utils import Quest, get_module_png
 from d20_governance.utils.decisions import *
+from d20_governance.utils.cultures import value_revision_manager
 
 # Voting functions
 majority = (
@@ -18,6 +19,7 @@ consensus = (
 )
 
 VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
+
 
 async def set_global_decision_module(ctx, decision_module: str = None):
     channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
@@ -86,6 +88,7 @@ async def vote(
     question: str = None,
     options: List[str] = [],
     timeout: int = 60,
+    decision_module: str = None,
 ):
     """
     Trigger a vote
@@ -93,12 +96,13 @@ async def vote(
     if quest.fast_mode:
         timeout = 7
 
-    channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
+    if decision_module == None:
+        channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
 
-    if not channel_decision_modules:
-        channel_decision_modules = await set_global_decision_module(ctx)
+        if not channel_decision_modules:
+            channel_decision_modules = await set_global_decision_module(ctx)
 
-    decision_module = channel_decision_modules[0]
+        decision_module = channel_decision_modules[0]
 
     print(f"A vote has been triggered. The decision module is: {decision_module}")
 
@@ -178,8 +182,10 @@ async def vote(
     if winning_option is not None:
         decision_data = {"decision": winning_option, "decision_module": decision_module}
         DECISION_DICT[question] = decision_data
-        if PROPOSED_VALUES_DICT:
-            VALUES_DICT.update(PROPOSED_VALUES_DICT)
+        if value_revision_manager.proposed_values_dict:
+            value_revision_manager.values_dict.update(
+                value_revision_manager.proposed_values_dict
+            )
 
     else:
         # If retries are configured, voting will be repeated

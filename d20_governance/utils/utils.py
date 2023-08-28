@@ -93,6 +93,7 @@ class Quest:
         self.title = None
         self.stages = None
         self.joined_players = set()
+        self.quest_values = {}
 
         # meta game vars
         self.gen_audio = gen_audio
@@ -112,7 +113,7 @@ class Quest:
 
     def update_vars(self):
         # LLM mode does not have yaml
-        if self.mode is not SIMULATIONS["llm_mode"]:
+        if self.mode is not SIMULATIONS["llm_mode"]["name"]:
             with open(self.mode, "r") as f:
                 quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
                 self.quest_data = quest_data
@@ -132,7 +133,7 @@ class Quest:
         # If player has already joined, this is a no-op
         self.joined_players.add(player_name)
         # TODO: figure out how to avoid this game-specific check here
-        if self.mode == SIMULATIONS["josh_game"]:
+        if self.mode == SIMULATIONS["josh_game"]["name"]:
             # Randomly select a nickname
             nickname = random.choice(JOSH_NICKNAMES)
 
@@ -146,7 +147,7 @@ class Quest:
         # get the name of the user invoking the command
         player_name = str(interaction.user.name)
         # get the nickname of the user invoking the command
-        if self.mode == SIMULATIONS["josh_game"]:
+        if self.mode == SIMULATIONS["josh_game"]["name"]:
             player_name = self.players_to_nicknames.get(player_name)
             self.players_to_submissions[player_name] = text
         else:
@@ -937,14 +938,21 @@ async def check_cmd_channel(ctx, channel_name):
     channel = discord.utils.get(ctx.guild.channels, name=channel_name)
     if ctx.command.name == "help":
         return True
-    elif ctx.channel.name != channel.name:
-        embed = discord.Embed(
-            title="Error: This command cannot be run in this channel.",
-            description=f"Run this command in <#{channel.id}>",
-            color=discord.Color.red(),
-        )
-        await ctx.send(embed=embed)
-        return False
+
+    # Check if the command is being invoked by a user
+    if ctx.message.author and not ctx.message.author.bot:
+        print("True")
+        if ctx.channel.name != channel.name:
+            print("True")
+            embed = discord.Embed(
+                title="Error: This command cannot be run in this channel.",
+                description=f"Run this command in <#{channel.id}>",
+                color=discord.Color.red(),
+            )
+            await ctx.send(embed=embed)
+            return False
+        else:
+            return True
     else:
         return True
 

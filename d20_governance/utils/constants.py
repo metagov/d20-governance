@@ -58,13 +58,66 @@ BOT_ICON = "assets/imgs/game_icons/d20-gov-icon.png"
 
 # SIMULATION CONFIGS
 SIMULATIONS = {
-    "whimsy": "d20_governance/d20_configs/quest_configs/whimsy.yaml",
-    "colony": "d20_governance/d20_configs/quest_configs/colony.yaml",
-    "mascot": "d20_governance/d20_configs/quest_configs/mascot.yaml",
-    "josh_game": "d20_governance/d20_configs/minigame_configs/josh_game.yaml",
-    "build_a_community": "d20_governance/d20_configs/minigame_configs/build_community_game.yaml",
-    "llm_mode": "llm",
+    "build_a_community": {
+        "name": "build a community",
+        "emoji": "🎪",
+        "file": "d20_governance/d20_configs/minigame_configs/build_community_game.yaml",
+        "description": "Build a community prompt",
+    },
+    "whimsy": {
+        "name": "whimsy",
+        "emoji": "🤪",
+        "file": "d20_governance/d20_configs/quest_configs/whimsy.yaml",
+        "description": "A whimsical governance game",
+    },
+    "colony": {
+        "name": "colony",
+        "emoji": "🛸",
+        "file": "d20_governance/d20_configs/quest_configs/colony.yaml",
+        "description": "Governance under space colony",
+    },
+    "mascot": {
+        "name": "mascot",
+        "emoji": "🐻‍❄️",
+        "file": "d20_governance/d20_configs/quest_configs/mascot.yaml",
+        "description": "Propose a new community mascot",
+    },
+    "llm_mode": {
+        "name": "llm_mode",
+        "emoji": "🤔",
+        "file": "llm",
+        "description": "A random game of d20 governance",
+    },
+    "josh_game": {
+        "name": "josh_game",
+        "emoji": "👨‍🦰",
+        "file": "d20_governance/d20_configs/minigame_configs/josh_game.yaml",
+        "description": "The josh gam",
+    },
 }
+
+# DELIBERATION QUESTIONS
+deliberation_questions_for_name = [
+    "What emotions or associations should our name evoke?",
+    "Should the name be descriptive or abstract?",
+    "Should our name resonate with the community we are embedded in?",
+    "How should our name relate to our values?",
+    "Should our name be short or long?",
+]
+deliberation_questions_for_purpose = [
+    "What emotions or associations should our name evoke?",
+    "Should the name be descriptive or abstract?",
+    "Should our name resonate with the community we are embedded in?",
+    "How should our name relate to our values?",
+    "Should our name be short or long?",
+]
+deliberation_questions_for_prompt = [
+    "What emotions or associations should our name evoke?",
+    "Should the name be descriptive or abstract?",
+    "Should our name resonate with the community we are embedded in?",
+    "How should our name relate to our values?",
+    "Should our name be short or long?",
+]
 
 # QUEST KEYS
 QUEST_MESSAGE_KEY = "message"
@@ -159,18 +212,8 @@ DECISION_MODULES = {
 
 DECISION_DICT = {}
 
-# VALUES DEFINITION
-
-PROPOSED_VALUES_DICT = {}
-VALUES_DICT = {}
-
-DEFAULT_VALUES_DICT = {
-    "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
-    "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
-    "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",
-    "Collaboration": "Our community encourage collaboration, fostering an environment where members can work together and share knowledge or skills.",
-    "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
-}
+# GENERAL CULTURE STORAGE
+PROMPTS = {}
 
 # SPECTRUM VALUES
 INPUT_SPECTRUM = {

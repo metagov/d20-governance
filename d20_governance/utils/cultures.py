@@ -2,12 +2,12 @@ from abc import ABC, abstractmethod
 import random
 import discord
 import asyncio
+from discord import app_commands
 from d20_governance.utils.constants import *
+# from d20_governance.utils.decisions import consent
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
 from collections import defaultdict
 
 
@@ -39,12 +39,60 @@ class OrderedSet:
         return len(self) > 0  # Theinstance is "Truthy" if there are elements in it
 
 
+class RandomCultureModuleManager:
+    def __init__(self):
+        self.random_culture_module = ""
+
+
+random_culture_module_manager = RandomCultureModuleManager()
+
+
+class ValueRevisionManager:
+    def __init__(self):
+        self.proposed_values_dict = {}
+        self.values_dict = {
+            "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
+            "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
+            "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",
+            "Collaboration": "Our community encourage collaboration, fostering an environment where members can work together and share knowledge or skills.",
+            "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
+        }
+        self.selected_value = {}
+
+    def get_value_choices(self):
+        choices = [
+            app_commands.Choice(name=f"{name}: {value[:60]}", value=name)
+            for name, value in value_revision_manager.values_dict.items()
+        ]
+        return choices
+
+    def store_proposal(
+        self, proposed_value_name_input, proposed_value_definition_input
+    ):
+        proposed_value_name = proposed_value_name_input.value.strip()
+        proposed_value_definition = proposed_value_definition_input.value.strip()
+        self.proposed_values_dict[proposed_value_name] = proposed_value_definition
+
+    def update_values_dict(self, select_value, vote_result):
+        if not vote_result:
+            print("value dict not updated")
+        else:
+            value_revision_manager.values_dict.pop(select_value)
+            value_revision_manager.values_dict.update(vote_result)
+
+    def clear_proposed_values(self):
+        self.proposed_values_dict.clear()
+
+
+value_revision_manager = ValueRevisionManager()
+
+
 class CultureModule(ABC):
     def __init__(self, config):
         self.config = config  # This hold the configuration for the module
 
     async def filter_message(
-        self, ctx, message: discord.Message, message_string: str
+        self, message: discord.Message, message_string: str
     ) -> str:
         return message_string
 
@@ -97,7 +145,7 @@ class CultureModule(ABC):
 class Obscurity(CultureModule):
     # Message string may be pre-filtered by other modules
     async def filter_message(
-        self, ctx, message: discord.Message, message_string: str
+        self, message: discord.Message, message_string: str
     ) -> str:
         # Get the method from the module based on the value of "mode"
         method = getattr(self, self.config["mode"])
@@ -163,9 +211,35 @@ class Diversity(CultureModule):
         await ctx.send(f"```{message}```")
 
 
+class Wildcard(CultureModule):
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        """
+        A LLM filter for messages made by users
+        """
+        # FIXME: This global list is not updating when running add_prompt again
+        get_module = CULTURE_MODULES.get("wildcard", None)
+        llm_prompt = get_module.config["llm_disclosure"]
+        print(llm_prompt)
+        llm = OpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+        prompt = PromptTemplate(
+            input_variables=["selected_prompt", "input_text"],
+            template="Use the following prompt: {selected_prompt} to transform this input text: {input_text}. The resulting message should be no longer than 500 characters",
+        )
+        chain = LLMChain(llm=llm, prompt=prompt)
+        response = chain.run(
+            {
+                "selected_prompt": llm_prompt,
+                "input_text": message_string,
+            }
+        )
+        return response
+
+
 class Amplify(CultureModule):
     async def filter_message(
-        self, ctx, message: discord.Message, message_string: str
+        self, message: discord.Message, message_string: str
     ) -> str:
         """
         A LLM filter for messages during the /eloquence command/function
@@ -176,12 +250,13 @@ class Amplify(CultureModule):
             template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
         )
         chain = LLMChain(llm=llm, prompt=prompt)
-        return chain.run(message_string)
+        response = chain.run(message_string)
+        return response
 
 
 class Ritual(CultureModule):
     async def filter_message(
-        self, ctx, message: discord.Message, message_string: str
+        self, message: discord.Message, message_string: str
     ) -> str:
         async for msg in message.channel.history(limit=100):
             if msg.id == message.id:
@@ -231,7 +306,7 @@ class Values(CultureModule):
                     f"Original Message Content: {reference_message.content}, posted by {message.author}"
                 )
 
-            current_values_dict = VALUES_DICT if VALUES_DICT else DEFAULT_VALUES_DICT
+            current_values_dict = value_revision_manager.values_dict
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
@@ -245,7 +320,7 @@ class Values(CultureModule):
         """
         llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
-        current_values_dict = VALUES_DICT if VALUES_DICT else DEFAULT_VALUES_DICT
+        current_values_dict = value_revision_manager.values_dict
         for (
             value,
             description,
@@ -254,12 +329,13 @@ class Values(CultureModule):
         template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
         prompt = PromptTemplate.from_template(template=template)
         chain = LLMChain(llm=llm, prompt=prompt)
-        return chain.run({"text": text})
+        response = chain.run({"text": text})
+        return response
 
 
 class Eloquence(CultureModule):
     async def filter_message(
-        self, ctx, message: discord.Message, message_string: str
+        self, message: discord.Message, message_string: str
     ) -> str:
         """
         A LLM filter for messages during the /eloquence command/function
@@ -272,7 +348,8 @@ class Eloquence(CultureModule):
             input_text=message_string
         )  # TODO: is both formatting and passing the message_string necessary?
         chain = LLMChain(llm=llm, prompt=prompt)
-        return chain.run(message_string)
+        response = chain.run(message_string)
+        return response
 
 
 ACTIVE_MODULES_BY_CHANNEL = defaultdict(OrderedSet)
@@ -354,6 +431,22 @@ async def display_culture_module_state(ctx, module_name, state):
 
 
 CULTURE_MODULES = {
+    "wildcard": Wildcard(
+        {
+            "name": "wildcard",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": "llm",
+            "llm_disclosure": None,
+            "activated_message": "Messages will now be process through an LLM.",
+            "deactivated_message": "Messages will no longer be processed through an LLM.",
+            "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
     "obscurity": Obscurity(
         {
             "name": "obscurity",
