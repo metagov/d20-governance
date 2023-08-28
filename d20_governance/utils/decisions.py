@@ -60,7 +60,7 @@ class Consensus(DecisionModule):
             return None
 
 
-class ConsentView(discord.ui.View):
+class LazyConsensus(discord.ui.View):
     def __init__(self, ctx, option, timeout=60):
         super().__init__(timeout=timeout)
         self.ctx = ctx
@@ -104,7 +104,7 @@ async def set_starting_decision_module():
     add_module_to_stack(selected_module)
 
 
-async def consent(
+async def lazy_consensus(
     ctx=None, channel=None, quest=None, question=None, options=None, timeout: int = 60
 ):
     if quest is not None:
@@ -119,13 +119,13 @@ async def consent(
     # Send introduction embed
     embed = discord.Embed(
         title=f"Vote: {question}",
-        description="**Decision Module:** Consent",
+        description="**Decision Module:** Lazy Consensus",
         color=discord.Color.dark_gold(),
     )
 
     # Get module png
     module_png = await get_module_png(
-        "consent"
+        "lazy_consensus"
     )  # TODO: fix, reconcile with other modules
 
     # Add module png to vote embed
@@ -137,8 +137,8 @@ async def consent(
 
     # Add a description of how decisions are made based on decision module
     embed.add_field(
-        name=f"How decisions are made under consent:",
-        value=DECISION_MODULES["consent"]["description"],
+        name=f"How decisions are made under lazy consensus:",
+        value=DECISION_MODULES["lazy_consensus"]["description"],
         inline=False,
     )
 
@@ -146,8 +146,8 @@ async def consent(
 
     views = []
     for name, description in options.items():
-        # Create a new ConsentView for this option
-        view = ConsentView(ctx, name, timeout=timeout)
+        # Create a new View for this option
+        view = LazyConsensus(ctx, name, timeout=timeout)
         views.append(view)
 
         # Display the option name, description and associated view to the user

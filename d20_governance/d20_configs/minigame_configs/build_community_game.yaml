@@ -68,7 +68,7 @@ stages:
  
   - stage: Community Name
     message: |
-      Now that our vlaues are defined, let's make sense of our situation by giving our community a name.
+      Now that our values are defined, let's make sense of our situation by giving our community a name.
 
       What should we call ourselves?
     actions:
@@ -237,7 +237,7 @@ stages:
       
       Type `/help resubmit` for more information. 
     
-      There will be a majority based vote in 2 minutes.
+      There will be a consensus based vote in 2 minutes.
     actions:
       - action: quiet "False"
       - action: countdown 120 "until making a decision"
@@ -252,11 +252,11 @@ stages:
       You have 1 minute to vote on your community purpose.
     actions:
       - action: post_submissions
-      - action: set_global_decision_module "majority"
+      - action: set_global_decision_module "consensus"
       - action: trigger_vote 'What should be the purpose of our community?' 60 "submissions"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"        
-        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over.```"
       - action: countdown 30 "until the next stage"
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/goal.png"

@@ -169,7 +169,8 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
 
     # Post the image to the Discord channel
     await game_channel_ctx.send(file=discord.File("generated_image.png"))
-    os.remove("generated_image.png")  # Clean up the image file
+    if os.path.exists("generated_image.png"):
+        os.remove("generated_image.png")
 
     if quest.gen_audio:
         # Post audio file
@@ -507,7 +508,7 @@ class QuestBuilderView(discord.ui.View):
                     emoji="#️⃣",
                     value=str(n),
                 )
-                for n in range(2, 20)
+                for n in range(1, 20)
             ],
         )
         self.select3 = QuestBuilder(
@@ -596,6 +597,7 @@ class JoinLeaveView(discord.ui.View):
         self.ctx = ctx
         self.num_players = num_players
         self.quest = quest
+        self.lock = asyncio.Lock()
 
     async def update_embed(self, interaction):
         needed_players = self.num_players - len(self.quest.joined_players)
@@ -623,31 +625,34 @@ class JoinLeaveView(discord.ui.View):
     ):
         quest = self.quest
         player_name = interaction.user.name
-        if player_name not in quest.joined_players:
-            quest.add_player(player_name)
-            await interaction.response.send_message(
-                f"{player_name} has joined the quest!"
-            )
-            await self.update_embed(interaction)
 
-            if len(quest.joined_players) == self.num_players:
-                # remove join and leave buttons
-                await interaction.message.edit(view=None)
-                # create channel for game
-                await make_game_channel(self.ctx, quest)
-                embed = discord.Embed(
-                    title=f"{self.ctx.author.display_name}'s proposal to play has enough players, and is ready to play",
-                    description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
+        async with self.lock:  # ensure that the player count gets updated synchronously, else we may end up creating multiple channels
+            if player_name not in quest.joined_players:
+                quest.add_player(player_name)
+                await interaction.response.send_message(
+                    f"{player_name} has joined the quest!"
                 )
-                await interaction.message.edit(embed=embed)
-                await start_quest(self.ctx, self.quest)
+                await self.update_embed(interaction)
+                if len(quest.joined_players) == self.num_players:
+                    print(quest.joined_players)
+                    print(self.num_players)
 
-        else:
-            # Ephemeral means only the person who took the action will see this message
-            await interaction.response.send_message(
-                "You have already joined the quest. Wait until enough people have joined for the quest to start.",
-                ephemeral=True,
-            )
+                    # remove join and leave buttons
+                    await interaction.message.edit(view=None)
+                    # create channel for game
+                    await make_game_channel(self.ctx, quest)
+                    embed = discord.Embed(
+                        title=f"{self.ctx.author.display_name}'s proposal to play has enough players, and is ready to play",
+                        description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
+                    )
+                    await interaction.message.edit(embed=embed)
+                    await start_quest(self.ctx, self.quest)
+            else:
+                # Ephemeral means only the person who took the action will see this message
+                await interaction.response.send_message(
+                    "You have already joined the quest. Wait until enough people have joined for the quest to start.",
+                    ephemeral=True,
+                )
 
     @discord.ui.button(
         style=discord.ButtonStyle.red, label="Leave", custom_id="leave_button"
@@ -712,7 +717,7 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
         )
 
         await asyncio.sleep(2)
-        vote_result = await consent(
+        vote_result = await lazy_consensus(
             channel=interaction.channel,
             question=f"Should we change the following value **{value_revision_manager.selected_value}** to the newly proposed value: **{self.proposed_value_name}: {self.proposed_value_definition}**?",
             options=value_revision_manager.proposed_values_dict,
@@ -831,7 +836,7 @@ async def embark(
     # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
 
-    if not 2 <= number_of_players.value <= 20:
+    if not 1 <= number_of_players <= 20:
         await ctx.send("The game requires at least 2 and at most 20 players")
         return
 
@@ -1365,7 +1370,7 @@ async def post_submissions(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command(hidden=True)
+@bot.command()
 async def post_proposal_values(ctx):
     message = "Proposed values:\n"
     for key, value in value_revision_manager.proposed_values_dict.items():
@@ -1408,7 +1413,7 @@ async def trigger_vote(ctx, question: str, timeout="20", type: str = None):
     quest = bot.quest
     if type == "values":
         contenders = list(value_revision_manager.proposed_values_dict.values())
-        non_objection_options = await consent(
+        non_objection_options = await lazy_consensus(
             ctx=ctx,
             quest=quest,
             question=question,
@@ -1677,13 +1682,16 @@ async def on_command(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send("That command does not exist.")
+    else:
+        await ctx.send("An error occurred.")
     traceback_text = "".join(
         traceback.format_exception(type(error), error, error.__traceback__)
     )
     error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
     print(error_message)
     logging.error(error_message)
-    await ctx.send("An error occurred.")
 
 
 @bot.event
@@ -1958,7 +1966,7 @@ async def process_message(ctx, message):
                 and "values" in active_modules_by_channel
             ):
                 module_name: Values = CULTURE_MODULES["values"]
-                await module_name.check_values(ctx, message)
+                await module_name.check_values(bot, ctx, message)
                 return
 
             message_content = message.content

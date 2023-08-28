@@ -4,7 +4,6 @@ import discord
 import asyncio
 from discord import app_commands
 from d20_governance.utils.constants import *
-# from d20_governance.utils.decisions import consent
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
@@ -244,7 +243,7 @@ class Amplify(CultureModule):
         """
         A LLM filter for messages during the /eloquence command/function
         """
-        llm = OpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
             input_variables=["input_text"],
             template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
@@ -277,18 +276,20 @@ class Ritual(CultureModule):
         return filtered_message
 
     async def initialize_ritual_agreement(self, previous_message, new_message):
-        llm = OpenAI(temperature=0.9)
+        llm = ChatOpenAI(temperature=0.9)
         prompt = PromptTemplate(
             input_variables=["previous_message", "new_message"],
             template="Write a message that reflects the content in the message '{new_message}' but is cast in agreement with the message '{previous_message}'. Preserve and transfer the meaning and any spelling errors or text transformations in the message in the response.",
         )  # FIXME: This template does not preserve obscurity text processing. Maybe obscurity should be reaplied after ritual if active in the active_culture_mode list
         chain = LLMChain(llm=llm, prompt=prompt)
-        response = chain.run(previous_message=previous_message, new_message=new_message)
+        response = await chain.arun(
+            previous_message=previous_message, new_message=new_message
+        )
         return response
 
 
 class Values(CultureModule):
-    async def check_values(self, ctx, message: discord.Message):
+    async def check_values(self, bot, ctx, message: discord.Message):
         if message.reference:
             reference_message = await message.channel.fetch_message(
                 message.reference.message_id
@@ -310,26 +311,28 @@ class Values(CultureModule):
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
-            llm_response = await self.llm_analyze_values(reference_message.content)
+            llm_response = await self.llm_analyze_values(
+                current_values_dict, reference_message.content
+            )
             message_content = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}"
             await ctx.send(message_content)
 
-    async def llm_analyze_values(self, text):
+    async def llm_analyze_values(self, values_dict, text):
         """
         Analyze message content based on values
         """
-        llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
         current_values_dict = value_revision_manager.values_dict
         for (
             value,
             description,
-        ) in current_values_dict.items():
+        ) in values_dict.items():
             template += f"- {value}: {description}\n"
         template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
         prompt = PromptTemplate.from_template(template=template)
         chain = LLMChain(llm=llm, prompt=prompt)
-        response = chain.run({"text": text})
+        response = await chain.arun({"text": text})
         return response
 
 
@@ -340,7 +343,7 @@ class Eloquence(CultureModule):
         """
         A LLM filter for messages during the /eloquence command/function
         """
-        llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate.from_template(
             template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
         )
@@ -348,7 +351,7 @@ class Eloquence(CultureModule):
             input_text=message_string
         )  # TODO: is both formatting and passing the message_string necessary?
         chain = LLMChain(llm=llm, prompt=prompt)
-        response = chain.run(message_string)
+        response = await chain.arun(message_string)
         return response
 
 
