@@ -7,6 +7,7 @@ stages:
       - action: select_random_culture_module
       - action: quiet "True"
       - action: pause 5
+      - action: values
     progress_conditions: []
     image_path: ""
   
@@ -26,49 +27,10 @@ stages:
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
-    
-  - stage: Community Values
-    message: |
-      The first step in building a community and making sense of our situation is to define our values.
-
-      What do we value, and how do we define those values?
-
-      Use `/propose_value` to submit a proposal value
-    actions: 
-      - action: quiet "False"
-      - action: countdown 120 "until the next stage. Propose a value using `/propose_value` now"
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/temple.png"
-
-  - stage: Vote on Values
-    message: |
-      This is the moment we collectively define our values. 
-      
-      Each value will be presented for decision.
-    actions:
-      - action: post_proposal_values
-      - action: set_global_decision_module "majority"
-      - action: trigger_vote "Which values should we adopt?" 30 "values"
-      - action: countdown 10 "until the next stage"
-      - action: values
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/interference.png"
- 
-  - stage: Values defined
-    message: |
-      Our values are now defined and can be used to check if our posting aligns with our values. 
-
-      Reply to a message and type `check-values` to check alignment.
-    actions:
-      - action: pause 5
-      - action: quiet "True"
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/interference.png"
  
   - stage: Community Name
     message: |
-      Now that our values are defined, let's make sense of our situation by giving our community a name.
+      Let's make sense of our situation by giving our community a name.
 
       What should we call ourselves?
     actions:
@@ -239,7 +201,6 @@ stages:
     
       There will be a consensus based vote in 2 minutes.
     actions:
-      - action: quiet "False"
       - action: countdown 120 "until making a decision"
       - action: send_deliberation_questions deliberation_questions_for_purpose
     progress_conditions: []
@@ -269,11 +230,19 @@ stages:
     
       A semblance of normalcy returns.
     actions:
+      - action: quiet "True"
       - action: eloquence
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/online_community.png"
   
+  - stage: Define Prompt
+    message: |
+      Define prompt narrative
+    actions: []
+    progress_conditions: []
+    image_path: "assets/imgs/pre_generated/end.png"
+
   - stage: End
     message: |
       Congratulations on completing this first experience in online governance in this new world.

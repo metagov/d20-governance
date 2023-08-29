@@ -7,6 +7,7 @@ from d20_governance.utils.constants import *
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
+from langchain.chat_models import ChatOpenAI
 from collections import defaultdict
 
 
@@ -49,7 +50,7 @@ random_culture_module_manager = RandomCultureModuleManager()
 class ValueRevisionManager:
     def __init__(self):
         self.proposed_values_dict = {}
-        self.values_dict = {
+        self.agora_values_dict = {
             "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
             "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
             "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",
@@ -57,11 +58,13 @@ class ValueRevisionManager:
             "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
         }
         self.selected_value = {}
+        self.game_quest_values_dict = {}
+        self.quest_game_channels = []
 
     def get_value_choices(self):
         choices = [
             app_commands.Choice(name=f"{name}: {value[:60]}", value=name)
-            for name, value in value_revision_manager.values_dict.items()
+            for name, value in value_revision_manager.agora_values_dict.items()
         ]
         return choices
 
@@ -76,8 +79,8 @@ class ValueRevisionManager:
         if not vote_result:
             print("value dict not updated")
         else:
-            value_revision_manager.values_dict.pop(select_value)
-            value_revision_manager.values_dict.update(vote_result)
+            value_revision_manager.agora_values_dict.pop(select_value)
+            value_revision_manager.agora_values_dict.update(vote_result)
 
     def clear_proposed_values(self):
         self.proposed_values_dict.clear()
@@ -221,13 +224,13 @@ class Wildcard(CultureModule):
         get_module = CULTURE_MODULES.get("wildcard", None)
         llm_prompt = get_module.config["llm_disclosure"]
         print(llm_prompt)
-        llm = OpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+        llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
             input_variables=["selected_prompt", "input_text"],
             template="Use the following prompt: {selected_prompt} to transform this input text: {input_text}. The resulting message should be no longer than 500 characters",
         )
         chain = LLMChain(llm=llm, prompt=prompt)
-        response = chain.run(
+        response = await chain.arun(
             {
                 "selected_prompt": llm_prompt,
                 "input_text": message_string,
@@ -249,7 +252,7 @@ class Amplify(CultureModule):
             template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
         )
         chain = LLMChain(llm=llm, prompt=prompt)
-        response = chain.run(message_string)
+        response = await chain.arun(message_string)
         return response
 
 
@@ -307,7 +310,7 @@ class Values(CultureModule):
                     f"Original Message Content: {reference_message.content}, posted by {message.author}"
                 )
 
-            current_values_dict = value_revision_manager.values_dict
+            current_values_dict = value_revision_manager.agora_values_dict
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
@@ -323,7 +326,7 @@ class Values(CultureModule):
         """
         llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
-        current_values_dict = value_revision_manager.values_dict
+        current_values_dict = value_revision_manager.agora_values_dict
         for (
             value,
             description,

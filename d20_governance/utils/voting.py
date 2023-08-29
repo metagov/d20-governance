@@ -183,7 +183,7 @@ async def vote(
         decision_data = {"decision": winning_option, "decision_module": decision_module}
         DECISION_DICT[question] = decision_data
         if value_revision_manager.proposed_values_dict:
-            value_revision_manager.values_dict.update(
+            value_revision_manager.agora_values_dict.update(
                 value_revision_manager.proposed_values_dict
             )
 

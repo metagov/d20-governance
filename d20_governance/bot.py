@@ -91,8 +91,10 @@ async def start_quest(ctx, quest: Quest):
     message_obj = await quest.game_channel.send(embed=embed)
 
     # TODO: WIP value inheritance from agora into quest
-    quest.quest_values = dict(value_revision_manager.values_dict)
-    await quest.game_channel.send(f"Inherited values = {quest.quest_values}")
+    value_revision_manager.game_quest_values_dict = dict(
+        value_revision_manager.agora_values_dict
+    )
+    print(value_revision_manager.game_quest_values_dict)
 
     # Sleep for 3 seconds to give time for users to get to the channel and avoid possible latency issues in fetching the message_object
     await asyncio.sleep(3)
@@ -734,11 +736,10 @@ class ValueRevisionView(discord.ui.View):
     def __init__(self):
         super().__init__()
 
-        print(value_revision_manager.values_dict.items())
-
+    def assign_values(self, values_dict):
         options = [
             discord.SelectOption(label=name, description=value[:60], value=name)
-            for name, value in value_revision_manager.values_dict.items()
+            for name, value in values_dict.items()
         ]
 
         self.add_item(SelectValue(options))
@@ -899,6 +900,7 @@ async def make_game_channel(ctx, quest: Quest):
         name=f"d20-{quest.title}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
+    value_revision_manager.quest_game_channels.append(quest.game_channel)
 
 
 # CULTURE MODULES
@@ -917,7 +919,7 @@ async def add_prompt(
     # construct the values list using either the default values dictionary
     # or the values dictionary defined in the agora
     values_list = ""
-    current_values_dict = value_revision_manager.values_dict
+    current_values_dict = value_revision_manager.agora_values_dict
     for key, value in current_values_dict.items():
         values_list += f"* {key}: {value}\n\n"
 
@@ -1345,7 +1347,7 @@ async def submit_message(
 
 
 @bot.command(hidden=True)
-@commands.check(lambda ctx: False)
+# @commands.check(lambda ctx: False)
 async def post_submissions(ctx):
     """
     Post submissions from /submit
@@ -1379,27 +1381,26 @@ async def post_proposal_values(ctx):
     await ctx.send(message)
 
 
-# TODO: Remove this function here and in yaml
 @bot.tree.command(
-    name="propose_value",
-    description="propose and define a value that will govern your interactions",
-)
-async def propose_value(interaction: discord.Interaction, name: str, definition: str):
-    value_revision_manager.proposed_values_dict[name] = definition
-    print(value_revision_manager.proposed_values_dict)
-    await interaction.response.send_message(
-        f"**{interaction.user.name} proposed a new value:**\n* **{name}:** {definition}"
-    )
-
-
-@bot.tree.command(
-    name="propose_revision",
+    name="propose_value_revision",
     description="Press enter to select and propose a revision to the values list",
 )
-async def propose_revision(interaction: discord.Interaction):
+async def propose_value_revision(interaction: discord.Interaction):
+    channel = interaction.channel
+    values_dict = {}
+
+    if channel in value_revision_manager.quest_game_channels:
+        values_dict = value_revision_manager.game_quest_values_dict
+    else:
+        values_dict = value_revision_manager.agora_values_dict
+
     view = ValueRevisionView()
+    view.assign_values(values_dict)
+
     await interaction.response.send_message(
-        f"Here are the current values:", view=view, ephemeral=True
+        f"Here are the current values:",
+        view=view,
+        ephemeral=True,
     )
 
 
@@ -1420,7 +1421,7 @@ async def trigger_vote(ctx, question: str, timeout="20", type: str = None):
             options=value_revision_manager.proposed_values_dict,
             timeout=int(timeout),
         )
-        value_revision_manager.values_dict.update(non_objection_options)
+        value_revision_manager.agora_values_dict.update(non_objection_options)
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
         contenders = list(bot.quest.players_to_submissions.values())
@@ -1720,7 +1721,7 @@ async def list_values(ctx):
     for (
         value,
         description,
-    ) in value_revision_manager.values_dict.items():
+    ) in value_revision_manager.agora_values_dict.items():
         message_content += f"{value}:\n{description}\n\n"
     message = f"```{message_content}```"
     await ctx.send(message)

@@ -14,7 +14,7 @@ import shlex
 import os
 
 from d20_governance.utils.constants import *
-from d20_governance.utils.cultures import CULTURE_MODULES
+from d20_governance.utils.cultures import CULTURE_MODULES, value_revision_manager
 
 from discord.ext import commands
 from io import BytesIO
