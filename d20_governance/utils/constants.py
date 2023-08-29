@@ -183,6 +183,7 @@ DECISION_MODULES = {
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
+        "valid_for_continuous_input": True,
     },
     "consensus": {
         "name": "consensus",
@@ -194,6 +195,7 @@ DECISION_MODULES = {
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
+        "valid_for_continuous_input": True,
     },
     "lazy_consensus": {
         "name": "lazy consensus",
@@ -205,8 +207,11 @@ DECISION_MODULES = {
         "url": "",  # TODO: make decision img
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
+        "valid_for_continuous_input": False,
     },
 }
+
+CONTINUOUS_INPUT_DECISION_MODULES = {module: attributes for module, attributes in DECISION_MODULES.items() if attributes["valid_for_continuous_input"]}
 
 # DECISIONS LOG
 

@@ -1,3 +1,4 @@
+import time
 from typing import List
 import random
 import discord
@@ -163,7 +164,18 @@ async def vote(
 
     # Send embed message and view
     await ctx.send(embed=embed, file=file, view=vote_view)
-    await vote_view.wait()
+    # await vote_view.wait()
+
+    member_count = len(ctx.channel.members)-1 # -1 to account for the bot
+    print("member count " + str(member_count))
+    # New code to check for completion before the timeout
+    start_time = time.time()
+
+    while True:
+        elapsed_time = time.time() - start_time
+        if len(vote_view.votes) == member_count or elapsed_time > timeout:
+            break
+        await asyncio.sleep(1)  # Check every second
 
     # Calculate total votes per member interaction
     results = await get_vote_results(ctx, vote_view.votes, options)
