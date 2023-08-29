@@ -215,6 +215,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     break
                 # TODO: Add more specific exceptions
                 except Exception as e:
+                    print(f"Error encountered: {e}")
                     if retries > 0:
                         # TODO: how can we avoid the global
                         global VOTE_RETRY
@@ -227,7 +228,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                                 "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
                             )
                             await display_module_status(
-                                game_channel_ctx, DECISION_MODULES
+                                game_channel_ctx, CONTINUOUS_INPUT_DECISION_MODULES
                             )
                             await game_channel_ctx.send(
                                 "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
@@ -1710,8 +1711,8 @@ async def clear_decision_input_values(ctx):
 
     Used during vote retries
     """
-    for decision_module in DECISION_MODULES:
-        DECISION_MODULES[decision_module]["input_value"] = 0
+    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES:
+        CONTINUOUS_INPUT_DECISION_MODULES[decision_module]["input_value"] = 0
     print("Decision input values set to 0")
 
 
@@ -1749,15 +1750,15 @@ async def calculate_module_inputs(context, retry=None, tally=None):
     """
     Change local state of modules based on calculation of module inputs
     """
-    # Calculate decision inputs if retry True
+
     if retry:
         max_value = max(
-            DECISION_MODULES[module]["input_value"] for module in DECISION_MODULES
+            CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES
         )
         max_keys = [
             module
-            for module in DECISION_MODULES
-            if DECISION_MODULES[module]["input_value"] == max_value
+            for module in CONTINUOUS_INPUT_DECISION_MODULES
+            if CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"] == max_value
         ]
 
         if not tally:
@@ -2055,13 +2056,13 @@ async def on_message(message):
         if message.content.startswith("※"):
             return
 
-        for module_name in DECISION_MODULES.keys() | CULTURE_MODULES.keys():
+        for module_name in CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys():
             if (
                 message.content.lower() == f"{module_name} +1"
                 or message.content.lower() == f"{module_name} -1"
             ):
                 change = 1 if message.content.lower().endswith("+1") else -1
-                if module_name in DECISION_MODULES:
+                if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
                     if VOTE_RETRY:
                         decision_bucket = cooldowns["decisions"].get_bucket(message)
                         retry_after = decision_bucket.update_rate_limit()
@@ -2071,8 +2072,8 @@ async def on_message(message):
                             )
                             return
 
-                        DECISION_MODULES[module_name]["input_value"] += change
-                        await display_module_status(context, DECISION_MODULES)
+                        CONTINUOUS_INPUT_DECISION_MODULES[module_name]["input_value"] += change
+                        await display_module_status(context, CONTINUOUS_INPUT_DECISION_MODULES)
                         return
                     else:
                         return
