@@ -77,6 +77,16 @@ class Progress_Condition:
         )
 
 
+class DecisionManager:
+    def __init__(self):
+        self.community_name = ""
+        self.community_purpose = ""
+        self.community_prompt = ""
+
+
+decision_manager = DecisionManager()
+
+
 class Stage:
     def __init__(self, name, message, actions, progress_conditions, image_path=None):
         self.name = name

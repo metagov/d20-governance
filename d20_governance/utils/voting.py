@@ -89,6 +89,7 @@ async def vote(
     question: str = None,
     options: List[str] = [],
     timeout: int = 60,
+    topic: str = None,
     decision_module: str = None,
 ):
     """
@@ -166,7 +167,7 @@ async def vote(
     await ctx.send(embed=embed, file=file, view=vote_view)
     # await vote_view.wait()
 
-    member_count = len(ctx.channel.members)-1 # -1 to account for the bot
+    member_count = len(ctx.channel.members) - 1  # -1 to account for the bot
     print("member count " + str(member_count))
     # New code to check for completion before the timeout
     start_time = time.time()
@@ -198,6 +199,12 @@ async def vote(
             value_revision_manager.agora_values_dict.update(
                 value_revision_manager.proposed_values_dict
             )
+        if topic == "community_name":
+            decision_manager.community_name = winning_option
+        elif topic == "community_purpose":
+            decision_manager.community_purpose = winning_option
+        elif topic == "community_prompt":
+            decision_manager.community_prompt = winning_option
 
     else:
         # If retries are configured, voting will be repeated

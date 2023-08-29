@@ -268,6 +268,8 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                                 color=discord.Color.dark_gold(),
                             )
 
+                            bot.quest.reset_submissions()
+
                             decision_data = {
                                 "decision": winning_option,
                                 "decision_module": "implicit_feudalism",
@@ -838,9 +840,9 @@ async def embark(
     # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
 
-    if not 1 <= number_of_players <= 20:
-        await ctx.send("The game requires at least 2 and at most 20 players")
-        return
+    # if not 1 <= number_of_players <= 20:
+    #     await ctx.send("The game requires at least 2 and at most 20 players")
+    #     return
 
     # Quest setup
     quest = setup_quest(
@@ -905,32 +907,29 @@ async def make_game_channel(ctx, quest: Quest):
 
 
 # CULTURE MODULES
+
+# TODO: Add resubmit command for submit_prompt
+
+
 # Community generated wildcard culture module
-@bot.tree.command(name="add_prompt", description="Add a new wildcard prompt.")
-async def add_prompt(
-    interaction: discord.Interaction, affiliation: str, purpose: str, prompt: str
-):
+@bot.tree.command(name="submit_prompt", description="Add a new wildcard prompt.")
+async def submit_prompt(interaction: discord.Interaction, prompt: str):
     # assign prompt, affiliation, and purpose to the prompts dictionary
-    PROMPTS[prompt] = (affiliation, purpose)
+    PROMPTS[prompt] = (
+        decision_manager.community_name,
+        decision_manager.community_purpose,
+    )
 
     # assign the prompt to the wildcard culture module config
     module = CULTURE_MODULES.get("wildcard", None)
     module.config["llm_disclosure"] = prompt
 
-    # construct the values list using either the default values dictionary
-    # or the values dictionary defined in the agora
-    values_list = ""
-    current_values_dict = value_revision_manager.agora_values_dict
-    for key, value in current_values_dict.items():
-        values_list += f"* {key}: {value}\n\n"
-
     # send a message detailing the name of the prompt,
     # the community that defined it,
     # the community's purpose,
     # and the values they had when they made the prompt
-    await interaction.response.send_message(
-        f"New wildcard prompt added:\n```Prompt: {prompt}```\n* Prompt added by **{affiliation}**\n* With the following purpose: **{purpose}**\n* And the following values:\n```{values_list}```"
-    )
+    confirmation_message = "has made their submission"
+    await submit_message(interaction, prompt, confirmation_message)
 
 
 @bot.command()
@@ -938,7 +937,7 @@ async def select_random_culture_module(ctx):
     """
     Randomly select a culture module to turn on
     """
-    culture_commands = ["eloquence", "obscurity", "ritual", "amplify"]
+    culture_commands = ["eloquence", "obscurity", "amplify"]
     random_command_name = random.choice(culture_commands)
     logging.info(f"Selected random culture module: {random_command_name}")
 
@@ -1326,11 +1325,10 @@ async def resubmit(interaction: discord.Interaction, submission: str):
 
 
 async def submit_message(
-    interaction: discord.Interaction, text: str, confirmation_message
+    interaction: discord.Interaction, submission: str, confirmation_message
 ):
-    # await ctx.message.delete()
     if hasattr(bot, "quest"):
-        bot.quest.add_submission(interaction, text)
+        bot.quest.add_submission(interaction, submission)
         if bot.quest.mode != SIMULATIONS["josh_game"]:
             await interaction.response.send_message(
                 f"🎉  {interaction.user.name} {confirmation_message} 📮"
@@ -1407,7 +1405,9 @@ async def propose_value_revision(interaction: discord.Interaction):
 
 @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
-async def trigger_vote(ctx, question: str, timeout="20", type: str = None):
+async def trigger_vote(
+    ctx, question: str, timeout="20", type: str = None, topic: str = None
+):
     """
     Call vote on values, submissions, etc
     """
@@ -1426,8 +1426,20 @@ async def trigger_vote(ctx, question: str, timeout="20", type: str = None):
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
         contenders = list(bot.quest.players_to_submissions.values())
-        await vote(ctx, quest, question, contenders, int(timeout))
+        winning_result = await vote(
+            ctx, quest, question, contenders, int(timeout), topic
+        )
         # Reset the players_to_submissions dictionary for the next round
+        if topic == "community_prompt":
+            # construct the values list using either the default values dictionary
+            # or the values dictionary defined in the agora
+            values_list = ""
+            current_values_dict = value_revision_manager.agora_values_dict
+            for key, value in current_values_dict.items():
+                values_list += f"* {key}: {value}\n\n"
+            await ctx.send(
+                f"New wildcard prompt added:\n```Prompt: {winning_result}```\n* Prompt added by **{decision_manager.community_name}**\n* With the following purpose: **{decision_manager.community_purpose}**\n* And the following values:\n```{values_list}```"
+            )
         bot.quest.reset_submissions()
 
 
@@ -1505,8 +1517,17 @@ async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> 
 # STREAM OF DELIBERATION QUESTIONS
 @bot.command()
 async def send_deliberation_questions(ctx, questions):
+    if hasattr(bot, "quest") and bot.quest.fast_mode:
+        timeout_seconds = 15
+        await asyncio.sleep(timeout_seconds)
+        return
+
     if questions == "deliberation_questions_for_name":
         questions = deliberation_questions_for_name
+    if questions == "deliberation_questions_for_purpose":
+        questions = deliberation_questions_for_purpose
+    if questions == "deliberation_questions_for_prompt":
+        questions = deliberation_questions_for_prompt
 
     random.shuffle(questions)
     asked_questions = []
@@ -1753,7 +1774,8 @@ async def calculate_module_inputs(context, retry=None, tally=None):
 
     if retry:
         max_value = max(
-            CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES
+            CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"]
+            for module in CONTINUOUS_INPUT_DECISION_MODULES
         )
         max_keys = [
             module
@@ -1995,9 +2017,8 @@ async def process_message(ctx, message):
                 if module_name == "wildcard":
                     get_module = CULTURE_MODULES.get("wildcard", None)
                     llm_prompt = get_module.config["llm_disclosure"]
-                    affiliation, purpose = PROMPTS[llm_prompt]
                     await ctx.send(
-                        f"{filtered_message}\n\n```Message made using prompt '{llm_prompt}' by {affiliation} with purpose:{purpose}```"
+                        f"{filtered_message}\n\n```Message made using prompt '{llm_prompt}' by {decision_manager.community_name} with purpose:{decision_manager.community_purpose}```"
                     )
                 else:
                     await send_webhook_message(webhook, message, filtered_message)
@@ -2056,7 +2077,9 @@ async def on_message(message):
         if message.content.startswith("※"):
             return
 
-        for module_name in CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys():
+        for module_name in (
+            CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
+        ):
             if (
                 message.content.lower() == f"{module_name} +1"
                 or message.content.lower() == f"{module_name} -1"
@@ -2072,8 +2095,12 @@ async def on_message(message):
                             )
                             return
 
-                        CONTINUOUS_INPUT_DECISION_MODULES[module_name]["input_value"] += change
-                        await display_module_status(context, CONTINUOUS_INPUT_DECISION_MODULES)
+                        CONTINUOUS_INPUT_DECISION_MODULES[module_name][
+                            "input_value"
+                        ] += change
+                        await display_module_status(
+                            context, CONTINUOUS_INPUT_DECISION_MODULES
+                        )
                         return
                     else:
                         return

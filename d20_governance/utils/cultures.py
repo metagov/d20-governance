@@ -220,7 +220,7 @@ class Wildcard(CultureModule):
         """
         A LLM filter for messages made by users
         """
-        # FIXME: This global list is not updating when running add_prompt again
+        print("applying wildcard module")
         get_module = CULTURE_MODULES.get("wildcard", None)
         llm_prompt = get_module.config["llm_disclosure"]
         print(llm_prompt)
@@ -246,6 +246,7 @@ class Amplify(CultureModule):
         """
         A LLM filter for messages during the /eloquence command/function
         """
+        print("applying amplify module")
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
             input_variables=["input_text"],
@@ -260,6 +261,7 @@ class Ritual(CultureModule):
     async def filter_message(
         self, message: discord.Message, message_string: str
     ) -> str:
+        print("applying ritual module")
         async for msg in message.channel.history(limit=100):
             if msg.id == message.id:
                 continue
@@ -324,6 +326,7 @@ class Values(CultureModule):
         """
         Analyze message content based on values
         """
+        print("applying values module")
         llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
         current_values_dict = value_revision_manager.agora_values_dict
@@ -346,6 +349,7 @@ class Eloquence(CultureModule):
         """
         A LLM filter for messages during the /eloquence command/function
         """
+        print("applying eloquence module")
         llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate.from_template(
             template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
