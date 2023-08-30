@@ -25,7 +25,166 @@ intents.dm_messages = True
 intents.messages = True
 intents.guilds = True
 
-bot = commands.Bot(command_prefix="-", description=description, intents=intents)
+
+class MyBot(commands.Bot):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.quest = None
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """
+        Event handler for when the bot has logged in and is ready to start interacting with Discord
+        """
+        await bot.tree.sync()
+        logging.basicConfig(
+            filename="logs/bot.log",
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(message)s",
+        )
+        print(">> Logging to logs/bot.log <<")
+        with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+            f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
+        logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+        value_revision_manager.__init__()
+        for guild in bot.guilds:
+            await bot.tree.sync(guild=guild)
+            await setup_server(guild)
+            await delete_all_webhooks(guild)
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        """
+        Global message event listener
+        """
+        global VOTE_RETRY
+        context = await bot.get_context(message)
+        try:
+            if message.author == bot.user:  # Ignore messages sent by the bot itself
+                return
+
+            # Allow the "-help" command to run without channel checks
+            if message.content.startswith("-help"):
+                await bot.process_commands(message)
+                return
+
+            # If message is a slash command, proceed directly to processing
+            if message.content.startswith("/"):
+                await bot.process_commands(message)
+                return
+
+            # If message is a regular command, proceed directly to processing
+            if message.content.startswith("-"):
+                await bot.process_commands(message)
+                return
+
+            # This symbol ensures webhook messages don't loop
+            if message.content.startswith("※"):
+                return
+
+            for module_name in (
+                CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
+            ):
+                if (
+                    message.content.lower() == f"{module_name} +1"
+                    or message.content.lower() == f"{module_name} -1"
+                ):
+                    change = 1 if message.content.lower().endswith("+1") else -1
+                    if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
+                        if VOTE_RETRY:
+                            decision_bucket = cooldowns["decisions"].get_bucket(message)
+                            retry_after = decision_bucket.update_rate_limit()
+                            if retry_after:
+                                await context.send(
+                                    f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+                                )
+                                return
+
+                            CONTINUOUS_INPUT_DECISION_MODULES[module_name][
+                                "input_value"
+                            ] += change
+                            await display_module_status(
+                                context, CONTINUOUS_INPUT_DECISION_MODULES
+                            )
+                            return
+                        else:
+                            return
+                    elif module_name in CULTURE_MODULES:
+                        culture_bucket = cooldowns["cultures"].get_bucket(message)
+                        retry_after = culture_bucket.update_rate_limit()
+                        if retry_after:
+                            await context.send(
+                                f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
+                            )
+                            return
+
+                        module = CULTURE_MODULES[module_name]
+                        module.config["input_value"] += change
+                        await display_module_status(context, CULTURE_MODULES)
+                        return
+
+            await process_message(context, message)
+        except Exception as e:
+            type, value, tb = sys.exc_info()
+            traceback_str = "".join(traceback.format_exception(type, value, tb))
+            print(f"Unhandled exception:\n{traceback_str}")
+            logging.error(f"Unhandled exception:\n{traceback_str}")
+            await context.send("An error occurred.")
+
+    @commands.Cog.listener()
+    async def on_guild_join(guild):
+        """
+        Event handler for when the bot has been invited to a new guild.
+        """
+        print(f"D20 Bot has been invited to server `{guild.name}`")
+        await setup_server(guild)
+
+    @commands.Cog.listener()
+    async def on_reaction_add(reaction, user):
+        if user.bot:
+            return
+
+        if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
+            if user.id in bot.voters:
+                await reaction.remove(user)
+                await user.send(
+                    f"Naughty naughty! You cannot vote twice!",
+                    delete_after=timeouts["vote"],
+                )
+            else:
+                bot.voters.add(user.id)
+
+    @commands.Cog.listener()
+    async def on_command(ctx):
+        """
+        Event listener that prints command invoked, channel where invoked, and channel id
+        """
+        print(
+            f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+        )
+
+    @commands.Cog.listener()
+    async def on_command_error(ctx, error):
+        if isinstance(error, commands.CommandNotFound):
+            await ctx.send("That command does not exist.")
+        else:
+            await ctx.send("An error occurred.")
+        traceback_text = "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
+        error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
+        print(error_message)
+        logging.error(error_message)
+
+    @commands.Cog.listener()
+    async def on_error(event):
+        type, value, tb = sys.exc_info()
+        traceback_str = "".join(traceback.format_exception(type, value, tb))
+        print(f"Unhandled exception in {event}:\n{traceback_str}")
+        logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
+
+
+bot = MyBot(command_prefix="-", description=description, intents=intents)
 bot.remove_command("help")
 
 
@@ -89,6 +248,8 @@ async def start_quest(ctx, quest: Quest):
 
     # Send and store a message object as an initial message for the new quest game channel
     message_obj = await quest.game_channel.send(embed=embed)
+
+    bot.loop.create_task(values_module.randomly_check_values(bot))
 
     # TODO: WIP value inheritance from agora into quest
     value_revision_manager.game_quest_values_dict = dict(
@@ -749,51 +910,51 @@ class ValueRevisionView(discord.ui.View):
 
 
 # EVENTS
-@bot.event
-async def on_ready():
-    """
-    Event handler for when the bot has logged in and is ready to start interacting with Discord
-    """
-    await bot.tree.sync()
-    logging.basicConfig(
-        filename="logs/bot.log",
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
-    print(">> Logging to logs/bot.log <<")
-    with open(f"{LOGGING_PATH}/bot.log", "a") as f:
-        f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
-    logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
-    value_revision_manager.__init__()
-    for guild in bot.guilds:
-        await bot.tree.sync(guild=guild)
-        await setup_server(guild)
-        await delete_all_webhooks(guild)
+# @bot.event
+# async def on_ready():
+#     """
+#     Event handler for when the bot has logged in and is ready to start interacting with Discord
+#     """
+#     await bot.tree.sync()
+#     logging.basicConfig(
+#         filename="logs/bot.log",
+#         level=logging.INFO,
+#         format="%(asctime)s %(levelname)s %(message)s",
+#     )
+#     print(">> Logging to logs/bot.log <<")
+#     with open(f"{LOGGING_PATH}/bot.log", "a") as f:
+#         f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
+#     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
+#     value_revision_manager.__init__()
+#     for guild in bot.guilds:
+#         await bot.tree.sync(guild=guild)
+#         await setup_server(guild)
+#         await delete_all_webhooks(guild)
 
 
-@bot.event
-async def on_guild_join(guild):
-    """
-    Event handler for when the bot has been invited to a new guild.
-    """
-    print(f"D20 Bot has been invited to server `{guild.name}`")
-    await setup_server(guild)
+# @bot.event
+# async def on_guild_join(guild):
+#     """
+#     Event handler for when the bot has been invited to a new guild.
+#     """
+#     print(f"D20 Bot has been invited to server `{guild.name}`")
+#     await setup_server(guild)
 
 
-@bot.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
-        return
+# @bot.event
+# async def on_reaction_add(reaction, user):
+#     if user.bot:
+#         return
 
-    if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
-        if user.id in bot.voters:
-            await reaction.remove(user)
-            await user.send(
-                f"Naughty naughty! You cannot vote twice!",
-                delete_after=timeouts["vote"],
-            )
-        else:
-            bot.voters.add(user.id)
+#     if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
+#         if user.id in bot.voters:
+#             await reaction.remove(user)
+#             await user.send(
+#                 f"Naughty naughty! You cannot vote twice!",
+#                 delete_after=timeouts["vote"],
+#             )
+#         else:
+#             bot.voters.add(user.id)
 
 
 # QUEST START AND PROGRESSION
@@ -1092,7 +1253,6 @@ async def ritual(ctx):
 
 
 @bot.command(hidden=True)
-@commands.check(lambda ctx: False)
 async def secret_message(ctx):
     """
     Secrecy: Randomly Send Messages to DMs
@@ -1693,36 +1853,36 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
 
 
 # COMMAND TRACKING
-@bot.event
-async def on_command(ctx):
-    """
-    Event listener that prints command invoked, channel where invoked, and channel id
-    """
-    print(
-        f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
-    )
+# @bot.event
+# async def on_command(ctx):
+#     """
+#     Event listener that prints command invoked, channel where invoked, and channel id
+#     """
+#     print(
+#         f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+#     )
 
 
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        await ctx.send("That command does not exist.")
-    else:
-        await ctx.send("An error occurred.")
-    traceback_text = "".join(
-        traceback.format_exception(type(error), error, error.__traceback__)
-    )
-    error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
-    print(error_message)
-    logging.error(error_message)
+# @bot.event
+# async def on_command_error(ctx, error):
+#     if isinstance(error, commands.CommandNotFound):
+#         await ctx.send("That command does not exist.")
+#     else:
+#         await ctx.send("An error occurred.")
+#     traceback_text = "".join(
+#         traceback.format_exception(type(error), error, error.__traceback__)
+#     )
+#     error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
+#     print(error_message)
+#     logging.error(error_message)
 
 
-@bot.event
-async def on_error(event):
-    type, value, tb = sys.exc_info()
-    traceback_str = "".join(traceback.format_exception(type, value, tb))
-    print(f"Unhandled exception in {event}:\n{traceback_str}")
-    logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
+# @bot.event
+# async def on_error(event):
+#     type, value, tb = sys.exc_info()
+#     traceback_str = "".join(traceback.format_exception(type, value, tb))
+#     print(f"Unhandled exception in {event}:\n{traceback_str}")
+#     logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
 
 
 # GOVERNANCE INPUT
@@ -2047,81 +2207,81 @@ async def apply_culture_modules(active_modules, message, message_content: str):
 
 
 # ON MESSAGE
-@bot.event
-async def on_message(message):
-    """
-    Global message event listener
-    """
-    global VOTE_RETRY
-    context = await bot.get_context(message)
-    try:
-        if message.author == bot.user:  # Ignore messages sent by the bot itself
-            return
+# @bot.event
+# async def on_message(message):
+#     """
+#     Global message event listener
+#     """
+#     global VOTE_RETRY
+#     context = await bot.get_context(message)
+#     try:
+#         if message.author == bot.user:  # Ignore messages sent by the bot itself
+#             return
 
-        # Allow the "-help" command to run without channel checks
-        if message.content.startswith("-help"):
-            await bot.process_commands(message)
-            return
+#         # Allow the "-help" command to run without channel checks
+#         if message.content.startswith("-help"):
+#             await bot.process_commands(message)
+#             return
 
-        # If message is a slash command, proceed directly to processing
-        if message.content.startswith("/"):
-            await bot.process_commands(message)
-            return
+#         # If message is a slash command, proceed directly to processing
+#         if message.content.startswith("/"):
+#             await bot.process_commands(message)
+#             return
 
-        # If message is a regular command, proceed directly to processing
-        if message.content.startswith("-"):
-            await bot.process_commands(message)
-            return
+#         # If message is a regular command, proceed directly to processing
+#         if message.content.startswith("-"):
+#             await bot.process_commands(message)
+#             return
 
-        # This symbol ensures webhook messages don't loop
-        if message.content.startswith("※"):
-            return
+#         # This symbol ensures webhook messages don't loop
+#         if message.content.startswith("※"):
+#             return
 
-        for module_name in (
-            CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
-        ):
-            if (
-                message.content.lower() == f"{module_name} +1"
-                or message.content.lower() == f"{module_name} -1"
-            ):
-                change = 1 if message.content.lower().endswith("+1") else -1
-                if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
-                    if VOTE_RETRY:
-                        decision_bucket = cooldowns["decisions"].get_bucket(message)
-                        retry_after = decision_bucket.update_rate_limit()
-                        if retry_after:
-                            await context.send(
-                                f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
-                            )
-                            return
+#         for module_name in (
+#             CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
+#         ):
+#             if (
+#                 message.content.lower() == f"{module_name} +1"
+#                 or message.content.lower() == f"{module_name} -1"
+#             ):
+#                 change = 1 if message.content.lower().endswith("+1") else -1
+#                 if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
+#                     if VOTE_RETRY:
+#                         decision_bucket = cooldowns["decisions"].get_bucket(message)
+#                         retry_after = decision_bucket.update_rate_limit()
+#                         if retry_after:
+#                             await context.send(
+#                                 f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+#                             )
+#                             return
 
-                        CONTINUOUS_INPUT_DECISION_MODULES[module_name][
-                            "input_value"
-                        ] += change
-                        await display_module_status(
-                            context, CONTINUOUS_INPUT_DECISION_MODULES
-                        )
-                        return
-                    else:
-                        return
-                elif module_name in CULTURE_MODULES:
-                    culture_bucket = cooldowns["cultures"].get_bucket(message)
-                    retry_after = culture_bucket.update_rate_limit()
-                    if retry_after:
-                        await context.send(
-                            f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
-                        )
-                        return
+#                         CONTINUOUS_INPUT_DECISION_MODULES[module_name][
+#                             "input_value"
+#                         ] += change
+#                         await display_module_status(
+#                             context, CONTINUOUS_INPUT_DECISION_MODULES
+#                         )
+#                         return
+#                     else:
+#                         return
+#                 elif module_name in CULTURE_MODULES:
+#                     culture_bucket = cooldowns["cultures"].get_bucket(message)
+#                     retry_after = culture_bucket.update_rate_limit()
+#                     if retry_after:
+#                         await context.send(
+#                             f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
+#                         )
+#                         return
 
-                    module = CULTURE_MODULES[module_name]
-                    module.config["input_value"] += change
-                    await display_module_status(context, CULTURE_MODULES)
-                    return
+#                     module = CULTURE_MODULES[module_name]
+#                     module.config["input_value"] += change
+#                     await display_module_status(context, CULTURE_MODULES)
+#                     return
 
-        await process_message(context, message)
-    except Exception as e:
-        type, value, tb = sys.exc_info()
-        traceback_str = "".join(traceback.format_exception(type, value, tb))
-        print(f"Unhandled exception:\n{traceback_str}")
-        logging.error(f"Unhandled exception:\n{traceback_str}")
-        await context.send("An error occurred.")
+#         await process_message(context, message)
+#     except Exception as e:
+#         type, value, tb = sys.exc_info()
+#         traceback_str = "".join(traceback.format_exception(type, value, tb))
+#         print(f"Unhandled exception:\n{traceback_str}")
+#         logging.error(f"Unhandled exception:\n{traceback_str}")
+#         await context.send("An error occurred.")

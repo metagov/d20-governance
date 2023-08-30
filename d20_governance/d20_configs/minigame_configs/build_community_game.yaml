@@ -2,15 +2,12 @@ title: 'Governance Game: Build a Community'
 stages:
   - stage: Introduction
     message: |
-      Your online community exists in a new confusion. 
-      
-      You goal is to write a new prompt that will be added to the community agora.
-      
-      You will: 
+      You are a group embeded within a larger community. Your task is to form a new group identiy that will shape discussion in the agora.
 
-      1️⃣ Give your group a name
-      2️⃣ Decide on an animating purpose
-      3️⃣ Make a new prompt to add to your community's agora
+      You will:
+
+      1️⃣ Give your group a name and goal, and 
+      2️⃣ Describe the culture of your group
     actions:
       - action: pause 5
     progress_conditions: []

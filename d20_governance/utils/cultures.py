@@ -316,10 +316,16 @@ class Values(CultureModule):
             values_list = f"Community Defined Values:\n\n"
             for value in current_values_dict.keys():
                 values_list += f"* {value}\n"
-            llm_response = await self.llm_analyze_values(
+            llm_response, alignment = await self.llm_analyze_values(
                 current_values_dict, reference_message.content
             )
             message_content = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}"
+
+            # Assign alignment roles to users if their post is values-checked
+            if alignment == "aligned":
+                await assign_role_to_user(message.author, "Aligned")
+            else:
+                await assign_role_to_user(message.author, "Misaligned")
             await ctx.send(message_content)
 
     async def llm_analyze_values(self, values_dict, text):
@@ -335,11 +341,54 @@ class Values(CultureModule):
             description,
         ) in values_dict.items():
             template += f"- {value}: {description}\n"
-        template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
+        template += f"\nNow, analyze the message:\n{text}. Start the message with either the string 'This message aligns with our values' or 'This message does not align with our values'. Then briefly explain why the values are aligned or misaligned based on the values the group holds."
         prompt = PromptTemplate.from_template(template=template)
         chain = LLMChain(llm=llm, prompt=prompt)
         response = await chain.arun({"text": text})
-        return response
+        alignment = (
+            "aligned"
+            if "This message aligns with our values" in response
+            else "misaligned"
+        )
+        return response, alignment
+
+    async def randomly_check_values(self, bot):
+        while True:
+            # Randomly generate delay between executions
+            delay = random.randint(5, 20)
+
+            # Wait for the specified delay
+            await asyncio.sleep(delay)
+
+            # Fetch a random message from a game channel
+            game_channel = bot.get_channel(bot.quest.game_channel)
+
+            random_message = await game_channel.fetch_message(
+                random.randint(1, game_channel.last_message_id)
+            )
+
+            # Check values of the random message
+            await self.check_values(bot, None, random_message)
+
+
+values_module = Values(CultureModule)
+
+
+async def assign_role_to_user(user, role_name):
+    guild = user.guild
+    new_role = discord.utils.get(guild.roles, name=role_name)
+
+    # Define role variables
+    aligned_role = discord.utils.get(guild.roles, name="Aligned")
+    misaligned_role = discord.utils.get(guild.roles, name="Misaligned")
+
+    # Check if the user already has an alignment role
+    if aligned_role in user.roles and new_role == misaligned_role:
+        await user.remove_roles(aligned_role)
+    elif misaligned_role in user.roles and new_role == aligned_role:
+        await user.remove_roles(misaligned_role)
+
+    await user.add_roles(new_role)
 
 
 class Eloquence(CultureModule):

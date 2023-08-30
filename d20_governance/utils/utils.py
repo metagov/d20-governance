@@ -236,6 +236,9 @@ async def setup_server(guild):
     Function to set up the server by checking and creating categories and channels as needed.
     """
     logging.info(f"---Checking setup for server: '{guild.name}'---")
+
+    # make server categories
+    print("Checking if all categories are present")
     server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
@@ -244,6 +247,15 @@ async def setup_server(guild):
             logging.info(f"Created category: {category.name}")
         else:
             pass
+
+    # Make roles
+    role_names = ["Aligned", "Misaligned"]
+
+    print("Checking if all roles are present")
+    for role_name in role_names:
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role is None:
+            await guild.create_role(name=role_name)
 
     # Define the d20-agora channel and d20-values-space
     overwrites = {
