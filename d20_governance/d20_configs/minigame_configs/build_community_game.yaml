@@ -28,7 +28,6 @@ stages:
       
       To propose a value revision use the command `/propose_value_revision` and press enter.
     actions:
-      - action: list-values   
       - action: values   
       - action: pause 5
     progress_conditions: []
