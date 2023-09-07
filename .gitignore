@@ -4,9 +4,9 @@
 .gitignore
 d20_governance/playground
 **/__pycache__/**
-logs/*.log
-logs/
-**/.DS_Store/**
+logs/*
+**/.DS_Store
 package.json
 node_modules
 package-lock.json
+dev_logs

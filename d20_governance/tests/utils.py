@@ -1,11 +1,17 @@
 from unittest.mock import AsyncMock, MagicMock
-from d20_governance.utils.constants import MINIGAME_JOSH, TUTORIAL_BUILD_COMMUNITY
+from d20_governance.utils.constants import SIMULATIONS
 from d20_governance.utils.utils import Quest
 
 
 def create_quest():
     # Create a real Quest object
-    quest = Quest(quest_mode=TUTORIAL_BUILD_COMMUNITY, gen_images=False, gen_audio=False, fast_mode=True, solo_mode=False)
+    quest = Quest(
+        quest_mode=SIMULATIONS["build_a_community"],
+        gen_images=False,
+        gen_audio=False,
+        fast_mode=True,
+        solo_mode=False,
+    )
 
     # Create a mock for the game_channel
     mock_game_channel = MagicMock()

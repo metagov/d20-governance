@@ -2,6 +2,7 @@ import os
 import yaml as py_yaml
 from dotenv import load_dotenv
 from ruamel.yaml import YAML
+from discord.ext import commands
 
 
 def read_config(file_path):
@@ -30,14 +31,21 @@ API_HOST = "https://api.stability.ai"
 STABILITY_API_HOST = "https://api.stability.ai"
 ENGINE_ID = "stable-diffusion-v1-5"
 
-
 # TIMEOUTS
-START_TIMEOUT = 600  # The window for starting a game will time out after 10 minutes
-GAME_TIMEOUT = (
-    86400  # The game will auto-archive if there is no game play within 24 hours
-)
-VOTE_DURATION_SECONDS = 60
-
+timeouts = {
+    "cooldown": 5,  # global cooldown value
+    "start": 600,  # The window for starting a game will time out after 10 minutes
+    "no_game_play": 86400,  # The game will auto-archive if there is no game play within 24 hours
+    "vote": 60,  # amount of time to vote
+}
+cooldowns = {
+    "decisions": commands.CooldownMapping.from_cooldown(
+        1, timeouts["cooldown"], commands.BucketType.user
+    ),
+    "cultures": commands.CooldownMapping.from_cooldown(
+        1, timeouts["cooldown"], commands.BucketType.user
+    ),
+}
 
 # TEMP DIRECTORY PATHS
 AUDIO_MESSAGES_PATH = "assets/audio/bot_generated"
@@ -48,17 +56,68 @@ LOG_FILE_NAME = f"{LOGGING_PATH}/bot.log"
 # BOT IMAGES
 BOT_ICON = "assets/imgs/game_icons/d20-gov-icon.png"
 
-# QUEST CONFIGS
-QUEST_WHIMSY = "d20_governance/d20_configs/quest_configs/whimsy.yaml"
-QUEST_COLONY = "d20_governance/d20_configs/quest_configs/colony.yaml"
-QUEST_MASCOT = "d20_governance/d20_configs/quest_configs/mascot.yaml"
-QUEST_MODE_LLM = "llm"
+# SIMULATION CONFIGS
+SIMULATIONS = {
+    "build_a_community": {
+        "name": "build a community",
+        "emoji": "🎪",
+        "file": "d20_governance/d20_configs/minigame_configs/build_community_game.yaml",
+        "description": "Build a community prompt",
+    },
+    "whimsy": {
+        "name": "whimsy",
+        "emoji": "🤪",
+        "file": "d20_governance/d20_configs/quest_configs/whimsy.yaml",
+        "description": "A whimsical governance game",
+    },
+    "colony": {
+        "name": "colony",
+        "emoji": "🛸",
+        "file": "d20_governance/d20_configs/quest_configs/colony.yaml",
+        "description": "Governance under space colony",
+    },
+    "mascot": {
+        "name": "mascot",
+        "emoji": "🐻‍❄️",
+        "file": "d20_governance/d20_configs/quest_configs/mascot.yaml",
+        "description": "Propose a new community mascot",
+    },
+    "llm_mode": {
+        "name": "llm_mode",
+        "emoji": "🤔",
+        "file": "llm",
+        "description": "A random game of d20 governance",
+    },
+    "josh_game": {
+        "name": "josh_game",
+        "emoji": "👨‍🦰",
+        "file": "d20_governance/d20_configs/minigame_configs/josh_game.yaml",
+        "description": "The josh gam",
+    },
+}
 
-# MINIGAM CONFIGS
-MINIGAME_JOSH = "d20_governance/d20_configs/minigame_configs/josh_game.yaml"
-TUTORIAL_BUILD_COMMUNITY = (
-    "d20_governance/d20_configs/minigame_configs/build_community_game.yaml"
-)
+# DELIBERATION QUESTIONS
+deliberation_questions_for_name = [
+    "What emotions or associations should our name evoke?",
+    "Should the name be descriptive or abstract?",
+    "Should our name resonate with the community we are embedded in?",
+    "How should our name relate to our values?",
+    "Should our name be short or long?",
+]
+deliberation_questions_for_purpose = [
+    "What emotions or associations should our name evoke?",
+    "Should the name be descriptive or abstract?",
+    "Should our name resonate with the community we are embedded in?",
+    "How should our name relate to our values?",
+    "Should our name be short or long?",
+]
+deliberation_questions_for_prompt = [
+    "What emotions or associations should our name evoke?",
+    "Should the name be descriptive or abstract?",
+    "Should our name resonate with the community we are embedded in?",
+    "How should our name relate to our values?",
+    "Should our name be short or long?",
+]
 
 # QUEST KEYS
 QUEST_MESSAGE_KEY = "message"
@@ -67,7 +126,7 @@ QUEST_ACTIONS_KEY = "actions"
 QUEST_PROGRESS_CONDITIONS_KEY = "progress_conditions"
 QUEST_IMAGE_PATH_KEY = "image_path"
 
-# GOVERNANCE CONFIGS
+# GOVERNANCE STACK CONFIGS
 GOVERNANCE_STACK_CONFIG_PATH = "d20_governance/governance_stack_config.yaml"
 GOVERNANCE_STACK_CHAOS_PATH = (
     "d20_governance/governance_stacks/governance_stack_templates/chaos_stack.yaml"
@@ -80,6 +139,12 @@ GOVERNANCE_TYPES = {
     "decision": "d20_governance/governance_stacks/types/decision.yaml",
     "process": "d20_governance/governance_stacks/types/process.yaml",
     "structure": "d20_governance/governance_stacks/types/structure.yaml",
+}
+GOVERNANCE_SVG_ICONS = {
+    "culture": "assets/imgs/CommunityRule/icons/palette.svg",
+    "decision": "assets/imgs/CommunityRule/icons/thumb-up.svg",
+    "process": "assets/imgs/CommunityRule/icons/rotate.svg",
+    "structure": "assets/imgs/CommunityRule/icons/building.svg",
 }
 
 # FONTS
@@ -99,41 +164,67 @@ CIRCLE_EMOJIS = [
     "⚪",
 ]
 
-# MODULE CONSTRUCTION
+# MODULE STACK IMG CONSTRUCTION
 FILE_COUNT = 0  # Global variable to store the count of created files
 MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
-# CULTURE MODES
-OBSCURITY = False
-ELOQUENCE = False
-RITUAL = False
-AMPLIFY = False
-OBSCURITY_MODE = "scramble"
-IS_QUIET = False
-COMMAND_VISIBILITY = {}
-DECISION_MODULE = None
-MAX_VOTE_TRIGGERS = 3
+# DECISION MODULES
+ACTIVE_GLOBAL_DECISION_MODULES = {}
 
-# CONTINUOUS INPUT VARS
-SPECTRUM_SCALE = 10
-SPECTRUM_THRESHOLD = 7
-MAJORITY_REACHED = False
-CONSENSUS_REACHED = False
-ELOQUENCE_ACTIVATED = False
-OBSCURITY_ACTIVATED = False
-
-decision_inputs = {
-    "consensus": 0,
-    "majority": 0,
+DECISION_MODULES = {
+    "majority": {
+        "name": "majority",
+        "description": "Majority requires a simiple majority from the number of people who voteon the options.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+        "valid_for_continuous_input": True,
+    },
+    "consensus": {
+        "name": "consensus",
+        "description": "Consensus requires everyone in the simulation to vote on the same option.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+        "valid_for_continuous_input": True,
+    },
+    "lazy_consensus": {
+        "name": "lazy consensus",
+        "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+        "valid_for_continuous_input": False,
+    },
 }
 
-culture_inputs = {
-    "eloquence": 0,
-    "obscurity": 0,
-}
+CONTINUOUS_INPUT_DECISION_MODULES = {module: attributes for module, attributes in DECISION_MODULES.items() if attributes["valid_for_continuous_input"]}
 
-GLOBAL_DECISION_MODULE = None
+# DECISIONS LOG
+
+DECISION_DICT = {}
+
+# GENERAL CULTURE STORAGE
+PROMPTS = {}
+
+# SPECTRUM VALUES
+INPUT_SPECTRUM = {
+    "scale": 10,
+    "threshold": 7,
+}
 
 # INTERNAL ACCESS CONTROL SETTINGS
 ACCESS_CONTROL_SETTINGS = {
@@ -142,22 +233,20 @@ ACCESS_CONTROL_SETTINGS = {
     "command_name": [],
 }
 
-# MISC
-COMMAND_VISIBILITY = {}
-# Stores the number of messages sent by each user
-user_message_count = {}
-# stores webhooks
-webhooks = []
+# MISC INITS
+IS_QUIET = False
+MAX_VOTE_TRIGGERS = 3
+VOTE_RETRY = False
 
-# GLOBAL CULTURE MODULES
-active_global_culture_modules = {}
+# MISC DICTS
+USER_MESSAGE_COUNT = {}  # Stores the number of messages sent by each user
 
-# GLOBAL DECISION MODULES
-active_global_decision_modules = {}
-
+# MISC LISTS
+WEBHOOK_LIST = []  # stores webhooks
+ARCHIVED_CHANNELS = []
 
 # JOSH GAME # todo: move this out to game-specific file
-nicknames = [
+JOSH_NICKNAMES = [
     "Jigsaw Joshy",
     "Josh-a-mania",
     "Jovial Joshington",

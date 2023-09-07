@@ -1,100 +1,560 @@
+from abc import ABC, abstractmethod
 import random
 import discord
+import asyncio
+from discord import app_commands
 from d20_governance.utils.constants import *
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
+from langchain.chat_models import ChatOpenAI
+from collections import defaultdict
 
 
-# Culture Utils
-class Obscurity:
-    def __init__(self, string):
-        self.string = string
+# This is a custom List that tracks order or append and removal as well as groups of channels through sets
+class OrderedSet:
+    def __init__(self):
+        self.set = set()
+        self.list = []
 
-    def scramble(self):
-        print(self.string)
-        words = self.string.split()
-        scrambled_words = [scramble_word(word) for word in words]
+    def add(self, item):
+        if item not in self.set:
+            self.set.add(item)
+            self.list.append(item)
+
+    def remove(self, item):
+        if item in self.set:
+            self.set.discard(item)
+            self.list.remove(item)
+
+    def __iter__(self):
+        return iter(self.list)
+
+    def __len__(self):
+        return len(
+            self.list
+        )  # The lengthof the ListSet is the length of the internal list
+
+    def __bool__(self):
+        return len(self) > 0  # Theinstance is "Truthy" if there are elements in it
+
+
+class RandomCultureModuleManager:
+    def __init__(self):
+        self.random_culture_module = ""
+
+
+random_culture_module_manager = RandomCultureModuleManager()
+
+
+class ValueRevisionManager:
+    def __init__(self):
+        self.proposed_values_dict = {}
+        self.agora_values_dict = {
+            "Respect": "Our members should treat each other with respect, recognizing and appreciating diverse perspectives and opinions.",
+            "Inclusivity": "Our community strives to be inclusive, creating an environment where everyone feels welcome and valued regardless of their background, identity, or beliefs.",
+            "Support": "Our members support and help one another, whether it's providing guidance, advice, or emotional support.",
+            "Collaboration": "Our community encourage collaboration, fostering an environment where members can work together and share knowledge or skills.",
+            "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
+        }
+        self.selected_value = {}
+        self.game_quest_values_dict = {}
+        self.quest_game_channels = []
+
+    def get_value_choices(self):
+        choices = [
+            app_commands.Choice(name=f"{name}: {value[:60]}", value=name)
+            for name, value in value_revision_manager.agora_values_dict.items()
+        ]
+        return choices
+
+    def store_proposal(
+        self, proposed_value_name_input, proposed_value_definition_input
+    ):
+        proposed_value_name = proposed_value_name_input.value.strip()
+        proposed_value_definition = proposed_value_definition_input.value.strip()
+        self.proposed_values_dict[proposed_value_name] = proposed_value_definition
+
+    def update_values_dict(self, select_value, vote_result):
+        if not vote_result:
+            print("value dict not updated")
+        else:
+            value_revision_manager.agora_values_dict.pop(select_value)
+            value_revision_manager.agora_values_dict.update(vote_result)
+
+    def clear_proposed_values(self):
+        self.proposed_values_dict.clear()
+
+
+value_revision_manager = ValueRevisionManager()
+
+
+class CultureModule(ABC):
+    def __init__(self, config):
+        self.config = config  # This hold the configuration for the module
+
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        return message_string
+
+    # Methods to handle local state
+    def is_local_state_active(self):
+        return self.config["local_state"]
+
+    def activate_local_state(self):
+        self.config["local_state"] = True
+
+    def deactivate_local_state(self):
+        self.config["local_state"] = False
+
+    # Methods to handle global state
+    def is_global_state_active(self):
+        return self.config["global_state"]
+
+    async def activate_global_state(self, ctx):
+        self.config["global_state"] = True
+        await toggle_culture_module(ctx, self.config["name"], True)
+        await display_culture_module_state(ctx, self.config["name"], True)
+
+    async def deactivate_global_state(self, ctx, timeout=None):
+        self.config["global_state"] = False
+        await toggle_culture_module(ctx, self.config["name"], False)
+        await display_culture_module_state(ctx, self.config["name"], False)
+
+        if timeout:
+            print("Timeout True")
+            asyncio.create_task(self.timeout(timeout))
+
+    async def toggle_global_state(self, ctx):
+        if self.is_global_state_active():
+            await self.deactivate_global_state(ctx)
+        else:
+            await self.activate_global_state(ctx)
+
+    # Timeout method
+    async def timeout(self, timeout):
+        print("Starting Timeout Task")
+        await asyncio.sleep(timeout)
+        print("ending Timeout Task")
+        if (
+            not self.is_local_state_active()
+        ):  # Check is module is still deactivated locally after waiting
+            # if not
+            self.activate_global_state()
+
+
+class Obscurity(CultureModule):
+    # Message string may be pre-filtered by other modules
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        # Get the method from the module based on the value of "mode"
+        method = getattr(self, self.config["mode"])
+
+        # Call the method
+        filtered_message = method(message_string)
+        return filtered_message
+
+    def scramble(self, message_string):
+        words = message_string.split()
+        scrambled_words = []
+        for word in words:
+            if len(word) <= 3:
+                scrambled_words.append(word)
+            else:
+                middle = list(word[1:-1])
+                random.shuffle(middle)
+                scrambled_words.append(word[0] + "".join(middle) + word[-1])
         return " ".join(scrambled_words)
 
-    def replace_vowels(self):
+    def replace_vowels(self, message_string):
         vowels = "aeiou"
-        message_content = self.string.lower()
+        message_content = message_string.lower()
         return "".join([" " if c in vowels else c for c in message_content])
 
-    def pig_latin_word(self):
-        if self.string[0] in "aeiouAEIOU":
-            return self.string + "yay"
-        else:
-            first_consonant_cluster = ""
-            rest_of_word = self.string
-            for letter in self.string:
-                if letter not in "aeiouAEIOU":
-                    first_consonant_cluster += letter
-                    rest_of_word = rest_of_word[1:]
-                else:
-                    break
-            return rest_of_word + first_consonant_cluster + "ay"
-
-    def pig_latin(self):
-        words = self.string.split()
-        pig_latin_words = [pig_latin_word(word) for word in words]
+    def pig_latin(self, message_string):
+        words = message_string.split()
+        pig_latin_words = []
+        for word in words:
+            if word[0] in "aeiouAEIOU":
+                pig_latin_words.append(word + "yay")
+            else:
+                first_consonant_cluster = ""
+                rest_of_word = word
+                for letter in word:
+                    if letter not in "aeiouAEIOU":
+                        first_consonant_cluster += letter
+                        rest_of_word = rest_of_word[1:]
+                    else:
+                        break
+                pig_latin_words.append(rest_of_word + first_consonant_cluster + "ay")
         return " ".join(pig_latin_words)
 
-    def camel_case(self):
-        words = self.string.split()
+    def camel_case(self, message_string):
+        words = message_string.split()
         camel_case_words = [word.capitalize() for word in words]
         return "".join(camel_case_words)
 
 
-def scramble_word(word):
-    if len(word) <= 3:
-        return word
-    else:
-        middle = list(word[1:-1])
-        random.shuffle(middle)
-        return word[0] + "".join(middle) + word[-1]
+class Diversity(CultureModule):
+    async def display_info(self, ctx):
+        # Display the message count for each user
+        message = "Message count by user:\n"
+
+        # Sort the user_message_count dictionary by message count in descending order
+        sorted_user_message_count = sorted(
+            USER_MESSAGE_COUNT.items(), key=lambda x: x[1], reverse=True
+        )
+
+        for user_id, count in sorted_user_message_count:
+            user = await ctx.guild.fetch_member(user_id)
+            message += f"{user.name}: {count}\n"
+        await ctx.send(f"```{message}```")
 
 
-def pig_latin_word(word):
-    if word[0] in "aeiouAEIOU":
-        return word + "yay"
-    else:
-        first_consonant_cluster = ""
-        rest_of_word = word
-        for letter in word:
-            if letter not in "aeiouAEIOU":
-                first_consonant_cluster += letter
-                rest_of_word = rest_of_word[1:]
+class Wildcard(CultureModule):
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        """
+        A LLM filter for messages made by users
+        """
+        print("applying wildcard module")
+        get_module = CULTURE_MODULES.get("wildcard", None)
+        llm_prompt = get_module.config["llm_disclosure"]
+        print(llm_prompt)
+        llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+        prompt = PromptTemplate(
+            input_variables=["selected_prompt", "input_text"],
+            template="Use the following prompt: {selected_prompt} to transform this input text: {input_text}. The resulting message should be no longer than 500 characters",
+        )
+        chain = LLMChain(llm=llm, prompt=prompt)
+        response = await chain.arun(
+            {
+                "selected_prompt": llm_prompt,
+                "input_text": message_string,
+            }
+        )
+        return response
+
+
+class Amplify(CultureModule):
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        """
+        A LLM filter for messages during the /eloquence command/function
+        """
+        print("applying amplify module")
+        llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
+        prompt = PromptTemplate(
+            input_variables=["input_text"],
+            template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
+        )
+        chain = LLMChain(llm=llm, prompt=prompt)
+        response = await chain.arun(message_string)
+        return response
+
+
+class Ritual(CultureModule):
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        print("applying ritual module")
+        async for msg in message.channel.history(limit=100):
+            if msg.id == message.id:
+                continue
+            if msg.author.bot and not msg.content.startswith(
+                "※"
+            ):  # This condition lets webhook messages to be checked
+                continue
+            if msg.content.startswith("/") or msg.content.startswith("-"):
+                continue
+            previous_message = msg.content
+            break
+        if previous_message is None:
+            return message_string
+        filtered_message = await self.initialize_ritual_agreement(
+            previous_message, message_string
+        )
+        return filtered_message
+
+    async def initialize_ritual_agreement(self, previous_message, new_message):
+        llm = ChatOpenAI(temperature=0.9)
+        prompt = PromptTemplate(
+            input_variables=["previous_message", "new_message"],
+            template="Write a message that reflects the content in the message '{new_message}' but is cast in agreement with the message '{previous_message}'. Preserve and transfer the meaning and any spelling errors or text transformations in the message in the response.",
+        )  # FIXME: This template does not preserve obscurity text processing. Maybe obscurity should be reaplied after ritual if active in the active_culture_mode list
+        chain = LLMChain(llm=llm, prompt=prompt)
+        response = await chain.arun(
+            previous_message=previous_message, new_message=new_message
+        )
+        return response
+
+
+class Values(CultureModule):
+    async def check_values(self, bot, ctx, message: discord.Message):
+        if message.reference:
+            reference_message = await message.channel.fetch_message(
+                message.reference.message_id
+            )
+            if (
+                reference_message.author.bot
+                and not reference_message.content.startswith(
+                    "※"
+                )  # This condition lets webhook messages to be checked
+            ):
+                await ctx.send("Cannot check values of messages from bot")
+                return
             else:
-                break
-        return rest_of_word + first_consonant_cluster + "ay"
+                print(
+                    f"Original Message Content: {reference_message.content}, posted by {message.author}"
+                )
+
+            current_values_dict = value_revision_manager.agora_values_dict
+            values_list = f"Community Defined Values:\n\n"
+            for value in current_values_dict.keys():
+                values_list += f"* {value}\n"
+            llm_response = await self.llm_analyze_values(
+                current_values_dict, reference_message.content
+            )
+            message_content = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}"
+            await ctx.send(message_content)
+
+    async def llm_analyze_values(self, values_dict, text):
+        """
+        Analyze message content based on values
+        """
+        print("applying values module")
+        llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
+        template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
+        current_values_dict = value_revision_manager.agora_values_dict
+        for (
+            value,
+            description,
+        ) in values_dict.items():
+            template += f"- {value}: {description}\n"
+        template += f"\nNow, analyze the message:\n{text}. Keep your analysis concise."
+        prompt = PromptTemplate.from_template(template=template)
+        chain = LLMChain(llm=llm, prompt=prompt)
+        response = await chain.arun({"text": text})
+        return response
 
 
-async def filter_eloquence(text):
+class Eloquence(CultureModule):
+    async def filter_message(
+        self, message: discord.Message, message_string: str
+    ) -> str:
+        """
+        A LLM filter for messages during the /eloquence command/function
+        """
+        print("applying eloquence module")
+        llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
+        prompt = PromptTemplate.from_template(
+            template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
+        )
+        prompt.format(
+            input_text=message_string
+        )  # TODO: is both formatting and passing the message_string necessary?
+        chain = LLMChain(llm=llm, prompt=prompt)
+        response = await chain.arun(message_string)
+        return response
+
+
+ACTIVE_MODULES_BY_CHANNEL = defaultdict(OrderedSet)
+
+
+async def toggle_culture_module(ctx, module_name, state):
     """
-    A LLM filter for messages during the /eloquence command/function
+    If state is True, turn on the culture module
+    if state is False, turn off the culture module
     """
-    llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
-    prompt = PromptTemplate(
-        input_variables=["input_text"],
-        template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, just rewrite them. Input: {input_text}",
+    channel_name = str(
+        ctx.channel
+    )  # TODO: add the modules, not just the channel name to this list
+    active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[channel_name]
+
+    if state:
+        active_modules_by_channel.add(module_name)
+    else:
+        active_modules_by_channel.remove(module_name)
+
+
+# TODO: what does the variable "state" mean?
+async def display_culture_module_state(ctx, module_name, state):
+    """
+    Send an embed displaying state of active culture moduled by channel
+    """
+    channel_name = str(ctx.channel)
+    active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[channel_name]
+
+    module = CULTURE_MODULES[module_name]
+
+    # TODO: make state a more descriptive variable name
+    if state:
+        name = "Activated"
+        value = module.config["activated_message"]
+    else:
+        name = "Deactivated"
+        value = module.config["deactivated_message"]
+
+    if active_modules_by_channel.list:
+        active_culture_module_values = ", ".join(active_modules_by_channel.list)
+    else:
+        active_culture_module_values = "none"
+
+    embed = discord.Embed(
+        title=f"Culture: {module_name.upper()}", color=discord.Color.dark_gold()
     )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    return chain.run(text)
-
-
-async def filter_amplify(text):
-    """
-    A LLM filter for messages during the /eloquence command/function
-    """
-    llm = OpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
-    prompt = PromptTemplate(
-        input_variables=["input_text"],
-        template="Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone. You must ONLY respond with the revised message. Input text: {input_text}",
+    embed.set_thumbnail(url=module.config["url"])
+    embed.add_field(
+        name=name,
+        value=value,
+        inline=False,
     )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    return chain.run(text)
+    if module.config["mode"] is not None and state:
+        embed.add_field(
+            name="Mode:",
+            value=module.config["mode"],
+            inline=False,
+        )
+    if module.config["message_alter_mode"] == "llm" and state:
+        embed.add_field(
+            name="LLM Prompt:",
+            value=module.config["llm_disclosure"],
+            inline=False,
+        )
+    if module.config["help"] and state:
+        embed.add_field(
+            name="How to use:",
+            value=module.config["how_to_use"],
+            inline=False,
+        )
+    embed.add_field(
+        name="ACTIVE CULTURE MODULES:",
+        value=active_culture_module_values,
+        inline=False,
+    )
+
+    await ctx.send(embed=embed)
+
+
+CULTURE_MODULES = {
+    "wildcard": Wildcard(
+        {
+            "name": "wildcard",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": "llm",
+            "llm_disclosure": None,
+            "activated_message": "Messages will now be process through an LLM.",
+            "deactivated_message": "Messages will no longer be processed through an LLM.",
+            "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "obscurity": Obscurity(
+        {
+            "name": "obscurity",
+            "global_state": False,
+            "local_state": False,
+            "mode": "scramble",
+            "help": False,
+            "message_alter_mode": "text",
+            "alter_message": True,
+            "activated_message": "Messages will be distored based on mode of obscurity.",
+            "deactivated_message": "Messages will no longer be distored by obscurity.",
+            "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "eloquence": Eloquence(
+        {
+            "name": "eloquence",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": "llm",
+            "llm_disclosure": "You are from the Shakespearean era. Please rewrite the messages in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent.",
+            "activated_message": "Messages will now be process through an LLM.",
+            "deactivated_message": "Messages will no longer be processed through an LLM.",
+            "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png",
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "ritual": Ritual(
+        {
+            "name": "ritual",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": "llm",
+            "llm_disclosure": "Write a message that reflects the content in the posted message and is cast in agreement with the previous message. Preserve and transfer any spelling errors or text transformations in these messages in the response.",
+            "activated_message": "A ritual of agreement permeates throughout the group.",
+            "deactivated_message": "Automatic agreement has ended. But will the effects linger in practice?",
+            "url": "",  # TODO: make ritual img
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "diversity": Diversity(
+        {
+            "name": "diversity",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": None,
+            "activated_message": "A measure of diversity influences the distribution of power.",
+            "deactivated_message": "Measurements of diversity continue, but no longer govern this environment's interactions.",
+            "url": "",  # TODO: make ritual img
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "amplify": Amplify(
+        {
+            "name": "amplify",
+            "global_state": False,
+            "local_state": False,
+            "mode": None,
+            "help": False,
+            "message_alter_mode": "llm",
+            "llm_disclosure": "Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone.",
+            "activated_message": "Sentiment amplification abounds.",
+            "deactivated_message": "Sentiment amplification has ceased.",
+            "url": "",  # TODO: make ritual img
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+    "values": Values(
+        {
+            "name": "values",
+            "global_state": False,
+            "mode": None,
+            "help": True,
+            "how_to_use": "Get a vibe check. See how aligned a post is with your community's values.\nReply to the message you want to check and type `check-values`.",
+            "local_state": False,
+            "message_alter_mode": None,
+            "llm_disclosure": "You hold and maintain a set of mutually agreed upon values. The values you maintain are the values defined by the community. You review the contents of messages sent for validation and analyze the contents in terms of the values you hold. You describe in what ways the input text are aligned or unaligned with the values you hold.",
+            "activated_message": "A means of validating the cultural alignment of this online communiuty is now available. Respond to a message with check-values.",
+            "deactivated_message": "Automatic measurement of values is no longer present, through an essence of the culture remains, and you can respond to messages with `check-values` to check value alignment.",
+            "url": "",  # TODO: make ritual img
+            "icon": GOVERNANCE_SVG_ICONS["culture"],
+            "input_value": 0,
+        }
+    ),
+}
+
 
 async def send_msg_to_random_player(game_channel):
     print("Sending random DM...")
@@ -104,147 +564,3 @@ async def send_msg_to_random_player(game_channel):
     await dm_channel.send(
         "🌟 Greetings, esteemed adventurer! A mischievous gnome has entrusted me with a cryptic message just for you: 'In the land of swirling colors, where unicorns prance and dragons snooze, a hidden treasure awaits those who dare to yawn beneath the crescent moon.' Keep this message close to your heart and let it guide you on your journey through the wondrous realms of the unknown. Farewell, and may your path be ever sprinkled with stardust! ✨"
     )
-
-
-def initialize_ritual_agreement(previous_message, new_message):
-    llm = OpenAI(temperature=0.9)
-    prompt = PromptTemplate(
-        input_variables=["previous_message", "new_message"],
-        template="Write a message that reflects the content in {new_message} and is cast in agreement with {previous_message}. Preserve and transfer any spelling errors or text transformations in these messages in the response.",
-    )  # FIXME: This template does not preserve obscurity text processing. Maybe obscurity should be reaplied after ritual if active in the active_culture_mode list
-    chain = LLMChain(llm=llm, prompt=prompt)
-    response = chain.run(previous_message=previous_message, new_message=new_message)
-    return response
-
-async def turn_amplify_on(ctx, channel_culture_modes):
-    channel_culture_modes.append("AMPLIFY")
-    active_global_culture_modules[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: AMPLIFY", color=discord.Color.dark_gold())
-
-    embed.add_field(
-        name="ACTIVATED:",
-        value="Messages will now be process through an LLM.",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    embed.add_field(
-        name="LLM Prompt:",
-        value="Using the provided input text, analyze the original sentiment and then generate a revised version that amplifies the identified sentiment to a greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone.",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-async def turn_amplify_off(ctx, channel_culture_modes):
-    channel_culture_modes.remove("AMPLIFY")
-    active_global_culture_modules[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: AMPLIFY", color=discord.Color.dark_gold())
-    embed.add_field(
-        name="DEACTIVATED",
-        value="Messages will no longer be processed through an LLM",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-async def turn_eloquence_on(ctx, channel_culture_modes):
-    channel_culture_modes.append("ELOQUENCE")
-    active_global_culture_modules[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: ELOQUENCE", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-    )
-    embed.add_field(
-        name="ACTIVATED:",
-        value="Messages will now be process through an LLM.",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    embed.add_field(
-        name="LLM Prompt:",
-        value="You are from the Shakespearean era. Please rewrite the messages in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def turn_eloquence_off(ctx, channel_culture_modes):
-    channel_culture_modes.remove("ELOQUENCE")
-    active_global_culture_modules[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title="Culture: ELOQUENCE", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png"
-    )
-    embed.add_field(
-        name="DEACTIVATED",
-        value="Messages will no longer be processed through an LLM",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def turn_obscurity_off(ctx, channel_culture_modes):
-    channel_culture_modes.remove("OBSCURITY")
-    active_global_culture_modules[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title=f"Culture: OBSCURITY", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
-    )
-    embed.add_field(
-        name="DEACTIVATED",
-        value="Messages will no longer be distored by obscurity.",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)
-
-
-async def turn_obscurity_on(ctx, channel_culture_modes):
-    channel_culture_modes.append("OBSCURITY")
-    active_global_culture_modules[ctx.channel] = channel_culture_modes
-
-    embed = discord.Embed(title=f"Culture: OBSCURITY", color=discord.Color.dark_gold())
-    embed.set_thumbnail(
-        url="https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png"
-    )
-    embed.add_field(
-        name="ACTIVATED",
-        value="Messages will be distored based on mode of obscurity.",
-        inline=False,
-    )
-    embed.add_field(
-        name="Mode:",
-        value=f"{OBSCURITY_MODE}",
-        inline=False,
-    )
-    embed.add_field(
-        name="ACTIVE CULTURE MODES:",
-        value=f"{', '.join(channel_culture_modes)}",
-        inline=False,
-    )
-    await ctx.send(embed=embed)

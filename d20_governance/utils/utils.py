@@ -14,6 +14,7 @@ import shlex
 import os
 
 from d20_governance.utils.constants import *
+from d20_governance.utils.cultures import CULTURE_MODULES, value_revision_manager
 
 from discord.ext import commands
 from io import BytesIO
@@ -32,12 +33,14 @@ class Action:
         retries: int,
         retry_message: str,
         failure_message: str,
+        soft_failure: str,
     ):
         self.action = action
         self.arguments = arguments
         self.retries = retries
         self.retry_message = retry_message
         self.failure_message = failure_message
+        self.soft_failure = soft_failure
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -50,7 +53,38 @@ class Action:
             retries=int(data.get("retries", 0)),
             retry_message=data.get("retry_message", ""),
             failure_message=data.get("failure_message", ""),
+            soft_failure=data.get("soft_failure", ""),
         )
+
+
+class Progress_Condition:
+    def __init__(
+        self,
+        progress_condition: str,
+        arguments: list,
+    ):
+        self.progress_condition = progress_condition
+        self.arguments = arguments
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        progress_condition_string = data.get("progress_condition", "")
+        tokens = shlex.split(progress_condition_string)
+        progress_condition, *arguments = tokens
+        return cls(
+            progress_condition=progress_condition,
+            arguments=arguments,
+        )
+
+
+class DecisionManager:
+    def __init__(self):
+        self.community_name = ""
+        self.community_purpose = ""
+        self.community_prompt = ""
+
+
+decision_manager = DecisionManager()
 
 
 class Stage:
@@ -69,6 +103,7 @@ class Quest:
         self.title = None
         self.stages = None
         self.joined_players = set()
+        self.quest_values = {}
 
         # meta game vars
         self.gen_audio = gen_audio
@@ -76,6 +111,9 @@ class Quest:
         self.fast_mode = fast_mode
         self.game_channel = None
         self.solo_mode = solo_mode
+
+        # game progression vars
+        self.progress_completed = False  # used to interupt action_runner in process_stage if progression condition complete
 
         # josh game specific # TODO: find a more general solution
         self.players_to_submissions = {}
@@ -85,7 +123,7 @@ class Quest:
 
     def update_vars(self):
         # LLM mode does not have yaml
-        if self.mode is not QUEST_MODE_LLM:
+        if self.mode is not SIMULATIONS["llm_mode"]["name"]:
             with open(self.mode, "r") as f:
                 quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
                 self.quest_data = quest_data
@@ -105,21 +143,21 @@ class Quest:
         # If player has already joined, this is a no-op
         self.joined_players.add(player_name)
         # TODO: figure out how to avoid this game-specific check here
-        if self.mode == MINIGAME_JOSH:
+        if self.mode == SIMULATIONS["josh_game"]["name"]:
             # Randomly select a nickname
-            nickname = random.choice(nicknames)
+            nickname = random.choice(JOSH_NICKNAMES)
 
             # Assign the nickname to the player
             self.players_to_nicknames[player_name] = nickname
 
             # Remove the nickname from the list so it can't be used again
-            nicknames.remove(nickname)
+            JOSH_NICKNAMES.remove(nickname)
 
-    def add_submission(self, ctx, text):
+    def add_submission(self, interaction: discord.Interaction, text):
         # get the name of the user invoking the command
-        player_name = str(ctx.message.author.name)
+        player_name = str(interaction.user.name)
         # get the nickname of the user invoking the command
-        if self.mode == MINIGAME_JOSH:
+        if self.mode == SIMULATIONS["josh_game"]["name"]:
             player_name = self.players_to_nicknames.get(player_name)
             self.players_to_submissions[player_name] = text
         else:
@@ -169,8 +207,7 @@ def access_control():
 
 
 # Context Utils
-async def get_channel_context(bot, game_channel):
-    message_obj = None
+async def get_channel_context(bot, game_channel, message_obj: None):
     attempts = 0
     max_attempts = 3  # Number of attempts to fetch the message
     while message_obj is None and attempts < max_attempts:
@@ -208,7 +245,7 @@ async def setup_server(guild):
         else:
             pass
 
-    # Define the d20-agora channel
+    # Define the d20-agora channel and d20-values-space
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(
             read_messages=True, send_messages=True
@@ -216,6 +253,9 @@ async def setup_server(guild):
     }
     agora_category = discord.utils.get(guild.categories, name="d20-explore")
     agora_channel = discord.utils.get(guild.text_channels, name="d20-agora")
+    values_space_channel = discord.utils.get(
+        guild.text_channels, name="d20-values-space"
+    )
     if not agora_channel:
         # Create channel in the d20-explore category and apply permisions
         agora_channel = await guild.create_text_channel(
@@ -223,6 +263,14 @@ async def setup_server(guild):
         )
         logging.info(
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
+        )
+    if not values_space_channel:
+        # Create channel in the d20-explore category and apply permisions
+        values_space_channel = await guild.create_text_channel(
+            name="d20-values-space", overwrites=overwrites, category=agora_category
+        )
+        logging.info(
+            f"Created channel '{values_space_channel.name}' under category '{agora_category}'."
         )
     else:
         pass
@@ -317,7 +365,24 @@ def add_module_to_stack(module):
     return module
 
 
-# Text Utils
+def chunk_text(text):
+    lines = text.split("\n")
+    chunks = []
+    for line in lines:
+        words = line.split()
+        i = 0
+        min = 10
+        max = 14
+        while i < len(words):
+            chunk_size = min if random.random() < 0.6 else max
+            chunk = " ".join(words[i : i + chunk_size])
+            chunks.append(chunk)
+            i += chunk_size
+        # Add a newline as a separate chunk at the end of each line
+        chunks.append("\n")
+    return chunks
+
+
 async def stream_message(ctx, text, original_embed):
     embed = original_embed.copy()
     embed.description = "[...]"
@@ -328,12 +393,15 @@ async def stream_message(ctx, text, original_embed):
         for chunk in chunks:
             # Use the typing context manager to simulate typing
             async with ctx.typing():
-                joined_text.append(chunk)
-                # distorted_text = distort_text(joined_text)  # distorted text disabled
-                joined_text_str = " ".join(joined_text)
+                # Append chunk without adding a space if it's a newline
+                if chunk == "\n":
+                    joined_text.append(chunk)
+                else:
+                    joined_text.append(" " + chunk)
+                joined_text_str = "".join(joined_text)
                 embed.description = joined_text_str
                 await message_canvas.edit(embed=embed)
-                sleep_time = random.uniform(0.7, 1.2)
+                sleep_time = random.uniform(0.3, 0.7)
                 for word in chunk.split():
                     if "," in word:
                         sleep_time += 0.7
@@ -347,20 +415,6 @@ async def stream_message(ctx, text, original_embed):
         await message_canvas.edit(embed=embed)
     except Exception as e:
         print(e)
-
-
-def chunk_text(text):
-    words = text.split()
-    chunks = []
-    i = 0
-    min = 10
-    max = 14
-    while i < len(words):
-        chunk_size = min if random.random() < 0.6 else max
-        chunk = " ".join(words[i : i + chunk_size])
-        chunks.append(chunk)
-        i += chunk_size
-    return chunks
 
 
 def distort_text(word_list):
@@ -501,44 +555,69 @@ def set_module_font_size(module_level=0):
     """
     Set and return font size based on module level
     """
+    print("Seting font path and size")
+
+    # Set base font size
     initial_font_size = 20
+    # Change font size based on level ofmodule nesting
     font_size = initial_font_size - 2 * module_level
 
-    font = ImageFont.truetype(FONT_PATH_LATO, font_size)
+    # Set font path and size
+    font_path_and_size = ImageFont.truetype(FONT_PATH_LATO, font_size)
 
-    return font
+    return font_path_and_size
 
 
-def get_module_text_box_size(draw, module, module_level=0):
+def get_module_text_box_size_and_font(draw, module, module_level=0):
     """
     Calculate the module text box size based on font size
     """
-    font = set_module_font_size(module_level)
-    text_witdh, text_height = draw.textsize(module["name"], font=font)
-    return text_witdh, text_height
+    print("Geting module text box size")
+
+    # Return font pathand size
+    font_path_and_size = set_module_font_size(module_level)
+
+    # Return text width and height based on font path and size
+    text_witdh, text_height = draw.textsize(module, font=font_path_and_size)
+
+    return text_witdh, text_height, font_path_and_size
 
 
-def get_module_height(img, draw, module, x, y, module_level=0):
+def get_module_elements_and_dimensions(
+    img, draw, module, x, y, svg_icon, module_level=0
+):
     """
-    Calculate the height of a module.
-    A module is the max icon height and text height.
+    Return module elements and dimensions
     """
-    font = set_module_font_size(module_level)
-    _, text_height = get_module_text_box_size(draw, module, module_level)
+    print("Getting module elements and dimensions")
 
-    icon = add_svg_icon(img, module["icon"], x, y, module_level)
-    _, icon_height = icon.size
+    # Return text width, height, and font path and size based on level of module nesting
+    text_width, text_height, font_path_and_size = get_module_text_box_size_and_font(
+        draw, module, module_level
+    )
 
-    return max(text_height, icon_height)
+    # Return converted icon svg
+    icon_svg = add_svg_icon(img, svg_icon, x, y, module_level)
+    icon_width, icon_height = icon_svg.size
+
+    return (
+        icon_svg,
+        font_path_and_size,
+        max(text_width, icon_width),
+        max(text_height, icon_height),
+    )
 
 
 def add_svg_icon(img, icon_path, x, y, module_level, size=None):
     """
     Load the SVG icon, replace its fill color with black, and draw it on the canvas.
     """
+    print("Converting, drawing, and returning svg icon")
+
+    # Set buffer
     buf = BytesIO()
 
-    # Set the icon size based on its original size and module_level
+    # if no size is set, set the icon size based on its original size and level of module nesting
     if not size:
         original_size = cairosvg.svg2png(
             url=icon_path, write_to=None, output_height=None
@@ -553,12 +632,12 @@ def add_svg_icon(img, icon_path, x, y, module_level, size=None):
     )
     buf.seek(0)
 
-    icon = Image.open(buf)
-    icon = icon.convert("RGBA")
-    pixel_data = icon.load()
+    icon_svg = Image.open(buf)
+    icon_svg = icon_svg.convert("RGBA")
+    pixel_data = icon_svg.load()
 
-    for i in range(icon.size[0]):
-        for j in range(icon.size[1]):
+    for i in range(icon_svg.size[0]):
+        for j in range(icon_svg.size[1]):
             if pixel_data[i, j][3] > 0:
                 # Replace the fill color with black
                 pixel_data[i, j] = (0, 0, 0, pixel_data[i, j][3])
@@ -566,17 +645,22 @@ def add_svg_icon(img, icon_path, x, y, module_level, size=None):
     if size:
         size = (size[0] - 2 * module_level, size[1] - 2)
 
-    img.paste(icon, (int(x), int(y) + (module_level * 1)), mask=icon)
-    return icon
+    img.paste(icon_svg, (int(x), int(y) + (module_level * 1)), mask=icon_svg)
+
+    return icon_svg
 
 
-def draw_modules(
+def draw_nested_modules(
     img, draw, module, x, y, module_level=0, drawn_modules=set(), max_x=0, max_y=0
 ):
     """
     Draw module names, icons, and rectangles
     """
-    module_height = get_module_height(img, draw, module, x, y, module_level)
+    # FIXME: This function is broken due to changes in governance stack config yaml structure
+    # It is left here to be fixed when that feature is reimplemented
+    module_height = get_module_elements_and_dimensions(
+        img, draw, module, x, y, module_level
+    )
     icon = add_svg_icon(img, module["icon"], x, y, module_level)
     icon_width, _ = icon.size
 
@@ -594,10 +678,9 @@ def draw_modules(
 
     # Calculate the dimensions of the module name and select the appropriate font size
     font = set_module_font_size(module_level)
-    text_width, text_height = get_module_text_box_size(draw, module, module_level)
-    print(
-        f" > Text dimensions for {module['name']}: width={text_width}, height={text_height}"
-    )  # TODO: Remove, here for testing at the moment
+    text_width, text_height = get_module_text_box_size_and_font(
+        draw, module, module_level
+    )
 
     # Draw the module name
     draw.text(
@@ -606,9 +689,6 @@ def draw_modules(
         font=font,
         fill=(0, 0, 0),
     )
-    print(
-        f" >> Module name `{module['name']}` drawn at x={x}, y={y}"
-    )  # TODO: Remove, here for testing at the moment
 
     # Calculate the x coordinate for the next module to be drawn
     next_x = x + icon_width + text_width + MODULE_PADDING
@@ -619,7 +699,7 @@ def draw_modules(
         sub_module_y = y
         for sub_module in module["modules"]:
             # Recurse through draw module function
-            sub_module_x, _ = draw_modules(
+            sub_module_x, _ = draw_nested_modules(
                 img,
                 draw,
                 sub_module,
@@ -642,18 +722,9 @@ def draw_modules(
         y + module_height + MODULE_PADDING - (module_level * 1),
     )
     draw.rectangle([rect_start, rect_end], outline=(0, 0, 0), width=2)
-    print(f"Depth Level:{module_level}, UniqueID:{uniqueID}")
-    print(
-        f"Rectangle drawn for module {module['name']}: start={rect_start}, end={rect_end}"
-    )
-    print(
-        f"   >>> Module {module['name']} finished drawing"
-    )  # TODO: Remove, here for testing
 
     # Calculate the maximum x-coordinate reached during drawing
     max_x = max(max_x, next_x)
-    print(max_x)
-    print(f"##{module_height}##")
 
     if module_level > 0:
         max_x += 5
@@ -666,6 +737,8 @@ def make_governance_snapshot():
     Generate a governance stack snapshot.
     This is a PNG file based on the governance_stack_config YAML.
     """
+    # FIXME: This function is broken due to changes in governance stack config yaml structure
+    # It is left here to be fixed when that feature is reimplemented
     if os.path.isfile(GOVERNANCE_STACK_CONFIG_PATH):
         data = read_config(GOVERNANCE_STACK_CONFIG_PATH)
     else:
@@ -684,7 +757,7 @@ def make_governance_snapshot():
     max_y = 0
     module_height = 0
     for module in data["modules"]:
-        x, max_height = draw_modules(img, draw, module, x, y)
+        x, max_height = draw_nested_modules(img, draw, module, x, y)
         x += 30
         max_y = y + max(max_height, module_height) + MODULE_PADDING * 2
 
@@ -710,6 +783,93 @@ def make_governance_snapshot():
         img_cropped.save("governance_stack_snapshot.png")
 
     FILE_COUNT += 1  # Increment the file count for the next snapshot
+
+
+async def get_module_png(module):
+    """
+    Get module png from make_module_png function based on module
+    """
+    print("Getting module png")
+    modules = {**DECISION_MODULES, **CULTURE_MODULES}
+
+    if module in modules:
+        name = modules[module]["name"]
+        svg_icon = modules[module]["icon"]
+        image_url = await make_module_png(name, svg_icon)
+        return image_url
+    else:
+        print(f"Module {module} not found in module dictionaries")
+        return None
+
+
+async def make_module_png(module, svg_icon):
+    """
+    Make a PNG file for the given module
+
+    This is a simplified version of draw_nested_modules
+
+    This makes a single module image instead of nesting multiple modules
+    """
+    print("Making module png")
+
+    # Initialize the image canvas
+    # Set large to eventually crop
+    # There is probably a more elegant way of doing this
+    img = Image.new("RGB", (2000, 2000), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    # Inset module by seting starting module position
+    x, y = 20, 20
+
+    # Return icon svg, font size, and icon+text width and height
+    (
+        icon_svg,
+        font_size,
+        icon_and_text_width,
+        icon_and_text_height,
+    ) = get_module_elements_and_dimensions(img, draw, module, x, y, svg_icon)
+    # Return the width and height of the svg icon
+    icon_width, icon_height = icon_svg.size
+
+    # Draw the module name
+    draw.text(
+        (x + icon_width + MODULE_PADDING, y),
+        text=module,
+        font=font_size,
+        fill=(0, 0, 0),
+    )
+
+    # TODO: Simplify math calculations
+    # Draw a rectanlge around module text and icon
+    rect_start = (x - MODULE_PADDING, y - MODULE_PADDING)
+    rect_end = (
+        x + icon_and_text_width + x * 2,
+        y + icon_and_text_height + MODULE_PADDING,
+    )
+    draw.rectangle([rect_start, rect_end], outline=(0, 0, 0), width=2)
+
+    # Define the max x and y positions for cropping the image
+    max_x = x + icon_and_text_width + MODULE_PADDING + x * 2
+    max_y = y + icon_and_text_height + MODULE_PADDING * 2
+
+    # Crop the image
+    print("Cropping image")
+    img_cropped = img.crop(
+        (
+            0,
+            0,
+            max_x,
+            max_y,
+        )
+    )
+
+    # Save the cropped image to a PNG file
+    print("Saving cropped image to PNG")
+    os.makedirs("assets/user_created/governance_modules", exist_ok=True)
+    module_img = f"assets/user_created/governance_modules/{module}.png"
+    img_cropped.save(module_img)
+
+    return module_img
 
 
 # FIXME: This Shuffle is not working
@@ -788,14 +948,21 @@ async def check_cmd_channel(ctx, channel_name):
     channel = discord.utils.get(ctx.guild.channels, name=channel_name)
     if ctx.command.name == "help":
         return True
-    elif ctx.channel.name != channel.name:
-        embed = discord.Embed(
-            title="Error: This command cannot be run in this channel.",
-            description=f"Run this command in <#{channel.id}>",
-            color=discord.Color.red(),
-        )
-        await ctx.send(embed=embed)
-        return False
+
+    # Check if the command is being invoked by a user
+    if ctx.message.author and not ctx.message.author.bot:
+        print("True")
+        if ctx.channel.name != channel.name:
+            print("True")
+            embed = discord.Embed(
+                title="Error: This command cannot be run in this channel.",
+                description=f"Run this command in <#{channel.id}>",
+                color=discord.Color.red(),
+            )
+            await ctx.send(embed=embed)
+            return False
+        else:
+            return True
     else:
         return True
 
@@ -815,6 +982,7 @@ def check_dirs():
         with open(LOG_FILE_NAME, "w") as f:
             f.write("This is a new log file.")
             print(f"Creates {LOG_FILE_NAME} file")
+    print("All necessary repo directories are present")
 
 
 # Cleanup
