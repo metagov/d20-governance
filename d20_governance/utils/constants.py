@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from ruamel.yaml import YAML
 from discord.ext import commands
 
+from d20_governance.utils.decisions import Consensus, Majority
+
 
 def read_config(file_path):
     """
@@ -169,7 +171,7 @@ MODULE_PADDING = 10
 ACTIVE_GLOBAL_DECISION_MODULES = {}
 
 DECISION_MODULES = {
-    "majority": {
+    "majority": Majority({
         "name": "majority",
         "description": "Majority requires a simiple majority from the number of people who voteon the options.",
         "state": False,
@@ -180,8 +182,8 @@ DECISION_MODULES = {
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
         "valid_for_continuous_input": True,
-    },
-    "consensus": {
+    }),
+    "consensus": Consensus({
         "name": "consensus",
         "description": "Consensus requires everyone in the simulation to vote on the same option.",
         "state": False,
@@ -192,7 +194,7 @@ DECISION_MODULES = {
         "icon": GOVERNANCE_SVG_ICONS["decision"],
         "input_value": 0,
         "valid_for_continuous_input": True,
-    },
+    }),
     "lazy_consensus": {
         "name": "lazy consensus",
         "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",

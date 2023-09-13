@@ -59,8 +59,19 @@ class Consensus(DecisionModule):
         else:
             return None
 
+class LazyConsensus(DecisionModule):
+    def __init__(self, config):
+        super().__init__(config)
 
-class LazyConsensus(discord.ui.View):
+    @property
+    def create_vote_view(self):
+        pass
+
+    def get_decision_result(self, quest: Quest, results):
+        pass
+
+
+class LazyConsensusView(discord.ui.View):
     def __init__(self, ctx, option, timeout=60):
         super().__init__(timeout=timeout)
         self.ctx = ctx
@@ -79,6 +90,16 @@ class LazyConsensus(discord.ui.View):
             "Your objection has been recorded.", ephemeral=True
         )
 
+    def set_message(self, message):
+        self.message = message
+
+    async def on_timeout(self):
+        # Disable the button after the timeout
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        # Update the message to reflect the change
+        await self.message.edit(view=self)
 
 async def set_decision_module():
     # Set starting decision module if necessary
@@ -147,20 +168,21 @@ async def lazy_consensus(
     views = []
     for name, description in options.items():
         # Create a new View for this option
-        view = LazyConsensus(ctx, name, timeout=timeout)
+        view = LazyConsensusView(ctx, name, timeout=timeout)
         views.append(view)
 
         # Display the option name, description and associated view to the user
-        await send_message(
+        message = await send_message(
             f"**Name:** {name}\n**Description:** {description}", view=view
         )
+        view.set_message(message)
 
     # Wait for all views to finish
     await asyncio.gather(*(view.wait() for view in views))
 
     # Determine the options that had no objections
     non_objection_options = {
-        view.option: options[view.option] for view in views if not view.objections
+        view.option: options[view.option] for view in views if not view.objections and view.option in options
     }
 
     # Iterate over the non_objection_options dict and format the name and description for each

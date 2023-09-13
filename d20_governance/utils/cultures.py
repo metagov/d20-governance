@@ -12,7 +12,7 @@ from langchain.chat_models import ChatOpenAI
 from collections import defaultdict
 
 
-# This is a custom List that tracks order or append and removal as well as groups of channels through sets
+# This is a custom set that tracks order or append and removal as well as groups of channels through sets
 class OrderedSet:
     def __init__(self):
         self.set = set()
@@ -59,6 +59,9 @@ class ValueRevisionManager:
             "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
         }
         self.selected_value = {}
+        self.game_quest_values_dict = {}
+        self.quest_game_channels = []
+        self.lock = asyncio.Lock()
 
     def get_value_choices(self):
         choices = [
@@ -67,32 +70,34 @@ class ValueRevisionManager:
         ]
         return choices
 
-    def store_proposal(
+    async def store_proposal(
         self, proposed_value_name_input, proposed_value_definition_input
     ):
-        proposed_value_name = proposed_value_name_input.value.strip()
-        proposed_value_definition = proposed_value_definition_input.value.strip()
-        self.proposed_values_dict[proposed_value_name] = proposed_value_definition
+        async with self.lock:
+            proposed_value_name = proposed_value_name_input.value.strip()
+            proposed_value_definition = proposed_value_definition_input.value.strip()
+            self.proposed_values_dict[proposed_value_name] = proposed_value_definition
 
-    def update_values_dict(self, select_value, vote_result):
-        if not vote_result:
-            print("value dict not updated")
-        else:
-            del value_revision_manager.agora_values_dict[select_value]
-            value_revision_manager.agora_values_dict.update(vote_result)
-            message_content = ""
-            for (
-                value,
-                description,
-            ) in value_revision_manager.agora_values_dict.items():
-                message_content += f"{value}:\n{description}\n\n"
-            message = f"```{message_content}```"
-            module = CULTURE_MODULES.get("values", None)
-            module.config["values_list"] = message
+    async def update_values_dict(self, select_value, vote_result):
+        async with self.lock:
+            if not vote_result:
+                print("value dict not updated")
+            else:
+                del value_revision_manager.agora_values_dict[select_value]
+                value_revision_manager.agora_values_dict.update(vote_result)
+                message_content = ""
+                for (
+                    value,
+                    description,
+                ) in value_revision_manager.agora_values_dict.items():
+                    message_content += f"{value}:\n{description}\n\n"
+                message = f"```{message_content}```"
+                module = CULTURE_MODULES.get("values", None)
+                module.config["values_list"] = message
 
-    def clear_proposed_values(self):
-        self.proposed_values_dict.clear()
-
+    async def clear_proposed_values(self):
+        async with self.lock:
+            self.proposed_values_dict.clear()
 
 value_revision_manager = ValueRevisionManager()
 

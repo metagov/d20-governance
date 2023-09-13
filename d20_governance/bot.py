@@ -915,7 +915,7 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        value_revision_manager.store_proposal(
+        await value_revision_manager.store_proposal(
             self.proposed_value_name, self.proposed_value_definition
         )
 
@@ -924,17 +924,27 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
         )
 
         await asyncio.sleep(2)
+        print(f"proposed value: ")
+
+        # Create a dictionary with only the proposed name and value
+        current_proposal = {
+            self.proposed_value_name.value: self.proposed_value_definition.value
+        }
+
         vote_result = await lazy_consensus(
             channel=interaction.channel,
-            question=f"Should we change the following value **{value_revision_manager.selected_value}** to the newly proposed value: **{self.proposed_value_name}: {self.proposed_value_definition}**?",
-            options=value_revision_manager.proposed_values_dict,
+            question=f"Should we change the following value {value_revision_manager.selected_value} to the newly proposed value: {self.proposed_value_name}: {self.proposed_value_definition}?",
+            options=current_proposal,
             timeout=20,
         )
 
-        value_revision_manager.update_values_dict(
-            value_revision_manager.selected_value, vote_result
-        )
-        value_revision_manager.clear_proposed_values()
+        # Check if the proposed value was accepted (i.e., not objected to)
+        if self.proposed_value_name.value in vote_result:
+            await value_revision_manager.update_values_dict(
+                value_revision_manager.selected_value, vote_result
+            )
+
+        await value_revision_manager.clear_proposed_values()
 
 
 class ValueRevisionView(discord.ui.View):
