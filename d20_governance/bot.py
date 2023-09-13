@@ -15,6 +15,7 @@ from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
 from discord import app_commands
+from discord.ext import tasks
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -29,7 +30,7 @@ intents.guilds = True
 class MyBot(commands.Bot):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.quest = None
+        self.quest = Quest()
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -129,10 +130,15 @@ class MyBot(commands.Bot):
             traceback_str = "".join(traceback.format_exception(type, value, tb))
             print(f"Unhandled exception:\n{traceback_str}")
             logging.error(f"Unhandled exception:\n{traceback_str}")
-            await context.send("An error occurred.")
+            if bot.quest.game_channel:
+                print("quest game channel = true")
+                await bot.quest.game_channel.send("An error occured")
+            else:
+                print("quest game channel = false")
+                await context.send("An error occurred.")
 
     @commands.Cog.listener()
-    async def on_guild_join(guild):
+    async def on_guild_join(self, guild):
         """
         Event handler for when the bot has been invited to a new guild.
         """
@@ -140,7 +146,7 @@ class MyBot(commands.Bot):
         await setup_server(guild)
 
     @commands.Cog.listener()
-    async def on_reaction_add(reaction, user):
+    async def on_reaction_add(self, reaction, user):
         if user.bot:
             return
 
@@ -155,7 +161,7 @@ class MyBot(commands.Bot):
                 bot.voters.add(user.id)
 
     @commands.Cog.listener()
-    async def on_command(ctx):
+    async def on_command(self, ctx):
         """
         Event listener that prints command invoked, channel where invoked, and channel id
         """
@@ -164,7 +170,7 @@ class MyBot(commands.Bot):
         )
 
     @commands.Cog.listener()
-    async def on_command_error(ctx, error):
+    async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CommandNotFound):
             await ctx.send("That command does not exist.")
         else:
@@ -177,7 +183,7 @@ class MyBot(commands.Bot):
         logging.error(error_message)
 
     @commands.Cog.listener()
-    async def on_error(event):
+    async def on_error(self, event):
         type, value, tb = sys.exc_info()
         traceback_str = "".join(traceback.format_exception(type, value, tb))
         print(f"Unhandled exception in {event}:\n{traceback_str}")
@@ -192,30 +198,27 @@ def run_bot():
     bot.run(token=DISCORD_TOKEN)
 
 
-@bot.command()
-async def help(ctx, command: str = None):
-    """
-    Help
-    """
+@bot.tree.command(name="help", description="Help information")
+async def help(interaction: discord.Interaction, command: str = None):
     prefix = bot.command_prefix
     if command:
         # Display help for a specific command
         cmd = bot.get_command(command)
         if not cmd:
-            await ctx.send(f"Sorry, I couldn't find command **{command}**.")
+            await interaction.response.send_message(f"Sorry, I couldn't find command **{command}**.", ephemeral=True)
             return
         cmd_help = cmd.help or "No help available."
         help_embed = discord.Embed(
             title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
         )
-        await ctx.send(embed=help_embed)
+        await interaction.response.send_message(embed=help_embed, ephemeral=True)
     else:
         # Display a list of available commands
         cmds = [c.name for c in bot.commands if not c.hidden]
         cmds.sort()
         embed = discord.Embed(
             title="Commands List",
-            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.",
+            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.\n\nTo play with the bot, visit `#d20-agora` and select any of the culture modules. You can also `/embark` from the same channel on a quest to form a new group identity and voice.",
             color=0x00FF00,
         )
         for cmd in cmds:
@@ -226,7 +229,7 @@ async def help(ctx, command: str = None):
                 value=description or "No description available.",
                 inline=False,
             )
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # QUEST FLOW
@@ -248,14 +251,6 @@ async def start_quest(ctx, quest: Quest):
 
     # Send and store a message object as an initial message for the new quest game channel
     message_obj = await quest.game_channel.send(embed=embed)
-
-    bot.loop.create_task(values_module.randomly_check_values(bot))
-
-    # TODO: WIP value inheritance from agora into quest
-    value_revision_manager.game_quest_values_dict = dict(
-        value_revision_manager.agora_values_dict
-    )
-    print(value_revision_manager.game_quest_values_dict)
 
     # Sleep for 3 seconds to give time for users to get to the channel and avoid possible latency issues in fetching the message_object
     await asyncio.sleep(3)
@@ -310,29 +305,21 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
         await future
 
     if quest.gen_images:
-        if (
-            hasattr(stage, "image_path") and stage.image_path
-        ):  # Check if stage has an image_path
+        # Check if stage has an non-empty image_path
+        if hasattr(stage, "image_path") and stage.image_path != "None":
             image = Image.open(stage.image_path)  # Open the image
+            image.save("generated_image.png")  # Save the image to a file
+        # If no image, pass
+        elif hasattr(stage, "image_path") and stage.image_path == "None":
+            pass
         else:
             # Generate intro image and send to temporary channel
             image = generate_image(stage.message)
-    else:
-        # Create an empty image representing the void
-        size = (256, 256)
-        border = 10
-        image = Image.new("RGB", size, (255, 255, 255))
-        draw = ImageDraw.Draw(image)
-        draw.rectangle(
-            [(border, border), (size[0] - border, size[1] - border)],
-            fill=(20, 20, 20),
-        )
-
-    image.save("generated_image.png")  # Save the image to a file
+            image.save("generated_image.png")  # Save the image to a file
 
     # Post the image to the Discord channel
-    await game_channel_ctx.send(file=discord.File("generated_image.png"))
     if os.path.exists("generated_image.png"):
+        await game_channel_ctx.send(file=discord.File("generated_image.png"))
         os.remove("generated_image.png")
 
     if quest.gen_audio:
@@ -354,6 +341,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
         await game_channel_ctx.send(embed=embed)
     else:
         await stream_message(quest.game_channel, stage.message, embed)
+    
+    # store most recent message in reminder class
+    reminder_manager.current_stage_message = stage.message
 
     # Call actions and poll for progress conditions simultaneously
     actions = stage.actions
@@ -473,50 +463,64 @@ async def countdown(ctx, timeout_seconds, text: str = None):
     Send an updating countdown display
     """
     if hasattr(bot, "quest") and bot.quest.fast_mode:
-        timeout_seconds = 15
+        timeout_seconds = 10
 
     # TODO: make this better
     remaining_seconds = int(timeout_seconds)
+    remaining_minutes = remaining_seconds / 60
 
     # Set new message interval
     message_interval_seconds = 60
     next_message_time = time.time() + message_interval_seconds
 
-    remaining_minutes = remaining_seconds / 60
-
     first_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
     message = await ctx.send(first_message)
 
-    while remaining_seconds > 0:
+    @tasks.loop(seconds=10)
+    async def update_countdown():
+        nonlocal remaining_seconds, remaining_minutes
         remaining_minutes = remaining_seconds / 60
         new_message = (
             f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
         )
-        if time.time() >= next_message_time:
-            new_message = await ctx.send(new_message)
-            next_message_time = (
-                time.time() + message_interval_seconds
-            )  # schedule next message
+        await message.edit(content=new_message)
+        if remaining_minutes <= 0:
+            new_message = f"```⏲️ Counting down finished.```"
+            await ctx.send(new_message)
+            print("⧗ Countdown finished.")
+            update_countdown.stop()
 
-        # TODO: can we avoid this check
-        if bot.quest.progress_completed == True:  # check if all submissions are done
-            print("Stopping countdown")
-            if time.time() >= next_message_time:
-                await new_message.edit(
-                    content="```⏲️ All submissions submitted. Countdown finished.```"
-                )
-            else:
-                await message.edit(
-                    content="```⏲️ All submissions submitted. Countdown finished.```"
-                )
-            break
 
-        remaining_seconds -= 1
-        await asyncio.sleep(1)
-
-    if remaining_seconds <= 0:  # send this message if time runs out
-        await message.edit(content="```⏲️ Counting down finished.```")
-    print("⧗ Countdown finished.")
+        # Check is all submissions have been submitted
+        if bot.quest.progress_completed:
+            await message.edit(content="```⏲️ All submissions submitted. Countdown finished.```")
+            update_countdown.stop()
+    
+    @tasks.loop(minutes=1)
+    async def send_new_message():
+        nonlocal remaining_minutes
+        if remaining_minutes <= 0:
+            await message.edit(content="```⏲️ Counting down finished.```")
+            print("⧗ Countdown finished.")
+            send_new_message.stop()
+        if remaining_minutes <= 2.5:
+            new_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
+            message = await ctx.send(new_message)
+        
+        
+    update_countdown.start()
+    send_new_message.start()
+    
+    try:
+        while send_new_message.is_running() and update_countdown.is_running():
+            remaining_seconds -= 1
+            await asyncio.sleep(1)
+            
+    
+    except asyncio.CancelledError:
+        update_countdown.stop()
+        send_new_message.stop()
+        print("⧗ Countdown cancelled.")
 
 
 async def all_submissions_submitted(ctx):
@@ -573,10 +577,42 @@ async def progress_timeout(ctx, seconds: str):
     return True
 
 
+@bot.tree.command(name="remind_me", description="Send most recent stage message")
+async def remind_me(interaction: discord.Interaction):
+    await interaction.response.send_message(reminder_manager.current_stage_message, ephemeral=True)
+
+
+async def turn_on_random_value_check(ctx):
+    global values_check_task
+    if bot.quest.game_channel == None:
+        print("bot quest = none")
+        values_check_task = bot.loop.create_task(
+            values_module.randomly_check_values(bot, ctx, ctx.channel)
+        )
+    else:
+        print("printing here")
+        values_check_task = bot.loop.create_task(
+            values_module.randomly_check_values(bot, ctx, bot.quest.game_channel)
+        )
+    print("value check loop turned on")
+
+async def turn_off_random_value_check(ctx):
+    global values_check_task
+    if values_check_task is not None and not values_check_task.done():
+        values_check_task.cancel()
+        print("value check loop turned off")
+
+
 async def end(ctx):
     """
     Archive the quest and channel
     """
+    # Check if values_check_task is running and if so cancel process
+    global values_check_task
+    if values_check_task is not None and not values_check_task.done():
+        values_check_task.cancel()
+        print("value check loop canceled")
+
     print("Archiving...")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
@@ -800,18 +836,17 @@ class JoinLeaveView(discord.ui.View):
                 )
                 await self.update_embed(interaction)
                 if len(quest.joined_players) == self.num_players:
-                    print(quest.joined_players)
-                    print(self.num_players)
+                    # delete the current message
+                    await interaction.message.delete()
 
-                    # remove join and leave buttons
-                    await interaction.message.edit(view=None)
                     # create channel for game
                     await make_game_channel(self.ctx, quest)
                     embed = discord.Embed(
                         title=f"{self.ctx.author.display_name}'s proposal to play has enough players, and is ready to play",
                         description=f"**Quest:** {quest.game_channel.mention}\n\n**Players:** {', '.join(quest.joined_players)}",
                     )
-                    await interaction.message.edit(embed=embed)
+                    # post updated message
+                    await interaction.channel.send(embed=embed)
                     await start_quest(self.ctx, self.quest)
             else:
                 # Ephemeral means only the person who took the action will see this message
@@ -909,54 +944,6 @@ class ValueRevisionView(discord.ui.View):
         self.add_item(SelectValue(options))
 
 
-# EVENTS
-# @bot.event
-# async def on_ready():
-#     """
-#     Event handler for when the bot has logged in and is ready to start interacting with Discord
-#     """
-#     await bot.tree.sync()
-#     logging.basicConfig(
-#         filename="logs/bot.log",
-#         level=logging.INFO,
-#         format="%(asctime)s %(levelname)s %(message)s",
-#     )
-#     print(">> Logging to logs/bot.log <<")
-#     with open(f"{LOGGING_PATH}/bot.log", "a") as f:
-#         f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
-#     logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
-#     value_revision_manager.__init__()
-#     for guild in bot.guilds:
-#         await bot.tree.sync(guild=guild)
-#         await setup_server(guild)
-#         await delete_all_webhooks(guild)
-
-
-# @bot.event
-# async def on_guild_join(guild):
-#     """
-#     Event handler for when the bot has been invited to a new guild.
-#     """
-#     print(f"D20 Bot has been invited to server `{guild.name}`")
-#     await setup_server(guild)
-
-
-# @bot.event
-# async def on_reaction_add(reaction, user):
-#     if user.bot:
-#         return
-
-#     if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
-#         if user.id in bot.voters:
-#             await reaction.remove(user)
-#             await user.send(
-#                 f"Naughty naughty! You cannot vote twice!",
-#                 delete_after=timeouts["vote"],
-#             )
-#         else:
-#             bot.voters.add(user.id)
-
-
 # QUEST START AND PROGRESSION
 @bot.tree.command(name="embark", description="Propose a quest to embark on")
 # @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -1001,9 +988,9 @@ async def embark(
     # Make Quest Builder view and return values from selections
     print("Waiting for proposal to be built...")
 
-    # if not 1 <= number_of_players <= 20:
-    #     await ctx.send("The game requires at least 2 and at most 20 players")
-    #     return
+    if not 1 <= number_of_players.value <= 8:
+        await ctx.send("The game requires at least 2 and at most 8 players")
+        return
 
     # Quest setup
     quest = setup_quest(
@@ -1064,22 +1051,14 @@ async def make_game_channel(ctx, quest: Quest):
         name=f"d20-{quest.title}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    value_revision_manager.quest_game_channels.append(quest.game_channel)
 
 
 # CULTURE MODULES
-
-# TODO: Add resubmit command for submit_prompt
-
-
 # Community generated wildcard culture module
-@bot.tree.command(name="submit_prompt", description="Add a new wildcard prompt.")
-async def submit_prompt(interaction: discord.Interaction, prompt: str):
+@bot.command(hidden=True)
+async def construct_and_post_prompt(ctx):
     # assign prompt, affiliation, and purpose to the prompts dictionary
-    PROMPTS[prompt] = (
-        decision_manager.community_name,
-        decision_manager.community_purpose,
-    )
+    prompt = f"Group name: {prompt_object.group_name}, Group goal: {prompt_object.group_purpose}, Group goal: {prompt_object.group_goal}"
 
     # assign the prompt to the wildcard culture module config
     module = CULTURE_MODULES.get("wildcard", None)
@@ -1089,16 +1068,16 @@ async def submit_prompt(interaction: discord.Interaction, prompt: str):
     # the community that defined it,
     # the community's purpose,
     # and the values they had when they made the prompt
-    confirmation_message = "has made their submission"
-    await submit_message(interaction, prompt, confirmation_message)
+    confirmation_message = "A new group prompt has been constructed"
+    await ctx.send(f"```{confirmation_message}: {prompt}```")
 
 
-@bot.command()
+@bot.command(hidden=True)
 async def select_random_culture_module(ctx):
     """
     Randomly select a culture module to turn on
     """
-    culture_commands = ["eloquence", "obscurity", "amplify"]
+    culture_commands = ["eloquence", "obscurity", "amplify", "values"]
     random_command_name = random.choice(culture_commands)
     logging.info(f"Selected random culture module: {random_command_name}")
 
@@ -1119,7 +1098,7 @@ async def select_random_culture_module(ctx):
         logging.error(error_msg)
 
 
-@bot.command()
+@bot.command(hidden=True)
 async def turn_off_random_culture_module(ctx):
     random_command_name = random_culture_module_manager.random_culture_module
     random_command = bot.get_command(random_command_name)
@@ -1140,7 +1119,6 @@ async def turn_off_random_culture_module(ctx):
 
 
 @bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 async def wildcard(ctx):
     """
     Toggle eloquence module
@@ -1206,6 +1184,13 @@ async def values(ctx):
         return
 
     await module.toggle_global_state(ctx)
+
+    if module.config["global_state"] == True:
+        print("true")
+        await turn_on_random_value_check(ctx)
+    else:
+        print("false")
+        await turn_off_random_value_check(ctx)
 
 
 # TODO: it would be nice to not have this toggled when displaying the info, maybe have a different command for display diversity info
@@ -1316,7 +1301,7 @@ async def info(
 
 
 @bot.command(hidden=True)
-async def show_decisions(ctx):
+async def list_decisions(ctx):
     """
     Show a list of decisions made
     """
@@ -1455,7 +1440,6 @@ async def setcool(ctx, duration=0):
 
 
 @bot.tree.command(name="submit", description="Make a submission.")
-@access_control()
 async def submit(interaction: discord.Interaction, submission: str):
     """
     Submit a message
@@ -1470,8 +1454,7 @@ async def submit(interaction: discord.Interaction, submission: str):
     await submit_message(interaction, submission, confirmation_message)
 
 
-@bot.tree.command(name="resubmit", description="Change your last submission.")
-@access_control()
+@bot.tree.command(name="resubmit", description="Change your submission.")
 async def resubmit(interaction: discord.Interaction, submission: str):
     """
     Resubmit/revise a message
@@ -1485,10 +1468,12 @@ async def resubmit(interaction: discord.Interaction, submission: str):
 
 
 async def submit_message(
-    interaction: discord.Interaction, submission: str, confirmation_message
+    interaction: discord.Interaction,
+    value_one: str,
+    confirmation_message,
 ):
     if hasattr(bot, "quest"):
-        bot.quest.add_submission(interaction, submission)
+        bot.quest.add_submission(interaction, value_one)
         if bot.quest.mode != SIMULATIONS["josh_game"]:
             await interaction.response.send_message(
                 f"🎉  {interaction.user.name} {confirmation_message} 📮"
@@ -1513,12 +1498,14 @@ async def post_submissions(ctx):
     """
     submissions = []
     players_to_submissions = bot.quest.players_to_submissions
-    title = "Submissions:"
+    title = "List of submitted proposals:"
 
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"📜 **{player_name}**:\n          🗣️  {submission}")
+        submissions.append(
+            f"📜 **{player_name}**:\n🗣️  {submission}"
+        )
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
@@ -1531,7 +1518,7 @@ async def post_submissions(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command()
+@bot.command(hidden=True)
 async def post_proposal_values(ctx):
     message = "Proposed values:\n"
     for key, value in value_revision_manager.proposed_values_dict.items():
@@ -1545,16 +1532,8 @@ async def post_proposal_values(ctx):
     description="Press enter to select and propose a revision to the values list",
 )
 async def propose_value_revision(interaction: discord.Interaction):
-    channel = interaction.channel
-    values_dict = {}
-
-    if channel in value_revision_manager.quest_game_channels:
-        values_dict = value_revision_manager.game_quest_values_dict
-    else:
-        values_dict = value_revision_manager.agora_values_dict
-
     view = ValueRevisionView()
-    view.assign_values(values_dict)
+    view.assign_values(value_revision_manager.agora_values_dict)
 
     await interaction.response.send_message(
         f"Here are the current values:",
@@ -1586,20 +1565,8 @@ async def trigger_vote(
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
         contenders = list(bot.quest.players_to_submissions.values())
-        winning_result = await vote(
-            ctx, quest, question, contenders, int(timeout), topic
-        )
+        await vote(ctx, quest, question, contenders, int(timeout), topic)
         # Reset the players_to_submissions dictionary for the next round
-        if topic == "community_prompt":
-            # construct the values list using either the default values dictionary
-            # or the values dictionary defined in the agora
-            values_list = ""
-            current_values_dict = value_revision_manager.agora_values_dict
-            for key, value in current_values_dict.items():
-                values_list += f"* {key}: {value}\n\n"
-            await ctx.send(
-                f"New wildcard prompt added:\n```Prompt: {winning_result}```\n* Prompt added by **{decision_manager.community_name}**\n* With the following purpose: **{decision_manager.community_purpose}**\n* And the following values:\n```{values_list}```"
-            )
         bot.quest.reset_submissions()
 
 
@@ -1621,18 +1588,8 @@ async def trigger_vote(
         app_commands.Choice(name="Long (90 seconds)", value=90),
     ]
 )
-@app_commands.choices(
-    category=[
-        app_commands.Choice(name="Value", value="value"),
-        app_commands.Choice(name="Article", value="article"),
-        app_commands.Choice(name="Goal", value="goal"),
-        app_commands.Choice(name="Amendment", value="amendment"),
-    ]
-)
-@access_control()
 async def propose(
     interaction: discord.Interaction,
-    category: app_commands.Choice[str],
     proposal: str,
     duration: app_commands.Choice[int],
     decision_method: app_commands.Choice[str],
@@ -1642,23 +1599,6 @@ async def propose(
     """
     quest = bot.quest
     options = ["Approve proposal", "Object proposal"]
-    print(decision_method.value)
-    print(options)
-    print(category)
-
-    if category.value == "value":
-        print("inside values category")
-        value_name = await prompt_user(interaction, "Enter the name of the value:")
-        value_definition = await prompt_user(
-            interaction, "Enter the definition of the value:"
-        )
-        value_example = await prompt_user(interaction, "Enter an example of the value:")
-
-        value_param = {
-            "name": value_name,
-            "definition": value_definition,
-            "example": value_example,
-        }
 
     await vote(interaction, quest, proposal, options, duration, decision_method)
 
@@ -1675,7 +1615,7 @@ async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> 
 
 
 # STREAM OF DELIBERATION QUESTIONS
-@bot.command()
+@bot.command(hidden=True)
 async def send_deliberation_questions(ctx, questions):
     if hasattr(bot, "quest") and bot.quest.fast_mode:
         timeout_seconds = 15
@@ -1686,22 +1626,14 @@ async def send_deliberation_questions(ctx, questions):
         questions = deliberation_questions_for_name
     if questions == "deliberation_questions_for_purpose":
         questions = deliberation_questions_for_purpose
-    if questions == "deliberation_questions_for_prompt":
-        questions = deliberation_questions_for_prompt
+    if questions == "deliberation_questions_for_goal":
+        questions = deliberation_questions_for_goal
 
-    random.shuffle(questions)
-    asked_questions = []
+    random_question = random.choice(questions)
+    embed = discord.Embed(title="A Deliberation Question:", description=random_question)
+    await ctx.channel.send(embed=embed)
 
-    for question in questions:
-        if question not in asked_questions:
-            embed = discord.Embed(
-                title="**Deliberation Question:**",
-                description=question,
-            )
-            await ctx.channel.send(embed=embed)
-            asked_questions.append(question)
-            await asyncio.sleep(20)
-
+    
 
 # CLEANING COMMANDS
 @bot.command(hidden=True)
@@ -1819,11 +1751,8 @@ async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
     """
     if module in module_dict:
         module_name = module_dict[module]["name"]
-        print(module_name)
         svg_icon = module_dict[module]["icon"]
-        print(svg_icon)
         image = make_module_png(module_name, svg_icon)
-        print(image)
     await ctx.send(file=discord.File(image))
 
 
@@ -1852,39 +1781,6 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
 
 
-# COMMAND TRACKING
-# @bot.event
-# async def on_command(ctx):
-#     """
-#     Event listener that prints command invoked, channel where invoked, and channel id
-#     """
-#     print(
-#         f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
-#     )
-
-
-# @bot.event
-# async def on_command_error(ctx, error):
-#     if isinstance(error, commands.CommandNotFound):
-#         await ctx.send("That command does not exist.")
-#     else:
-#         await ctx.send("An error occurred.")
-#     traceback_text = "".join(
-#         traceback.format_exception(type(error), error, error.__traceback__)
-#     )
-#     error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
-#     print(error_message)
-#     logging.error(error_message)
-
-
-# @bot.event
-# async def on_error(event):
-#     type, value, tb = sys.exc_info()
-#     traceback_str = "".join(traceback.format_exception(type, value, tb))
-#     print(f"Unhandled exception in {event}:\n{traceback_str}")
-#     logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
-
-
 # GOVERNANCE INPUT
 async def clear_decision_input_values(ctx):
     """
@@ -1899,7 +1795,7 @@ async def clear_decision_input_values(ctx):
 
 @bot.command(hidden=True)
 async def list_values(ctx):
-    message_content = "Our collectively defined values + definitions:\n\n"
+    message_content = "The Community's Current Values:\n\n"
     for (
         value,
         description,
@@ -1907,6 +1803,7 @@ async def list_values(ctx):
         message_content += f"{value}:\n{description}\n\n"
     message = f"```{message_content}```"
     await ctx.send(message)
+    return message
 
 
 async def update_decision_module(context, new_decision_module):
@@ -2177,9 +2074,8 @@ async def process_message(ctx, message):
                 if module_name == "wildcard":
                     get_module = CULTURE_MODULES.get("wildcard", None)
                     llm_prompt = get_module.config["llm_disclosure"]
-                    await ctx.send(
-                        f"{filtered_message}\n\n```Message made using prompt '{llm_prompt}' by {decision_manager.community_name} with purpose:{decision_manager.community_purpose}```"
-                    )
+                    prompt_result = f"{filtered_message}\n\n```Message made using prompt created by {prompt_object.group_name} with\n* purpose:{prompt_object.group_purpose}\n* and goal: {prompt_object.group_goal}```"
+                    await send_webhook_message(webhook, message, prompt_result)
                 else:
                     await send_webhook_message(webhook, message, filtered_message)
 
@@ -2204,84 +2100,3 @@ async def apply_culture_modules(active_modules, message, message_content: str):
         ]  # TODO: active_modules list should be the modules themselves, not their names
         message_content = await module.filter_message(message, message_content)
     return message_content
-
-
-# ON MESSAGE
-# @bot.event
-# async def on_message(message):
-#     """
-#     Global message event listener
-#     """
-#     global VOTE_RETRY
-#     context = await bot.get_context(message)
-#     try:
-#         if message.author == bot.user:  # Ignore messages sent by the bot itself
-#             return
-
-#         # Allow the "-help" command to run without channel checks
-#         if message.content.startswith("-help"):
-#             await bot.process_commands(message)
-#             return
-
-#         # If message is a slash command, proceed directly to processing
-#         if message.content.startswith("/"):
-#             await bot.process_commands(message)
-#             return
-
-#         # If message is a regular command, proceed directly to processing
-#         if message.content.startswith("-"):
-#             await bot.process_commands(message)
-#             return
-
-#         # This symbol ensures webhook messages don't loop
-#         if message.content.startswith("※"):
-#             return
-
-#         for module_name in (
-#             CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
-#         ):
-#             if (
-#                 message.content.lower() == f"{module_name} +1"
-#                 or message.content.lower() == f"{module_name} -1"
-#             ):
-#                 change = 1 if message.content.lower().endswith("+1") else -1
-#                 if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
-#                     if VOTE_RETRY:
-#                         decision_bucket = cooldowns["decisions"].get_bucket(message)
-#                         retry_after = decision_bucket.update_rate_limit()
-#                         if retry_after:
-#                             await context.send(
-#                                 f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
-#                             )
-#                             return
-
-#                         CONTINUOUS_INPUT_DECISION_MODULES[module_name][
-#                             "input_value"
-#                         ] += change
-#                         await display_module_status(
-#                             context, CONTINUOUS_INPUT_DECISION_MODULES
-#                         )
-#                         return
-#                     else:
-#                         return
-#                 elif module_name in CULTURE_MODULES:
-#                     culture_bucket = cooldowns["cultures"].get_bucket(message)
-#                     retry_after = culture_bucket.update_rate_limit()
-#                     if retry_after:
-#                         await context.send(
-#                             f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
-#                         )
-#                         return
-
-#                     module = CULTURE_MODULES[module_name]
-#                     module.config["input_value"] += change
-#                     await display_module_status(context, CULTURE_MODULES)
-#                     return
-
-#         await process_message(context, message)
-#     except Exception as e:
-#         type, value, tb = sys.exc_info()
-#         traceback_str = "".join(traceback.format_exception(type, value, tb))
-#         print(f"Unhandled exception:\n{traceback_str}")
-#         logging.error(f"Unhandled exception:\n{traceback_str}")
-#         await context.send("An error occurred.")

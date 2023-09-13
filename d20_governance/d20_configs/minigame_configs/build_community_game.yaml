@@ -1,339 +1,146 @@
-title: 'Governance Game: Build a Community'
+title: 'Group Quest'
 stages:
-  - stage: Introduction
+  - stage: The Quest Begins
     message: |
-      You are a group embeded within a larger community. Your task is to form a new group identiy that will shape discussion in the agora.
+      Welcome to Governance Game: Build a Group Voice! 🌍💬
 
-      You will:
+      You're a group within a larger community. Your task is to form a new group identity that will shape discussions and values in the agora. Let's get started! 
 
-      1️⃣ Give your group a name and goal, and 
-      2️⃣ Describe the culture of your group
-    actions:
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/online_community.png"
- 
-  - stage: Values
-    message: |
-      Your group has also inherited a set of values from the public agora. 
-
-      These values can be contested by proposing a values revision.
-
-      The values this group holds can be used to check how values align this group is while playing this game.
-
-      The values you settle on will also be reflected to the public agora when they make use of your wildcard prompt.
-      
-      To propose a value revision use the command `/propose_value_revision` and press enter.
-    actions:
-      - action: values   
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/online_community.png"
-
-  - stage: Community Name
-    message: |
-      Let's make sense of our situation by giving our group a name.
+      Your mission:
+      1️⃣ Give your group a name
+      2️⃣ Give your group a purpose
+      3️⃣ Give your group a goal
     actions:
       - action: pause 5
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/name.png"
-  
-  - stage: 'Submit Answers: Community Name'
+
+  - stage: Group Name
     message: |
-      Take a moment to submit a proposal to the question: `What should we call ourselves?`.
+      Step 1: Name and Goal 🏷️🎯
 
-      You have 2 minutes to submit an answer.
+      Take a moment to propose a name for your group. Type `/submit_ <submission>` to submit your proposal.
 
-      To submit your proposal, type `/submit` followed by your message.
-      
-      For example: `/submit <this is my submission>`
+      Remember, you can change your submission using `/resubmit`. Be creative and have fun! 🚀
 
-      If you make a mistake or change your mine you can use `/resubmit` to change your submission.
-
-      See `-help submit` for more information.
+      🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
     actions:
-      - action: countdown 120 "until the next stage. Type /submit and your message now"
+      - action: select_random_culture_module
+      - action: pause 4
+      - action: send_deliberation_questions "deliberation_questions_for_name"
+      - action: countdown 210 "until voting"
+      - action: pause 5
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 120
-    image_path: "assets/imgs/pre_generated/proposals.png"
-  
-  - stage: 'Proposals: Community Name'
+      - progress_condition: progress_timeout 210
+    image_path: "assets/imgs/pre_generated/name.png"
+
+  - stage: Vote on Group Name
     message: |
-      This nascent community has spoken. 
-      
-      Here are the proposed names for our community.
+      It's time to vote! 🗳️ 
+
+      Here are the proposals that have been submitted. You have *1 minute* to vote for your favorite group name. 😄✅
     actions:
+      - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: pause 5
-      - action: select_random_culture_module
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/submissions.png"
-  
-  - stage: Simulation Interference
-    message: |
-      🤖 SIMULATION INTERFERENCE 🤖
-        
-        Out of no where, the simulator has imposed a random culture upon this community. 
-
-        Let not this enhancement deter you, for now, the discussion must rise to the occasion.
-    actions: 
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/amplify.png"
-
-  - stage: 'Deliberation: Community Name'
-    message: |
-      Review the answers and deliberate and discuss amongst yourselves. Which name do we most prefer?
-
-      There will be a majority-based vote in 2 minutes.
-
-      Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
-      
-      Type `-help resubmit` for more information. 
-    actions:
-      - action: send_deliberation_questions "deliberation_questions_for_name"
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/deliberate.png"
-
-  - stage: 'Vote: Community Name'
-    message: |
-      Deliberation ends and the voting period begins.
-
-      You have 1 minute to vote on your community name.
-    actions:
-      - action: post_submissions
-      - action: set_global_decision_module "majority"
-      - action: trigger_vote 'What should we call ourselves?' 60 "submissions" "community_name"
+      - action: pause 10
+      - action: set_global_decision_module "random"
+      - action: trigger_vote 'What should our name be?' 60 "submissions" "group_name"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
-      - action: countdown 15 "until the next stage"
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/vote.png"
-
-  - stage: Simulation Reset
-    message: |
-      👾 SIMULATION RESET 👾
-      
-      A decision has been made.
-    
-      A semblance of normalcy returns.
-    actions:
-      - action: turn_off_random_culture_module
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/online_community.png"
-  
-  - stage: Community Purpose
-    message: |
-      Now that we have a name, we need to decide on our community's mission.
-    actions:
+      - action: list_decisions
       - action: clear_decision_input_values
       - action: pause 5
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/goal.png"
+    image_path: None
   
-  - stage: 'Submit Answers: Community Purpose'
+  - stage: Group Purpose
     message: |
-      Take a moment to submit a proposal to the question: `What should the purpose
-      of our community be?`.
+      Step 2: Group Purpose 💬📣
 
-      You have 2 minutes to submit an answer.
+      Discuss what your groups motivating purpose is. Propose your ideas using `/submit <submission>`. 🗣️🎙️
 
-      To submit your proposal, type `/submit` followed by your message.
-      
-      For example: `/submit <this is my submission>`
+      If you make a mistake or change your mind you can use `/resubmit` to change your submission.
 
-      If you make a mistake or change your mine you can use `/resubmit` to change your submission.
-
-      See `-help submit` for more information.
+      🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
     actions:
-      - action: countdown 120 "until deliberation stage. Type /submit and your message now"
-    progress_conditions: 
-      - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 120
-    image_path: "assets/imgs/pre_generated/proposals.png"
-  
-  - stage: 'Proposals: Community Goal'
-    message: |
-      This developing community has spoken. 
-      
-      Here are the proposed goals for our community.
-    actions:
-      - action: post_submissions
-      - action: pause 5
       - action: select_random_culture_module
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/submissions.png"
-  
-  - stage: Simulation Interference
-    message: |
-      🎲 SIMULATION INTERFERENCE 🎲
-        
-        Out of no where, the simulator has imposed a a random culture  upon this community. 
-                
-        Despite this interuption, deliberation must now commence.
-    actions: 
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/interference.png"
-  
-  - stage: 'Deliberation: Community Purpose'
-    message: |
-      Review the answers and deliberate amongst yourselves which purpose this community should pursue. 
-      
-      What will animate your activities?
-
-      Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`. 
-      
-      Type `-help resubmit` for more information. 
-    
-      There will be a consensus based vote in 2 minutes.
-    actions:
+      - action: pause 4
       - action: send_deliberation_questions "deliberation_questions_for_purpose"
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/deliberate.png"
-  
-  - stage: 'Vote: Community Purpose'
-    message: |
-      Deliberation ends and votes are cast.
-
-      You have 1 minute to vote on your community purpose.
-    actions:
-      - action: post_submissions
-      - action: set_global_decision_module "majority"
-      - action: trigger_vote 'What should be the purpose of our community?' 60 "submissions" "community_purpose"
-        retries: 1
-        retry_message: "```You have failed to reach a decision! You will have another chance to vote soon.```"
-        failure_message: "```Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over.```"
-      - action: countdown 15 "until the next stage"
-    progress_conditions: []
+      - action: countdown 210 "until voting"
+    progress_conditions: 
+      - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 210
     image_path: "assets/imgs/pre_generated/goal.png"
-  
-  - stage: Simulation Reset
+
+  - stage: Vote on Group Purpose
     message: |
-      👾 SIMULATION RESET 👾
-      
-      A decision has been made.
-    
-      A semblance of normalcy returns.
+      Voting time! Choose your favorite proposal for the group's voice. 🗳️📢
+
+      You have *1 minute* to vote on your group's voice.
     actions:
       - action: turn_off_random_culture_module
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/online_community.png"
-  
-  - stage: Community Prompt
-    message: |
-      Now that we have a name and a purpose, we have the opportunity to change the wildcard prompt in our community's agora.
-
-      Our prompt will be attributed to us and our purpose, so be mindful of what prompt you select.
-    actions:
+      - action: post_submissions
+      - action: pause 10
+      - action: set_global_decision_module "random"
+      - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_purpose"
+        retries: 1
+        retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
+      - action: list_decisions
       - action: clear_decision_input_values
       - action: pause 5
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/goal.png"
-  
-  - stage: 'Submit Answers: Community Prompt'
+    image_path: None
+
+  - stage: Group Goal
     message: |
-      Take a moment to submit a proposal to the question: `What prompt should we add to our agora?`.
+      Step 3: Group Goal 💬📣
 
-      You have 2 minutes to submit an answer.
+      Discuss the goal of your group. Propose your ideas using `/submit <submission>`. 🗣️🎙️
 
-      To submit your proposal, type `/submit_prompt` followed by your message.
-      
-      For example: `/submit_prompt <this is my submission>`
+      If you make a mistake or change your mind you can use `/resubmit` to change your submission.
 
-      If you make a mistake or change your mine you can use `/resubmit` to change your submission.
-
-      See `-help submit_prompt` for more information.
+      🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
     actions:
-      - action: countdown 120 "until deliberation stage. Type /submit and your message now"
+      - action: select_random_culture_module
+      - action: pause 4
+      - action: send_deliberation_questions "deliberation_questions_for_goal"
+      - action: countdown 210 "until voting"
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 120
-    image_path: "assets/imgs/pre_generated/proposals.png"
-  
-  - stage: 'Proposals: Community Prompt'
-    message: |
-      This developing community has spoken. 
-      
-      Here are the proposed prompts for our community's agora.
-    actions:
-      - action: post_submissions
-      - action: pause 5
-      - action: select_random_culture_module
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/submissions.png"
-  
-  - stage: Simulation Interference
-    message: |
-      👾 SIMULATION INTERFERENCE👾
-        
-        Out of no where, the simulator has imposed a random culture upon this community. 
-        
-        Despite this interuption, deliberation must now commence.
-    actions: 
-      - action: pause 5
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/interference.png"
-  
-  - stage: 'Deliberation: Community Prompt'
-    message: |
-      Review the answers and deliberate amongst yourselves which purpose this community should add to the agora. 
-
-      Deliberation may lead to new insights. You can change your previous submission by using `/resubmit`.
-      
-      Type `-help resubmit` for more information. 
-    
-      There will be a consensus based vote in 2 minutes.
-    actions:
-      - action: send_deliberation_questions "deliberation_questions_for_prompt"
-    progress_conditions: []
-    image_path: "assets/imgs/pre_generated/deliberate.png"
-  
-  - stage: 'Vote: Community Prompt'
-    message: |
-      Deliberation ends and votes are cast.
-
-      You have 1 minute to vote on your prompt.
-    actions:
-      - action: post_submissions
-      - action: set_global_decision_module "consensus"
-      - action: trigger_vote 'What prompt should we add to our agora?' 60 "submissions" "community_prompt"
-        retries: 1
-        retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"        
-        failure_message: "```Bummer. After several tries, your community has failed to reach a consensus vote. The game is now over.```"
-      - action: countdown 15 "until the next stage"
-    progress_conditions: []
+      - progress_condition: progress_timeout 210
     image_path: "assets/imgs/pre_generated/goal.png"
-    
-  - stage: Simulation Reset
+
+  - stage: Vote on Group Purpose
     message: |
-      👾 SIMULATION RESET 👾
-      
-      A decision has been made.
-    
-      A semblance of normalcy returns.
+      Voting time! Choose your favorite proposal for the group's voice. 🗳️📢
+
+      You have *1 minute* to vote on your group's voice.
     actions:
       - action: turn_off_random_culture_module
+      - action: post_submissions
+      - action: pause 10
+      - action: set_global_decision_module "random"
+      - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_goal"
+        retries: 1
+        retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
+      - action: list_decisions
+      - action: clear_decision_input_values
       - action: pause 5
+      - action: construct_and_post_prompt
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/online_community.png"
-
+    image_path: None
+  
   - stage: End
     message: |
-      Congratulations on completing this first experience in online governance in this new world.
+      Congratulations on completing this quest! 🥳🎉
 
-       This simulation was  meant to demonstrate the types of ways communication might be affected in this game, how those distortions impact the baility to deliberate, and how decisions might be made.
-
-       In future simulations or complete quests, you will explore how to self-govern by changing how you make decisions, the processes you follow when deliberating decisions, and how to deal with failed proposals.
-
-       Thanks for playing.
-    actions: 
-      - action: show_decisions
-      - action: countdown 60 "until this simulation auto-archives"
+      A new `wildcard` culture module has been added to this community. You can try it here and see it in action in #d20-agora. To turn on the module, type `-wildcard`. 👏🎮
+    actions:
+      - action: countdown 30 "until this simulation auto-archives"
       - action: end
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/end.png"
+    image_path: None

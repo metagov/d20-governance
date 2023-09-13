@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import random
 import discord
 import asyncio
+import datetime
 from discord import app_commands
 from d20_governance.utils.constants import *
 from langchain.prompts import PromptTemplate
@@ -58,8 +59,6 @@ class ValueRevisionManager:
             "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
         }
         self.selected_value = {}
-        self.game_quest_values_dict = {}
-        self.quest_game_channels = []
 
     def get_value_choices(self):
         choices = [
@@ -79,8 +78,17 @@ class ValueRevisionManager:
         if not vote_result:
             print("value dict not updated")
         else:
-            value_revision_manager.agora_values_dict.pop(select_value)
+            del value_revision_manager.agora_values_dict[select_value]
             value_revision_manager.agora_values_dict.update(vote_result)
+            message_content = ""
+            for (
+                value,
+                description,
+            ) in value_revision_manager.agora_values_dict.items():
+                message_content += f"{value}:\n{description}\n\n"
+            message = f"```{message_content}```"
+            module = CULTURE_MODULES.get("values", None)
+            module.config["values_list"] = message
 
     def clear_proposed_values(self):
         self.proposed_values_dict.clear()
@@ -213,6 +221,16 @@ class Diversity(CultureModule):
         await ctx.send(f"```{message}```")
 
 
+class PromptObject:
+    def __init__(self):
+        self.group_name = ""
+        self.group_goal = ""
+        self.group_purpose = ""
+
+
+prompt_object = PromptObject()
+
+
 class Wildcard(CultureModule):
     async def filter_message(
         self, message: discord.Message, message_string: str
@@ -223,16 +241,17 @@ class Wildcard(CultureModule):
         print("applying wildcard module")
         get_module = CULTURE_MODULES.get("wildcard", None)
         llm_prompt = get_module.config["llm_disclosure"]
-        print(llm_prompt)
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
-            input_variables=["selected_prompt", "input_text"],
-            template="Use the following prompt: {selected_prompt} to transform this input text: {input_text}. The resulting message should be no longer than 500 characters",
+            input_variables=["input_text", "group_name", "group_goal", "group_purpose"],
+            template="Transform the content of the following input text: {input_text}. The aim is to make the content of the input text sound as though it was influences by the implict voice of the group that made this prompt. To do this use the name of the group ({group_name}), the group's goal ({group_goal}), and the purpose of the group ({group_purpose}). Do not speak as through you are the group, instead use the attributes of the group to influence the content, mainintaining the perspective of teh original input text. The resulting message should be roughly the same length as the input text.",
         )
         chain = LLMChain(llm=llm, prompt=prompt)
         response = await chain.arun(
             {
-                "selected_prompt": llm_prompt,
+                "group_name": prompt_object.group_name,
+                "group_purpose": prompt_object.group_purpose,
+                "group_goal": prompt_object.group_goal,
                 "input_text": message_string,
             }
         )
@@ -295,6 +314,7 @@ class Ritual(CultureModule):
 
 class Values(CultureModule):
     async def check_values(self, bot, ctx, message: discord.Message):
+        print("Checking values")
         if message.reference:
             reference_message = await message.channel.fetch_message(
                 message.reference.message_id
@@ -319,7 +339,31 @@ class Values(CultureModule):
             llm_response, alignment = await self.llm_analyze_values(
                 current_values_dict, reference_message.content
             )
-            message_content = f"```{values_list}``````Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}"
+            message_content = f"----------```Message: {reference_message.content}\n\nMessage author: {reference_message.author}```\n> **Values Analysis:** {llm_response}\n```{values_list}```\n----------"
+
+            # Assign alignment roles to users if their post is values-checked
+            if alignment == "aligned":
+                await assign_role_to_user(message.author, "Aligned")
+            else:
+                await assign_role_to_user(message.author, "Misaligned")
+            await ctx.send(message_content)
+        else:
+            if message.author.bot and not message.content.startswith("※"):
+                await ctx.send("Cannot check values of messages from bot")
+                return
+            else:
+                print(
+                    f"Original Message Contnet: {message.content}, posted by {message.author}"
+                )
+
+            current_values_dict = value_revision_manager.agora_values_dict
+            values_list = f"Community Defined Values:\n\n"
+            for value in current_values_dict.keys():
+                values_list += f"* {value}\n"
+            llm_response, alignment = await self.llm_analyze_values(
+                current_values_dict, message.content
+            )
+            message_content = f"----------```Message: {message.content}\n\nMessage author: {message.author}```\n> **Values Analysis:** {llm_response}\n```{values_list}```\n----------"
 
             # Assign alignment roles to users if their post is values-checked
             if alignment == "aligned":
@@ -341,7 +385,7 @@ class Values(CultureModule):
             description,
         ) in values_dict.items():
             template += f"- {value}: {description}\n"
-        template += f"\nNow, analyze the message:\n{text}. Start the message with either the string 'This message aligns with our values' or 'This message does not align with our values'. Then briefly explain why the values are aligned or misaligned based on the values the group holds."
+        template += f"\nNow, analyze the message:\n{text}. Start the message with either the string 'This message aligns with our values' or 'This message does not align with our values'. Then briefly explain why the values are aligned or misaligned based on the values the group holds. Use no more than 250 characters."
         prompt = PromptTemplate.from_template(template=template)
         chain = LLMChain(llm=llm, prompt=prompt)
         response = await chain.arun({"text": text})
@@ -352,23 +396,49 @@ class Values(CultureModule):
         )
         return response, alignment
 
-    async def randomly_check_values(self, bot):
+    # FIXME: current_time variable not being assigned correctly
+    async def randomly_check_values(self, bot, ctx, channel):
         while True:
+            print("in a value check loop")
+            current_time = datetime.utcnow()
+            print(f"time is: {current_time}")
             # Randomly generate delay between executions
-            delay = random.randint(5, 20)
+            delay = random.randint(45, 55)
 
             # Wait for the specified delay
             await asyncio.sleep(delay)
 
-            # Fetch a random message from a game channel
-            game_channel = bot.get_channel(bot.quest.game_channel)
+            try:
+                # Fetch a random message from a game channel
+                messages = []
+                async for message in channel.history(limit=100, after=current_time):
+                    if (
+                        message.content.startswith("※")
+                        or isinstance(message, discord.Message)
+                        and not message.author.bot
+                    ):
+                        messages.append(message)
 
-            random_message = await game_channel.fetch_message(
-                random.randint(1, game_channel.last_message_id)
-            )
+                if not messages:
+                    print("No valid messages found in the channel")
+                    return
 
-            # Check values of the random message
-            await self.check_values(bot, None, random_message)
+                # Generate a list of valid message IDs
+                valid_message_ids = [message.id for message in messages]
+
+                random_message_id = random.choice(valid_message_ids)
+
+                random_message = await channel.fetch_message(random_message_id)
+                print("fetched random message")
+
+                # Check values of the random message
+                await self.check_values(bot, channel, random_message)
+            except Exception as e:
+                print(f"Error occurred while checking values: {e}")
+            except discord.NotFound:
+                print("Random message not found")
+            except discord.HTTPException as e:
+                print(f"Error occurrent while fetching random message: {e}")
 
 
 values_module = Values(CultureModule)
@@ -481,13 +551,32 @@ async def display_culture_module_state(ctx, module_name, state):
             inline=False,
         )
     embed.add_field(
-        name="ACTIVE CULTURE MODULES:",
+        name="Active Culture Modules:",
         value=active_culture_module_values,
         inline=False,
     )
+    if module.config["values_list"] is not None and state:
+        embed.add_field(
+            name="List of Current Community Values:",
+            value=module.config["values_list"],
+            inline=False,
+        )
 
     await ctx.send(embed=embed)
 
+
+def get_values_message():
+    message_content = ""
+    for (
+        value,
+        description,
+    ) in value_revision_manager.agora_values_dict.items():
+        message_content += f"{value}:\n{description}\n\n"
+    message = f"```{message_content}```"
+    return message
+
+
+values_list = get_values_message()
 
 CULTURE_MODULES = {
     "wildcard": Wildcard(
@@ -504,6 +593,7 @@ CULTURE_MODULES = {
             "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": None,
         }
     ),
     "obscurity": Obscurity(
@@ -520,6 +610,7 @@ CULTURE_MODULES = {
             "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": None,
         }
     ),
     "eloquence": Eloquence(
@@ -536,6 +627,7 @@ CULTURE_MODULES = {
             "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/eloquence.png",
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": None,
         }
     ),
     "ritual": Ritual(
@@ -552,6 +644,7 @@ CULTURE_MODULES = {
             "url": "",  # TODO: make ritual img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": None,
         }
     ),
     "diversity": Diversity(
@@ -567,6 +660,7 @@ CULTURE_MODULES = {
             "url": "",  # TODO: make ritual img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": None,
         }
     ),
     "amplify": Amplify(
@@ -583,6 +677,7 @@ CULTURE_MODULES = {
             "url": "",  # TODO: make ritual img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": None,
         }
     ),
     "values": Values(
@@ -591,15 +686,16 @@ CULTURE_MODULES = {
             "global_state": False,
             "mode": None,
             "help": True,
-            "how_to_use": "Get a vibe check. See how aligned a post is with your community's values.\nReply to the message you want to check and type `check-values`.",
+            "how_to_use": "Your posts are now subject to alignment analysis. The content of posts will be randomly analyized to see how aligned they are with the group's values. You can also reply to the message you want to check and type `check-values`. you will be labled either aligned or misaligned based on analysis.",
             "local_state": False,
             "message_alter_mode": None,
             "llm_disclosure": "You hold and maintain a set of mutually agreed upon values. The values you maintain are the values defined by the community. You review the contents of messages sent for validation and analyze the contents in terms of the values you hold. You describe in what ways the input text are aligned or unaligned with the values you hold.",
-            "activated_message": "A means of validating the cultural alignment of this online communiuty is now available. Respond to a message with check-values.",
+            "activated_message": "A means of validating the cultural alignment of this online communiuty is nafculture_moduow available. Respond to a message with check-values.",
             "deactivated_message": "Automatic measurement of values is no longer present, through an essence of the culture remains, and you can respond to messages with `check-values` to check value alignment.",
             "url": "",  # TODO: make ritual img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
+            "values_list": values_list,
         }
     ),
 }
