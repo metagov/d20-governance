@@ -88,8 +88,17 @@ class ValueRevisionManager:
             if not vote_result:
                 print("value dict not updated")
             else:
-                self.agora_values_dict.pop(select_value)
-                self.agora_values_dict.update(vote_result)
+                del value_revision_manager.agora_values_dict[select_value]
+                value_revision_manager.agora_values_dict.update(vote_result)
+                message_content = ""
+                for (
+                    value,
+                    description,
+                ) in value_revision_manager.agora_values_dict.items():
+                    message_content += f"{value}:\n{description}\n\n"
+                message = f"```{message_content}```"
+                module = CULTURE_MODULES.get("values", None)
+                module.config["values_list"] = message
 
     async def clear_proposed_values(self):
         async with self.lock:

@@ -60,7 +60,19 @@ class Consensus(DecisionModule):
             return None
 
 
-class LazyConsensus(discord.ui.View):
+class LazyConsensus(DecisionModule):
+    def __init__(self, config):
+        super().__init__(config)
+
+    @property
+    def create_vote_view(self):
+        pass
+
+    def get_decision_result(self, quest: Quest, results):
+        pass
+
+
+class LazyConsensusView(discord.ui.View):
     def __init__(self, ctx, option, timeout=60):
         super().__init__(timeout=timeout)
         self.ctx = ctx
@@ -167,7 +179,7 @@ async def lazy_consensus(
     views = []
     for name, description in options.items():
         # Create a new View for this option
-        view = LazyConsensus(ctx, name, timeout=timeout)
+        view = LazyConsensusView(ctx, name, timeout=timeout)
         views.append(view)
 
         # Display the option name, description and associated view to the user
