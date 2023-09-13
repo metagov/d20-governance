@@ -4,6 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Press+Start+2P&display=swap"
+        rel="stylesheet">
     <title>d20 Governance</title>
     <style>
         /* Basic Reset */
@@ -16,7 +19,8 @@
         a {
             margin: 0;
             padding: 0;
-            font-family: 'Arial', sans-serif;
+            font-family: 'Montserrat', sans-serif;
+            /* Main font */
             text-decoration: none;
         }
 
@@ -84,8 +88,12 @@
         }
 
         /* Images */
-        img {
-            max-width: 100%;
+        img.centered-image {
+            max-width: 50%;
+            /* Adjust this value to make the image as small as you want */
+            display: block;
+            margin: 20px auto;
+            /* This will center the image */
             border-radius: 8px;
         }
 
@@ -94,6 +102,12 @@
         h4 {
             margin-bottom: 20px;
         }
+
+        h1,
+        h2,
+        h3 {
+            font-family: 'Press Start 2P', cursive;
+        }
     </style>
 </head>
 
@@ -101,10 +115,11 @@
 
     <div class="container">
         <h1>Your simulation is loading…</h1>
+        <img src="../assets/imgs/pre_generated/online_community.png" alt="d20 Governance Logo" class="centered-image">
 
         <h2>Welcome to d20 Governance</h2>
         <p>an experimental governance environment for Discord communities</p>
-        <a href="https://github.com/your-repo-link">Our Github</a>
+        <a href="https://github.com/metagov/d20-governance">Our Github</a>
 
         <h3>Summary</h3>
         <p>d20 gives online communities the opportunity to experience a diversity of governance structures,
@@ -113,6 +128,8 @@
         <p>Facilitated by a Discord bot, d20 governance can be utilized for a variety of purposes including governance
             education, possible future scenario simulations, real-life decision-making, community bonding exercises, or
             simply a good laugh.</p>
+        <img src="../assets/imgs/pre_generated/deliberate.png" alt="d20 Governance Logo" class="centered-image">
+
 
         <h3>Background</h3>
         <p>d20 was built by a group of researchers from the Metagovernance Project, a nonprofit research collective
@@ -151,8 +168,8 @@
             see played out. Some ideas include civic education, community conflict mediation, reputation building, or
             any kind of custom role-play game. If you have an idea for a game, we’d love to hear from you!</p>
         <p>Email us at <a href="mailto:your-email@example.com">your-email@example.com</a></p>
+        <img src="../assets/imgs/pre_generated/end.png" alt="d20 Governance Logo" class="centered-image">
     </div>
-
 </body>
 
 </html>
