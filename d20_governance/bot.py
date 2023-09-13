@@ -983,6 +983,7 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
 
     async def on_submit(self, interaction: discord.Interaction):
         await value_revision_manager.store_proposal(
+        await value_revision_manager.store_proposal(
             self.proposed_value_name, self.proposed_value_definition
         )
 
