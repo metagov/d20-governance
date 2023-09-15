@@ -471,7 +471,7 @@ class Eloquence(CultureModule):
         print("applying eloquence module")
         llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate.from_template(
-            template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
+            template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, just rewrite them. Input: {input_text}"
         )
         prompt.format(
             input_text=message_string
