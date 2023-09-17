@@ -32,6 +32,7 @@ pytz = "^2023.3.post1"
 discord-buttons-plugin = "^0.1.2"
 colorama = "^0.4.6"
 
+
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
 

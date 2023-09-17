@@ -643,5 +643,5 @@ async def vote(vote_context: VoteContext):
         # If retried are configured, voting will be repeated
         raise Exception("No winner was found.")
 
-    await ctx.send(embed=embed)
+    await vote_context.ctx.send(embed=embed)
     return winning_option

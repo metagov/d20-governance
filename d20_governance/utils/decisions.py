@@ -66,19 +66,7 @@ class Consensus(DecisionModule):
             return None
 
 
-class LazyConsensus(DecisionModule):
-    def __init__(self, config):
-        super().__init__(config)
-
-    @property
-    def create_vote_view(self):
-        pass
-
-    def get_decision_result(self, quest: Quest, results):
-        pass
-
-
-class LazyConsensusView(discord.ui.View):
+class LazyConsensus(discord.ui.View):
     def __init__(self, ctx, option, timeout=60):
         super().__init__(timeout=timeout)
         self.ctx = ctx
@@ -149,6 +137,16 @@ async def lazy_consensus(
         if quest.fast_mode:
             timeout = 7
 
+
+from d20_governance.utils.voting import VoteContext, VoteView
+
+
+# async def lazy_consensus(
+#     ctx=None, channel=None, quest=None, question=None, options=None, timeout: int = 60
+# ):
+#     if quest is not None:
+#         if quest.fast_mode:
+#             timeout = 7
 
 #     if ctx is not None:
 #         send_message = ctx.send
