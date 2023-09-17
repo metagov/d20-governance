@@ -205,7 +205,9 @@ async def help(interaction: discord.Interaction, command: str = None):
         # Display help for a specific command
         cmd = bot.get_command(command)
         if not cmd:
-            await interaction.response.send_message(f"Sorry, I couldn't find command **{command}**.", ephemeral=True)
+            await interaction.response.send_message(
+                f"Sorry, I couldn't find command **{command}**.", ephemeral=True
+            )
             return
         cmd_help = cmd.help or "No help available."
         help_embed = discord.Embed(
@@ -341,7 +343,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
         await game_channel_ctx.send(embed=embed)
     else:
         await stream_message(quest.game_channel, stage.message, embed)
-    
+
     # store most recent message in reminder class
     reminder_manager.current_stage_message = stage.message
 
@@ -490,12 +492,13 @@ async def countdown(ctx, timeout_seconds, text: str = None):
             print("⧗ Countdown finished.")
             update_countdown.stop()
 
-
         # Check is all submissions have been submitted
         if bot.quest.progress_completed:
-            await message.edit(content="```⏲️ All submissions submitted. Countdown finished.```")
+            await message.edit(
+                content="```⏲️ All submissions submitted. Countdown finished.```"
+            )
             update_countdown.stop()
-    
+
     @tasks.loop(minutes=1)
     async def send_new_message():
         nonlocal remaining_minutes
@@ -504,19 +507,19 @@ async def countdown(ctx, timeout_seconds, text: str = None):
             print("⧗ Countdown finished.")
             send_new_message.stop()
         if remaining_minutes <= 2.5:
-            new_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
+            new_message = (
+                f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
+            )
             message = await ctx.send(new_message)
-        
-        
+
     update_countdown.start()
     send_new_message.start()
-    
+
     try:
         while send_new_message.is_running() and update_countdown.is_running():
             remaining_seconds -= 1
             await asyncio.sleep(1)
-            
-    
+
     except asyncio.CancelledError:
         update_countdown.stop()
         send_new_message.stop()
@@ -579,7 +582,9 @@ async def progress_timeout(ctx, seconds: str):
 
 @bot.tree.command(name="remind_me", description="Send most recent stage message")
 async def remind_me(interaction: discord.Interaction):
-    await interaction.response.send_message(reminder_manager.current_stage_message, ephemeral=True)
+    await interaction.response.send_message(
+        reminder_manager.current_stage_message, ephemeral=True
+    )
 
 
 async def turn_on_random_value_check(ctx):
@@ -595,6 +600,7 @@ async def turn_on_random_value_check(ctx):
             values_module.randomly_check_values(bot, ctx, bot.quest.game_channel)
         )
     print("value check loop turned on")
+
 
 async def turn_off_random_value_check(ctx):
     global values_check_task
@@ -1051,7 +1057,6 @@ async def make_game_channel(ctx, quest: Quest):
         name=f"d20-{quest.title}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
-    value_revision_manager.quest_game_channels.append(quest.game_channel)
 
 
 # CULTURE MODULES
@@ -1504,9 +1509,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(
-            f"📜 **{player_name}**:\n🗣️  {submission}"
-        )
+        submissions.append(f"📜 **{player_name}**:\n🗣️  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
@@ -1517,38 +1520,6 @@ async def post_submissions(ctx):
 
     # Send the formatted submissions to the context
     await ctx.send(embed=embed)
-
-
-@bot.command()
-async def post_proposal_values(ctx):
-    message = "Proposed values:\n"
-    for key, value in value_revision_manager.proposed_values_dict.items():
-        # Format the key as bold and add the value
-        message += f"```**{key}**: {value}\n```"
-    await ctx.send(message)
-
-
-@bot.tree.command(
-    name="propose_value_revision",
-    description="Press enter to select and propose a revision to the values list",
-)
-async def propose_value_revision(interaction: discord.Interaction):
-    channel = interaction.channel
-    values_dict = {}
-
-    if channel in value_revision_manager.quest_game_channels:
-        values_dict = value_revision_manager.game_quest_values_dict
-    else:
-        values_dict = value_revision_manager.agora_values_dict
-
-    view = ValueRevisionView()
-    view.assign_values(values_dict)
-
-    await interaction.response.send_message(
-        f"Here are the current values:",
-        view=view,
-        ephemeral=True,
-    )
 
 
 @bot.command(hidden=True)
@@ -1666,7 +1637,6 @@ async def send_deliberation_questions(ctx, questions):
     embed = discord.Embed(title="A Deliberation Question:", description=random_question)
     await ctx.channel.send(embed=embed)
 
-    
 
 # CLEANING COMMANDS
 @bot.command(hidden=True)
