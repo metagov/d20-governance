@@ -7,6 +7,7 @@ import traceback
 import sys
 import time
 import random
+from typing import Union
 from discord.app_commands import command as slash_command
 from discord.interactions import Interaction
 from d20_governance.utils.utils import *
@@ -15,7 +16,8 @@ from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
 from discord import app_commands
-from discord.ext import tasks
+from discord.ext import tasks, commands
+from discord.ui import Button, View
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -460,10 +462,21 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
     await asyncio.gather(action_runner(), progress_checker())
 
 
-async def countdown(ctx, timeout_seconds, text: str = None):
+async def countdown(
+    ctx_interaction: Union[discord.ext.commands.Context, discord.Interaction],
+    timeout_seconds=None,
+    text: str = None,
+):
     """
     Send an updating countdown display
     """
+    if isinstance(ctx_interaction, discord.ext.commands.Context):
+        channel = ctx_interaction.channel
+    elif isinstance(ctx_interaction, discord.Interaction):
+        channel = ctx_interaction.channel
+    else:
+        raise ValueError("Either ctx or interaction must be provided.")
+
     if hasattr(bot, "quest") and bot.quest.fast_mode:
         timeout_seconds = 10
 
@@ -476,7 +489,7 @@ async def countdown(ctx, timeout_seconds, text: str = None):
     next_message_time = time.time() + message_interval_seconds
 
     first_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
-    message = await ctx.send(first_message)
+    message = await channel.send(first_message)
 
     @tasks.loop(seconds=10)
     async def update_countdown():
@@ -488,11 +501,11 @@ async def countdown(ctx, timeout_seconds, text: str = None):
         await message.edit(content=new_message)
         if remaining_minutes <= 0:
             new_message = f"```⏲️ Counting down finished.```"
-            await ctx.send(new_message)
+            await channel.send(new_message)
             print("⧗ Countdown finished.")
             update_countdown.stop()
 
-        # Check is all submissions have been submitted
+        # Check if all submissions have been submitted
         if bot.quest.progress_completed:
             await message.edit(
                 content="```⏲️ All submissions submitted. Countdown finished.```"
@@ -510,7 +523,7 @@ async def countdown(ctx, timeout_seconds, text: str = None):
             new_message = (
                 f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
             )
-            message = await ctx.send(new_message)
+            message = await channel.send(new_message)
 
     update_countdown.start()
     send_new_message.start()
@@ -537,24 +550,25 @@ async def all_submissions_submitted(ctx):
         joined_players = bot.quest.joined_players
         players_to_submissions = bot.quest.players_to_submissions
         if len(joined_players) == len(players_to_submissions):
+            await ctx.send(
+                "Everyone has made their submission. The next stage will start in 5 seconds"
+            )
             print("All submissions submitted.")
             bot.quest.progress_completed = True
+            await asyncio.sleep(5)
             return True
         print("⧗ Waiting for all submissions to be submitted.")
         await asyncio.sleep(1)  # Wait for a second before checking again
 
 
-# TODO: what's the difference between pause / progress_timeout, can they be collapsed
-
-
-async def pause(ctx, seconds: str):
+async def wait(ctx, seconds: str):
     """
-    Simulation pauses
+    Simulation waits
 
-    Used by in simulation yaml to add pauses in the simulations
+    Used by in simulation yaml to add pauses in the simulations and check progress conditions
     """
     if bot.quest.fast_mode:
-        seconds = 1
+        seconds = 5
         print(f"Pausing for {seconds} seconds...")
         await asyncio.sleep(int(seconds))
     else:
@@ -565,16 +579,16 @@ async def pause(ctx, seconds: str):
 
 async def progress_timeout(ctx, seconds: str):
     """
-    Progression timeout
+    Simulation waits
 
-    Used in simulation yamls to define limits for progression checks
+    Used by in simulation yaml to add pauses in the simulations and check progress conditions
     """
     if bot.quest.fast_mode:
-        seconds = 7
-        print(f"Progression timeout in {seconds} seconds...")
+        seconds = 5
+        print(f"Progression Timeout")
         await asyncio.sleep(int(seconds))
     else:
-        print(f"Progression timeout in {seconds} seconds...")
+        print(f"Progression Timeout")
         await asyncio.sleep(int(seconds))
     bot.quest.progress_completed = True
     return True
@@ -1079,11 +1093,11 @@ async def construct_and_post_prompt(ctx):
 
 
 @bot.command(hidden=True)
-async def select_random_culture_module(ctx):
+async def turn_on_random_culture_module(ctx):
     """
     Randomly select a culture module to turn on
     """
-    culture_commands = ["eloquence", "obscurity", "amplify", "values"]
+    culture_commands = ["eloquence", "obscurity", "amplify"]
     random_command_name = random.choice(culture_commands)
     logging.info(f"Selected random culture module: {random_command_name}")
 
@@ -1284,6 +1298,64 @@ async def vote_governance(ctx, governance_type: str):
         await ctx.send(embed=embed)
 
     return winning_module_name
+
+
+# PROGRESSION COMMANDS
+
+
+class TimeoutView(View):
+    def __init__(self):
+        super().__init__(timeout=15.0)
+        self.wait_finished = asyncio.Event()
+
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.green, custom_id="yes")
+    async def yes_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # await interaction.response.defer()
+        await interaction.response.send_message(
+            "Someone has answered yes. Starting the countdown."
+        )
+        countdown_task = asyncio.create_task(
+            countdown(interaction, timeout_seconds=120, text="until the next stage.")
+        )
+        countdown_task.add_done_callback(lambda _: self.wait_finished.set())
+
+    @discord.ui.button(
+        label="I don't need more time.",
+        style=discord.ButtonStyle.gray,
+        custom_id="no",
+    )
+    async def no_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # await interaction.response.defer()
+        await interaction.response.send_message("Noted", ephemeral=True)
+        return
+
+    def set_message(self, message):
+        self.message = message
+
+    async def on_timeout(self):
+        # Disable the button after the timeout
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        # Update the message to reflect the change
+        await self.message.edit(view=self)
+        self.wait_finished.set()
+
+    async def wait(self):
+        await self.wait_finished.wait()
+        self.wait_finished.clear()
+
+
+@bot.command()
+async def ask_to_proceed(ctx):
+    view = TimeoutView()
+    await ctx.send("Do you need more time?", view=view)
+    await view.wait()
+    print("view finished")
 
 
 # META GAME COMMANDS
@@ -1902,7 +1974,11 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                 await module.deactivate_global_state(context, timeout)
                 # Send a countdown message to user letting them know the module they turned off will turn back on
                 countdown_message = f"until {module_name} turns back on"
-                await countdown(context, timeout, countdown_message)
+                await countdown(
+                    context,
+                    timeout_seconds=timeout,
+                    text=countdown_message,
+                )
                 # If local state is false after timeout
                 if not module.is_local_state_active():
                     # Reactivate the local state

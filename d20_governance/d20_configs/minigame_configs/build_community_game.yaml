@@ -11,7 +11,8 @@ stages:
       2️⃣ Give your group a purpose
       3️⃣ Give your group a goal
     actions:
-      - action: pause 5
+      - action: wait 5 
+      - action: ask_to_proceed
     progress_conditions: []
     image_path: "assets/imgs/pre_generated/name.png"
 
@@ -25,11 +26,12 @@ stages:
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
     actions:
-      - action: select_random_culture_module
-      - action: pause 4
+      - action: turn_on_random_culture_module
+      - action: wait 4 
       - action: send_deliberation_questions "deliberation_questions_for_name"
       - action: countdown 210 "until voting"
-      - action: pause 5
+      - action: ask_to_proceed
+      - action: wait 5 
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
       - progress_condition: progress_timeout 210
@@ -43,7 +45,7 @@ stages:
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: pause 10
+      - action: wait 10 
       - action: set_global_decision_module "random"
       - action: trigger_vote 'What should our name be?' 60 "submissions" "group_name"
         retries: 1
@@ -51,7 +53,7 @@ stages:
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: pause 5
+      - action: wait 5 
     progress_conditions: []
     image_path: None
   
@@ -65,13 +67,13 @@ stages:
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
     actions:
-      - action: select_random_culture_module
-      - action: pause 4
+      - action: turn_on_random_culture_module
+      - action: wait 4 
       - action: send_deliberation_questions "deliberation_questions_for_purpose"
       - action: countdown 210 "until voting"
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210
+      - progress_condition: progress_timeout 210 
     image_path: "assets/imgs/pre_generated/goal.png"
 
   - stage: Vote on Group Purpose
@@ -82,7 +84,7 @@ stages:
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: pause 10
+      - action: wait 10 
       - action: set_global_decision_module "random"
       - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_purpose"
         retries: 1
@@ -90,7 +92,7 @@ stages:
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: pause 5
+      - action: wait 5 
     progress_conditions: []
     image_path: None
 
@@ -104,13 +106,13 @@ stages:
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
     actions:
-      - action: select_random_culture_module
-      - action: pause 4
+      - action: turn_on_random_culture_module
+      - action: wait 4 
       - action: send_deliberation_questions "deliberation_questions_for_goal"
       - action: countdown 210 "until voting"
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210
+      - progress_condition: progress_timeout 210 
     image_path: "assets/imgs/pre_generated/goal.png"
 
   - stage: Vote on Group Purpose
@@ -121,7 +123,7 @@ stages:
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: pause 10
+      - action: wait 10 
       - action: set_global_decision_module "random"
       - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_goal"
         retries: 1
@@ -129,7 +131,7 @@ stages:
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: pause 5
+      - action: wait 5 
       - action: construct_and_post_prompt
     progress_conditions: []
     image_path: None

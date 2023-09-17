@@ -79,6 +79,26 @@ class LazyConsensus(discord.ui.View):
             "Your objection has been recorded.", ephemeral=True
         )
 
+    @discord.ui.button(
+        style=discord.ButtonStyle.grey, label="Abstain", custom_id="abstain_button"
+    )
+    async def object_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # Record the user's objection
+        await interaction.response.send_message("Abstain noted.", ephemeral=True)
+
+    def set_message(self, message):
+        self.message = message
+
+    async def on_timeout(self):
+        # Disable the button after the timeout
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        # Update the message to reflect the change
+        await self.message.edit(view=self)
+
 
 async def set_decision_module():
     # Set starting decision module if necessary
