@@ -101,23 +101,19 @@ deliberation_questions_for_name = [
     "What emotions or associations should our name evoke?",
     "Should the name be descriptive or abstract?",
     "Should our name resonate with the community we are embedded in?",
-    "How should our name relate to our values?",
-    "Should our name be short or long?",
 ]
 deliberation_questions_for_purpose = [
-    "What emotions or associations should our name evoke?",
-    "Should the name be descriptive or abstract?",
-    "Should our name resonate with the community we are embedded in?",
-    "How should our name relate to our values?",
-    "Should our name be short or long?",
+    "What emotions or associations might we attach to our purpose?",
+    "Should our purpose descriptive and specific or abstract and broad?",
+    "How does the purpose of our group align with the community we are embedded in?",
 ]
-deliberation_questions_for_prompt = [
-    "What emotions or associations should our name evoke?",
-    "Should the name be descriptive or abstract?",
-    "Should our name resonate with the community we are embedded in?",
-    "How should our name relate to our values?",
-    "Should our name be short or long?",
+deliberation_questions_for_goal = [
+    "What emotions or associations might we attach to our goal?",
+    "Should our goal descriptive or abstract?",
+    "How does the goal of our group align with the community we are embedded in?",
 ]
+
+values_check_task = None
 
 # QUEST KEYS
 QUEST_MESSAGE_KEY = "message"
@@ -211,7 +207,11 @@ DECISION_MODULES = {
     },
 }
 
-CONTINUOUS_INPUT_DECISION_MODULES = {module: attributes for module, attributes in DECISION_MODULES.items() if attributes["valid_for_continuous_input"]}
+CONTINUOUS_INPUT_DECISION_MODULES = {
+    module: attributes
+    for module, attributes in DECISION_MODULES.items()
+    if attributes["valid_for_continuous_input"]
+}
 
 # DECISIONS LOG
 

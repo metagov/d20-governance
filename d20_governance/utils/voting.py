@@ -1,11 +1,11 @@
 import time
-from typing import List
+from typing import List, Tuple
 import random
 import discord
 from d20_governance.utils.constants import CIRCLE_EMOJIS
 from d20_governance.utils.utils import Quest, get_module_png
 from d20_governance.utils.decisions import *
-from d20_governance.utils.cultures import value_revision_manager
+from d20_governance.utils.cultures import value_revision_manager, prompt_object
 
 # Voting functions
 majority = (
@@ -31,6 +31,10 @@ async def set_global_decision_module(ctx, decision_module: str = None):
     if decision_module is None and not channel_decision_modules:
         decision_module = await set_decision_module()
         print(decision_module)
+
+    if decision_module == "random":
+        decision_modules = ["majority", "consensus"]
+        decision_module = random.choice(decision_modules)
 
     channel_decision_modules.append(decision_module)
     ACTIVE_GLOBAL_DECISION_MODULES[ctx.channel] = channel_decision_modules
@@ -158,7 +162,7 @@ async def vote(
             truncated_option = option
         # truncate the option if it's longer than 100 characters
         vote_view.add_option(
-            label=truncated_option,
+            label=f"{truncated_option}",
             value=str(i),
             emoji=assigned_emojis[i],
         )
@@ -187,7 +191,7 @@ async def vote(
 
     # Display results
     embed = discord.Embed(
-        title=f"Results for: `{question}`:",
+        title=f"Results for: {question}:",
         description=results_message,
         color=discord.Color.dark_gold(),
     )
@@ -199,12 +203,13 @@ async def vote(
             value_revision_manager.agora_values_dict.update(
                 value_revision_manager.proposed_values_dict
             )
-        if topic == "community_name":
-            decision_manager.community_name = winning_option
-        elif topic == "community_purpose":
-            decision_manager.community_purpose = winning_option
-        elif topic == "community_prompt":
-            decision_manager.community_prompt = winning_option
+        if topic == "group_name":
+            decision_manager.group_name = winning_option
+            prompt_object.group_name = winning_option
+        elif topic == "group_purpose":
+            prompt_object.group_purpose = winning_option
+        elif topic == "group_goal":
+            decision_manager.group_purpose = winning_option
 
     else:
         # If retries are configured, voting will be repeated
@@ -229,17 +234,17 @@ async def get_vote_results(results, votes, options):
 def get_results_message(results, winning_option):
     total_votes = sum(results.values())
     message = "**Vote Breakdown:**\n\n"
-    message += f"** Total votes:** `{total_votes}`\n\n"
+    message += f"** Total votes:** {total_votes}\n\n"
     for option, votes in results.items():
         percentage = (votes / total_votes) * 100 if total_votes else 0
         message += (
-            f"**Option:** `{option}`\n** Votes:** `{votes}` -- ({percentage:.2f}%)\n\n"
+            f"**Option:** {option}\n**Votes:** {votes} -- ({percentage:.2f}%)\n\n"
         )
 
     if winning_option:
-        message += f"**Winning option:** `{winning_option}`\n\n"
+        message += f"**Winning option:** {winning_option}\n\n"
         message += (
-            "A record of all decisions can be displayed by typing `-show_decisions`"
+            "A record of all decisions can be displayed by typing `-list_decisions`"
         )
     else:
         message += "No winner was found.\n\n"

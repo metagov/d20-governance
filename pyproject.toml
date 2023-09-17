@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A governance game."
 authors = ["d20-team"]
 readme = "README.md"
-packages = [{include = "d20_governance"}]
+packages = [{ include = "d20_governance" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -28,6 +28,7 @@ pytest = "^7.3.1"
 pyttsx3 = "^2.90"
 pydub = "^0.25.1"
 deptry = "^0.12.0"
+pytz = "^2023.3.post1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

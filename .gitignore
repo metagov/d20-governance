@@ -4,7 +4,8 @@
 .gitignore
 d20_governance/playground
 **/__pycache__/**
-logs/*
+logs/*.log
+logs/
 **/.DS_Store
 package.json
 node_modules
