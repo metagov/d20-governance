@@ -79,12 +79,20 @@ class Progress_Condition:
 
 class DecisionManager:
     def __init__(self):
-        self.community_name = ""
-        self.community_purpose = ""
-        self.community_prompt = ""
+        self.group_name = ""
+        self.group_purpose = ""
+        self.group_goal = ""
 
 
 decision_manager = DecisionManager()
+
+
+class ReminderManager:
+    def __init__(self):
+        self.current_stage_message = "No recent stage messages."
+
+
+reminder_manager = ReminderManager()
 
 
 class Stage:
@@ -97,7 +105,14 @@ class Stage:
 
 
 class Quest:
-    def __init__(self, quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
+    def __init__(
+        self,
+        quest_mode=None,
+        gen_images=None,
+        gen_audio=None,
+        fast_mode=None,
+        solo_mode=None,
+    ):
         self.quest_data = None
         self.mode = quest_mode
         self.title = None
@@ -122,8 +137,11 @@ class Quest:
         self.update_vars()
 
     def update_vars(self):
+        # init quest with None vars
+        if self.mode == None:
+            pass
         # LLM mode does not have yaml
-        if self.mode is not SIMULATIONS["llm_mode"]["name"]:
+        elif self.mode is not SIMULATIONS["llm_mode"]["name"]:
             with open(self.mode, "r") as f:
                 quest_data = py_yaml.load(f, Loader=py_yaml.SafeLoader)
                 self.quest_data = quest_data
@@ -153,15 +171,15 @@ class Quest:
             # Remove the nickname from the list so it can't be used again
             JOSH_NICKNAMES.remove(nickname)
 
-    def add_submission(self, interaction: discord.Interaction, text):
+    def add_submission(self, interaction: discord.Interaction, value):
         # get the name of the user invoking the command
         player_name = str(interaction.user.name)
         # get the nickname of the user invoking the command
         if self.mode == SIMULATIONS["josh_game"]["name"]:
             player_name = self.players_to_nicknames.get(player_name)
-            self.players_to_submissions[player_name] = text
+            self.players_to_submissions[player_name] = value
         else:
-            self.players_to_submissions[player_name] = text
+            self.players_to_submissions[player_name] = value
 
     def reset_submissions(self):
         self.players_to_submissions = {}
@@ -236,6 +254,8 @@ async def setup_server(guild):
     Function to set up the server by checking and creating categories and channels as needed.
     """
     logging.info(f"---Checking setup for server: '{guild.name}'---")
+
+    # make server categories
     server_categories = ["d20-explore", "d20-quests", "d20-archive"]
     for category_name in server_categories:
         category = discord.utils.get(guild.categories, name=category_name)
@@ -244,6 +264,13 @@ async def setup_server(guild):
             logging.info(f"Created category: {category.name}")
         else:
             pass
+
+    # Make roles
+    role_names = ["Aligned", "Misaligned"]
+    for role_name in role_names:
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role is None:
+            await guild.create_role(name=role_name)
 
     # Define the d20-agora channel and d20-values-space
     overwrites = {
@@ -401,12 +428,12 @@ async def stream_message(ctx, text, original_embed):
                 joined_text_str = "".join(joined_text)
                 embed.description = joined_text_str
                 await message_canvas.edit(embed=embed)
-                sleep_time = random.uniform(0.3, 0.7)
+                sleep_time = random.uniform(0.1, 0.25)
                 for word in chunk.split():
                     if "," in word:
-                        sleep_time += 0.7
+                        sleep_time += 0.3
                     if "." in word:
-                        sleep_time += 1.2
+                        sleep_time += 0.4
                     else:
                         pass
                 await asyncio.sleep(sleep_time)
