@@ -79,9 +79,9 @@ class Progress_Condition:
 
 class DecisionManager:
     def __init__(self):
-        self.group_name_and_goal = ""
+        self.group_name = ""
+        self.group_purpose = ""
         self.group_goal = ""
-        self.community_prompt = ""
 
 
 decision_manager = DecisionManager()

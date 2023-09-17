@@ -204,12 +204,12 @@ async def vote(
                 value_revision_manager.proposed_values_dict
             )
         if topic == "group_name":
-            decision_manager.group_name_and_goal = winning_option
+            decision_manager.group_name = winning_option
             prompt_object.group_name = winning_option
         elif topic == "group_purpose":
             prompt_object.group_purpose = winning_option
         elif topic == "group_goal":
-            decision_manager.group_goal = winning_option
+            decision_manager.group_purpose = winning_option
 
     else:
         # If retries are configured, voting will be repeated

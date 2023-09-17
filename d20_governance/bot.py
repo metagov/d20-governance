@@ -1051,6 +1051,7 @@ async def make_game_channel(ctx, quest: Quest):
         name=f"d20-{quest.title}-{len(quests_category.channels) + 1}",
         overwrites=overwrites,
     )
+    value_revision_manager.quest_game_channels.append(quest.game_channel)
 
 
 # CULTURE MODULES
@@ -1516,6 +1517,38 @@ async def post_submissions(ctx):
 
     # Send the formatted submissions to the context
     await ctx.send(embed=embed)
+
+
+@bot.command()
+async def post_proposal_values(ctx):
+    message = "Proposed values:\n"
+    for key, value in value_revision_manager.proposed_values_dict.items():
+        # Format the key as bold and add the value
+        message += f"```**{key}**: {value}\n```"
+    await ctx.send(message)
+
+
+@bot.tree.command(
+    name="propose_value_revision",
+    description="Press enter to select and propose a revision to the values list",
+)
+async def propose_value_revision(interaction: discord.Interaction):
+    channel = interaction.channel
+    values_dict = {}
+
+    if channel in value_revision_manager.quest_game_channels:
+        values_dict = value_revision_manager.game_quest_values_dict
+    else:
+        values_dict = value_revision_manager.agora_values_dict
+
+    view = ValueRevisionView()
+    view.assign_values(values_dict)
+
+    await interaction.response.send_message(
+        f"Here are the current values:",
+        view=view,
+        ephemeral=True,
+    )
 
 
 @bot.command(hidden=True)
