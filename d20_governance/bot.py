@@ -202,6 +202,9 @@ async def help(interaction: discord.Interaction, command: str = None):
             await interaction.response.send_message(
                 f"Sorry, I couldn't find command **{command}**.", ephemeral=True
             )
+            await interaction.response.send_message(
+                f"Sorry, I couldn't find command **{command}**.", ephemeral=True
+            )
             return
         cmd_help = cmd.help or "No help available."
         help_embed = discord.Embed(
@@ -512,7 +515,9 @@ async def countdown(
     message_interval_seconds = 60
     next_message_time = time.time() + message_interval_seconds
 
-    first_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}```"
+    first_message = (
+        f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}```"
+    )
     message = await channel.send(first_message)
 
     @tasks.loop(seconds=15)
@@ -1546,7 +1551,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"🗣️ **{player_name}**:\n📜  {submission}")
+        submissions.append(f"🙋 **{player_name}**:\n📜  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
