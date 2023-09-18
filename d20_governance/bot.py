@@ -21,8 +21,18 @@ from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
-from d20_governance.utils.voting import vote, set_global_decision_module
-
+from d20_governance.utils.voting import (
+    ACTIVE_GLOBAL_DECISION_MODULES,
+    CONTINUOUS_INPUT_DECISION_MODULES,
+    VoteContext,
+    VoteFailedException,
+    set_decision_module,
+    vote_state_manager,
+    vote,
+    set_global_decision_module,
+)
+from discord import app_commands
+from discord.ext import tasks
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -108,9 +118,9 @@ class MyBot(commands.Bot):
                                 )
                                 return
 
-                            CONTINUOUS_INPUT_DECISION_MODULES[module_name][
-                                "input_value"
-                            ] += change
+                            CONTINUOUS_INPUT_DECISION_MODULES[
+                                module_name
+                            ].input_value += change
                             await display_module_status(
                                 context, CONTINUOUS_INPUT_DECISION_MODULES
                             )
@@ -392,11 +402,10 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                 try:
                     await execute_action(game_channel_ctx, command, args)
                     break
-                # TODO: Add more specific exceptions
-                except Exception as e:
-                    print(f"{Fore.RED}Error encountered: {e}{Style.RESET_ALL}")
+                except VoteFailedException as ve:
+                    print(f"Vote failed: {ve} Retrying...")
                     if retries > 0:
-                        # TODO: how can we avoid the global
+                        # TODO: avoid the global
                         global VOTE_RETRY
                         VOTE_RETRY = True
                         # view = TimeoutView(countdown_timeout=60)
@@ -446,7 +455,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
 
                             embed = discord.Embed(
                                 title=f"Results for: `{vote_state_manager.question}`:",
-                                description=f"In absence of collective decision making, the bot as autocratically selected a result randomly. Result: {winning_option}",
+                                description=f"In absence of collective decision making, the bot as autocratically selected a random result. Result: {winning_option}",
                                 color=discord.Color.dark_gold(),
                             )
 
@@ -459,6 +468,15 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                             DECISION_DICT[vote_state_manager.question] = decision_data
                             await game_channel_ctx.send(embed=embed)
                             break
+                except Exception as e:
+                    # For all other errors, log the error and continue to the next action
+                    print(
+                        f"Unexpected error encountered: {e}, continuing to next action."
+                    )
+                    logging.error(
+                        f"Unexpected error encountered: {e}, continuing to next action."
+                    )
+                    break
 
     async def progress_checker():
         if progress_conditions == None or len(progress_conditions) == 0:
@@ -979,12 +997,20 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
             self.proposed_value_name.value: self.proposed_value_definition.value
         }
 
-        vote_result = await lazy_consensus(
-            channel=interaction.channel,
-            question=f"Should we change the following value {value_revision_manager.selected_value} to the newly proposed value: {self.proposed_value_name}: {self.proposed_value_definition}?",
+        member_count = (
+            len(interaction.channel.members) - 1
+        )  # subtract one to account for bot
+        question = f"Should we change the value *{value_revision_manager.selected_value}* to the newly proposed value: *{self.proposed_value_name}*?"
+        vote_context = VoteContext.create(
+            interaction.channel.send,
+            member_count,
+            question=question,
             options=current_proposal,
-            timeout=20,
+            timeout=30,
+            decision_module_name="lazy_consensus",
         )
+
+        vote_result = await vote(vote_context)
 
         # Check if the proposed value was accepted (i.e., not objected to)
         if self.proposed_value_name.value in vote_result:
@@ -1598,20 +1624,28 @@ async def trigger_vote(
     """
     vote_state_manager.question = question
     quest = bot.quest
+    member_count = len(ctx.channel.members) - 1  # subtract one to account for bot
+    vote_context = VoteContext.create(
+        ctx.send,
+        member_count,
+        ctx=ctx,
+        question=question,
+        timeout=int(timeout),
+        topic=topic,
+        quest=quest,
+    )
     if type == "values":
-        contenders = list(value_revision_manager.proposed_values_dict.values())
-        non_objection_options = await lazy_consensus(
-            ctx=ctx,
-            quest=quest,
-            question=question,
-            options=value_revision_manager.proposed_values_dict,
-            timeout=int(timeout),
-        )
+        options = list(value_revision_manager.proposed_values_dict.values())
+        vote_context.decision_module_name = "lazy_consensus"
+        vote_context.options = options
+        non_objection_options = await vote(vote_context=vote_context)
         value_revision_manager.agora_values_dict.update(non_objection_options)
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-        contenders = list(bot.quest.players_to_submissions.values())
-        await vote(ctx, quest, question, contenders, int(timeout), topic)
+        options = list(bot.quest.players_to_submissions.values())
+        vote_context.decision_module_name = None  # choose decision module randomly
+        vote_context.options = options
+        await vote(vote_context=vote_context)
         # Reset the players_to_submissions dictionary for the next round
         bot.quest.reset_submissions()
 
@@ -1634,6 +1668,7 @@ async def trigger_vote(
         app_commands.Choice(name="Long (90 seconds)", value=90),
     ]
 )
+# TODO: vote not invoked correctly, needs to be updated; move to experimental
 async def propose(
     interaction: discord.Interaction,
     proposal: str,
@@ -1769,6 +1804,17 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
 
 
+async def clear_decision_input_values(ctx):
+    """
+    Set decision module input values to 0
+
+    Used during vote retries
+    """
+    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES.values():
+        decision_module.input_value = 0
+    print("Decision input values set to 0")
+
+
 @bot.command(hidden=True)
 async def list_values(ctx):
     message_content = "The Community's Current Values:\n\n"
@@ -1807,13 +1853,12 @@ async def calculate_module_inputs(context, retry=None, tally=None):
 
     if retry:
         max_value = max(
-            CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"]
-            for module in CONTINUOUS_INPUT_DECISION_MODULES
+            module.input_value for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
         )
         max_keys = [
-            module
-            for module in CONTINUOUS_INPUT_DECISION_MODULES
-            if CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"] == max_value
+            module_name
+            for module_name, module in CONTINUOUS_INPUT_DECISION_MODULES.items()
+            if module.input_value == max_value
         ]
 
         if not tally:
@@ -2079,4 +2124,5 @@ async def apply_culture_modules(active_modules, message, message_content: str):
             module_name
         ]  # TODO: active_modules list should be the modules themselves, not their names
         message_content = await module.filter_message(message, message_content)
+
     return message_content

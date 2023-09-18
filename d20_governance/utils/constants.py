@@ -4,8 +4,6 @@ from dotenv import load_dotenv
 from ruamel.yaml import YAML
 from discord.ext import commands
 
-from d20_governance.utils.decisions import Consensus, Majority
-
 
 def read_config(file_path):
     """
@@ -166,54 +164,6 @@ CIRCLE_EMOJIS = [
 FILE_COUNT = 0  # Global variable to store the count of created files
 MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
-
-# DECISION MODULES
-ACTIVE_GLOBAL_DECISION_MODULES = {}
-
-DECISION_MODULES = {
-    "majority": Majority({
-        "name": "majority",
-        "description": "Majority requires a simiple majority from the number of people who voteon the options.",
-        "state": False,
-        "activated": False,
-        "activated_message": "",
-        "deactivated_message": "",
-        "url": "",  # TODO: make decision img
-        "icon": GOVERNANCE_SVG_ICONS["decision"],
-        "input_value": 0,
-        "valid_for_continuous_input": True,
-    }),
-    "consensus": Consensus({
-        "name": "consensus",
-        "description": "Consensus requires everyone in the simulation to vote on the same option.",
-        "state": False,
-        "activated": False,
-        "activated_message": "",
-        "deactivated_message": "",
-        "url": "",  # TODO: make decision img
-        "icon": GOVERNANCE_SVG_ICONS["decision"],
-        "input_value": 0,
-        "valid_for_continuous_input": True,
-    }),
-    "lazy_consensus": {
-        "name": "lazy consensus",
-        "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",
-        "state": False,
-        "activated": False,
-        "activated_message": "",
-        "deactivated_message": "",
-        "url": "",  # TODO: make decision img
-        "icon": GOVERNANCE_SVG_ICONS["decision"],
-        "input_value": 0,
-        "valid_for_continuous_input": False,
-    },
-}
-
-CONTINUOUS_INPUT_DECISION_MODULES = {
-    module: attributes
-    for module, attributes in DECISION_MODULES.items()
-    if attributes["valid_for_continuous_input"]
-}
 
 # DECISIONS LOG
 
