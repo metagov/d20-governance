@@ -46,25 +46,6 @@ consensus = (
 
 VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
 
-from d20_governance.utils.constants import (
-    CIRCLE_EMOJIS,
-    DECISION_DICT,
-    GOVERNANCE_SVG_ICONS,
-)
-from d20_governance.utils.utils import (
-    decision_manager,
-    Quest,
-    add_module_to_stack,
-    get_current_governance_stack,
-    get_modules_for_type,
-    make_module_png,
-)
-from d20_governance.utils.cultures import (
-    CULTURE_MODULES,
-    value_revision_manager,
-    prompt_object,
-)
-
 
 async def get_module_png(module):
     """
@@ -562,6 +543,10 @@ async def vote(vote_context: VoteContext):
     if vote_context.quest is not None:
         if vote_context.quest.fast_mode:
             vote_context.timeout = 7
+
+    if vote_context.options == None:
+        print("No options recieved to vote on")
+        return
 
     if vote_context.decision_module_name is None:
         channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(

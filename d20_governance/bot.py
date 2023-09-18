@@ -11,7 +11,6 @@ import random
 from colorama import Fore, Style
 from typing import Union
 
-from typing import Union
 from discord.app_commands import command as slash_command
 from discord.interactions import Interaction
 from discord import app_commands
@@ -405,7 +404,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     await execute_action(game_channel_ctx, command, args)
                     break
                 except VoteFailedException as ve:
-                    print(f"Vote failed: {ve} Retrying...")
+                    print(f"{Fore.RED}Vote failed: {ve} Retrying...{Style.RESET_ALL}")
                     if retries > 0:
                         # TODO: avoid the global
                         global VOTE_RETRY
@@ -1354,64 +1353,6 @@ async def ask_to_proceed(ctx, countdown_timeout: int = None):
     view = TimeoutView(countdown_timeout=countdown_timeout)
     await ctx.send("Do you need more time?", view=view)
     await view.wait()
-
-
-# PROGRESSION COMMANDS
-
-
-class TimeoutView(View):
-    def __init__(self):
-        super().__init__(timeout=15.0)
-        self.wait_finished = asyncio.Event()
-
-    @discord.ui.button(label="Yes", style=discord.ButtonStyle.green, custom_id="yes")
-    async def yes_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        # await interaction.response.defer()
-        await interaction.response.send_message(
-            "Someone has answered yes. Starting the countdown."
-        )
-        countdown_task = asyncio.create_task(
-            countdown(interaction, timeout_seconds=120, text="until the next stage.")
-        )
-        countdown_task.add_done_callback(lambda _: self.wait_finished.set())
-
-    @discord.ui.button(
-        label="I don't need more time.",
-        style=discord.ButtonStyle.gray,
-        custom_id="no",
-    )
-    async def no_button(
-        self, interaction: discord.Interaction, button: discord.ui.Button
-    ):
-        # await interaction.response.defer()
-        await interaction.response.send_message("Noted", ephemeral=True)
-        return
-
-    def set_message(self, message):
-        self.message = message
-
-    async def on_timeout(self):
-        # Disable the button after the timeout
-        for item in self.children:
-            if isinstance(item, discord.ui.Button):
-                item.disabled = True
-        # Update the message to reflect the change
-        await self.message.edit(view=self)
-        self.wait_finished.set()
-
-    async def wait(self):
-        await self.wait_finished.wait()
-        self.wait_finished.clear()
-
-
-@bot.command()
-async def ask_to_proceed(ctx):
-    view = TimeoutView()
-    await ctx.send("Do you need more time?", view=view)
-    await view.wait()
-    print("view finished")
 
 
 # META GAME COMMANDS
