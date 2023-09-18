@@ -1,26 +1,347 @@
+from abc import ABC, abstractmethod
+import asyncio
 import time
-from typing import List, Tuple
+from typing import Any, List, Tuple
 import random
+from attr import dataclass
 import discord
-from d20_governance.utils.constants import CIRCLE_EMOJIS
-from d20_governance.utils.utils import Quest, get_module_png
-from d20_governance.utils.decisions import *
-from d20_governance.utils.cultures import value_revision_manager, prompt_object
+from d20_governance.utils.constants import CIRCLE_EMOJIS, DECISION_DICT, GOVERNANCE_SVG_ICONS
+from d20_governance.utils.utils import decision_manager, Quest, add_module_to_stack, get_current_governance_stack, get_modules_for_type, make_module_png
+from d20_governance.utils.cultures import CULTURE_MODULES, value_revision_manager, prompt_object
 
-# Voting functions
-majority = (
-    lambda results: max(results, key=results.get)
-    if max(results.values()) > sum(results.values()) / 2
-    else None
-)
-consensus = (
-    lambda results: max(results, key=results.get)
-    if max(results.values()) == sum(results.values())
-    else None
-)
+async def get_module_png(module):
+    """
+    Get module png from make_module_png function based on module
+    """
+    print("Getting module png")
+    modules = {**DECISION_MODULES, **CULTURE_MODULES}
+    
+    if module in modules:
+        name = modules[module]["name"]
+        svg_icon = modules[module]["icon"]
+        image_url = await make_module_png(name, svg_icon)
+        return image_url
+    else:
+        print(f"Module {module} not found in module dictionaries")
+        return None
+    
+class VoteStateManager:
+    def __init__(self):
+        self.question = ""
 
-VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
+vote_state_manager = VoteStateManager()
 
+class VoteFailedException(Exception):
+    """
+    Raised when a vote fails to produce a clear winner.
+    """
+    pass
+
+
+@dataclass
+class VoteContext:
+    send_message: Any
+    member_count: int
+    ctx: Any = None
+    options: List[str] = []
+    question: str = None
+    topic: str = None
+    timeout: int = 60
+    quest: Quest = None
+    decision_module_name: str = None
+
+    @staticmethod
+    def create(send_message, member_count, **kwargs):
+        return VoteContext(
+            send_message=send_message,
+            member_count=member_count,
+            ctx=kwargs.get('ctx'),
+            options=kwargs.get('options', []),
+            question=kwargs.get('question'),
+            topic=kwargs.get('topic'),
+            timeout=kwargs.get('timeout', 60),
+            quest=kwargs.get('quest'),
+            decision_module_name=kwargs.get('decision_module_name')
+        )
+
+
+class DecisionModule(ABC):
+    def __init__(self, config):
+        self.config = config
+
+    def __getitem__(self, key):
+        return self.config[key]
+
+    def _get_results_message(self, results):
+        total_votes = sum(results.values())
+        message = "**Vote Breakdown:**\n\n"
+        message += f"** Total votes:** {total_votes}\n\n"
+        for option, votes in results.items():
+            percentage = (votes / total_votes) * 100 if total_votes else 0
+            message += (
+                f"**Option:** {option}\n**Votes:** {votes} -- ({percentage:.2f}%)\n\n"
+            )
+
+        if self.winning_option:
+            message += f"**Winning option:** {self.winning_option}\n\n"
+            message += (
+                "A record of all decisions can be displayed by typing `-list_decisions`"
+            )
+        else:
+            message += "No winner was found.\n\n"
+
+        return message
+    
+    async def get_vote_result(self, vote_context: VoteContext):
+        if self.vote_view is None:
+            raise ValueError("No vote view set")
+        
+        await self._wait_for_votes_or_timeout(vote_context.member_count, vote_context.timeout)
+        
+        # Tally votes
+        results = self._tally_votes(vote_context.options)
+        
+        winning_option = self.get_winning_option(vote_context, results) if results else None
+        self.vote_view = None
+
+        
+        if winning_option is None:
+            # If retries are configured, voting will be repeated
+            await vote_context.send_message("No winner was found.")
+            raise VoteFailedException("No winner was found.")
+        
+        self.winning_option = winning_option
+        self.record_vote_result(vote_context.question, vote_context.topic)
+        return self._get_results_message(results), winning_option
+
+
+    async def _wait_for_votes_or_timeout(self, member_count, timeout):
+        start_time = time.time()
+        while True:
+            elapsed_time = time.time() - start_time
+            if len(self.vote_view.votes) == member_count or elapsed_time > timeout:
+                break
+            await asyncio.sleep(1)
+
+    def _tally_votes(self, options):
+        results = {}
+        votes = self.vote_view.votes
+        for vote in votes.values():
+            option_index = int(vote)
+            option = options[option_index]
+            results[option] = results.get(option, 0) + 1
+        return results
+    
+    async def create_vote_view(self, vote_context, embed, file):
+        # Create list of options with emojis
+        assigned_emojis = random.sample(CIRCLE_EMOJIS, len(vote_context.options))
+
+        options_text = ""
+        for i, option in enumerate(vote_context.options):
+            options_text += f"{assigned_emojis[i]} {option}\n"
+
+        # Create vote view UI
+        vote_view = VoteView(vote_context.timeout)
+
+        # Add options to the view dropdown select menu
+        for i, option in enumerate(vote_context.options):
+            if len(option) > 100:
+                truncated_option = option[:97] + "..."
+            else:
+                truncated_option = option
+            # truncate the option if it's longer than 100 characters
+            vote_view.add_option(
+                label=f"{truncated_option}",
+                value=str(i),
+                emoji=assigned_emojis[i],
+            )
+
+        # Send embed message and view
+        await vote_context.send_message(embed=embed, file=file, view=vote_view)
+        self.vote_view = vote_view
+        return vote_view
+    
+    def record_vote_result(self, question, topic):
+        winning_option = self.winning_option
+        decision_data = {"decision": winning_option, "decision_module": self["name"]}
+        DECISION_DICT[question] = decision_data
+        if topic == "group_name":
+            decision_manager.group_name = winning_option
+            prompt_object.group_name = winning_option
+        elif topic == "group_purpose":
+            prompt_object.group_purpose = winning_option
+        elif topic == "group_goal":
+            decision_manager.group_purpose = winning_option
+    
+    @abstractmethod
+    def get_winning_option(self, vote_context, results):
+        pass
+
+
+class Majority(DecisionModule):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def get_winning_option(self, vote_context, results):
+        if max(results.values()) > (sum(results.values()) / 2):
+            return max(results, key=results.get)
+        else:
+            return None
+
+class Consensus(DecisionModule):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def get_winning_option(self, vote_context, results):
+        # All players must have voted, and all votes must be the same
+        num_votes = sum(results.values())
+        max_votes = max(results.values())
+        if max_votes == num_votes and num_votes == vote_context.member_count:
+            return max(results, key=results.get)
+        else:
+            return None
+
+# TODO: make this handle more generic options than key-value pairs
+class LazyConsensus(DecisionModule):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def __getitem__(self, key):
+        return self.config[key]
+
+    async def create_vote_view(self, vote_context, embed, file):
+        views = []
+        for name, description in vote_context.options.items():
+            view = LazyConsensusView(name, vote_context.timeout)
+            views.append(view)
+            message = await vote_context.send_message(f"**Name:** {name}\n**Description:** {description}", view=view)
+            view.set_message(message)
+
+        await asyncio.gather(*(view.wait() for view in views))
+        self.views = views
+        return views
+
+    async def get_vote_result(self, vote_context: VoteContext):
+        non_objection_options = {
+            view.option: vote_context.options[view.option] for view in self.views if not view.objections and view.option in vote_context.options
+        }
+        self.winning_options = non_objection_options
+        self.record_vote_result(vote_context.question, vote_context.topic)
+        return self._get_results_message(vote_context.options, non_objection_options), non_objection_options
+
+    def _get_results_message(self, all_options, non_objection_options):
+        messages = []
+        for name, description in all_options.items():
+            status = "Accepted" if name in non_objection_options else "Rejected"
+            messages.append(f"**{name}: {status}** ")
+        return "\n".join(messages)
+
+    def record_vote_result(self, question, topic=None):
+        decision_data = {"decision": self.winning_options, "decision_module": self["name"]}
+        DECISION_DICT[question] = decision_data
+
+    def get_winning_option(self, vote_context, results):
+        pass
+
+class LazyConsensusView(discord.ui.View):
+    def __init__(self, option, timeout):
+        super().__init__(timeout=timeout)
+        self.option = option
+        self.objections = {}
+
+    @discord.ui.button(
+        style=discord.ButtonStyle.red, label="Object", custom_id="object_button"
+    )
+    async def object_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # Record the user's objection
+        self.objections[interaction.user] = True
+        await interaction.response.send_message(
+            "Your objection has been recorded.", ephemeral=True
+        )
+
+    def set_message(self, message):
+        self.message = message
+
+    async def on_timeout(self):
+        # Disable the button after the timeout
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        # Update the message to reflect the change
+        await self.message.edit(view=self)
+
+async def set_decision_module():
+    # Set starting decision module if necessary
+    current_modules = get_current_governance_stack()["modules"]
+    decision_module = next(
+        (module for module in current_modules if module["type"] == "decision"), None
+    )
+    if decision_module is None:
+        await set_starting_decision_module()
+
+    return decision_module
+
+
+async def set_starting_decision_module():
+    print("Randomly assigning a starting decision module")
+    decision_modules = get_modules_for_type("decision")
+    if decision_modules:  # Check if decision_modules is not empty
+        rand = random.randint(0, len(decision_modules) - 1)
+        selected_module = decision_modules[rand]
+        print(f"The selected module is: {selected_module}")
+    else:
+        raise ValueError("No decision modules available to choose from")
+    add_module_to_stack(selected_module)
+
+
+ACTIVE_GLOBAL_DECISION_MODULES = {}
+
+DECISION_MODULES = {
+    "majority": Majority({
+        "name": "majority",
+        "description": "Majority requires a simiple majority from the number of people who voteon the options.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+        "valid_for_continuous_input": True,
+    }),
+    "consensus": Consensus({
+        "name": "consensus",
+        "description": "Consensus requires everyone in the simulation to vote on the same option.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+        "valid_for_continuous_input": True,
+    }),
+    "lazy_consensus": LazyConsensus({
+        "name": "lazy consensus",
+        "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",
+        "state": False,
+        "activated": False,
+        "activated_message": "",
+        "deactivated_message": "",
+        "url": "",  # TODO: make decision img
+        "icon": GOVERNANCE_SVG_ICONS["decision"],
+        "input_value": 0,
+        "valid_for_continuous_input": False,
+    }),
+}
+
+CONTINUOUS_INPUT_DECISION_MODULES = {
+    module: attributes
+    for module, attributes in DECISION_MODULES.items()
+    if attributes["valid_for_continuous_input"]
+}
 
 async def set_global_decision_module(ctx, decision_module: str = None):
     channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
@@ -45,9 +366,8 @@ async def set_global_decision_module(ctx, decision_module: str = None):
 
 
 class VoteView(discord.ui.View):
-    def __init__(self, ctx, timeout):
+    def __init__(self, timeout):
         super().__init__(timeout=timeout)
-        self.ctx = ctx
         self.votes = {}
 
     async def on_timeout(self):
@@ -87,48 +407,37 @@ class VoteView(discord.ui.View):
             )
 
 
-async def vote(
-    ctx,
-    quest: Quest,
-    question: str = None,
-    options: List[str] = [],
-    timeout: int = 60,
-    topic: str = None,
-    decision_module: str = None,
-):
+async def vote(vote_context: VoteContext):
     """
     Trigger a vote
     """
-    if quest.fast_mode:
-        timeout = 7
+    if vote_context.quest is not None:
+        if vote_context.quest.fast_mode:
+            vote_context.timeout = 7
 
-    if decision_module == None:
-        channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
+    if vote_context.decision_module_name is None:
+        channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(vote_context.ctx.channel, [])
 
         if not channel_decision_modules:
-            channel_decision_modules = await set_global_decision_module(ctx)
+            channel_decision_modules = await set_global_decision_module(vote_context.ctx)
 
-        decision_module = channel_decision_modules[0]
+        vote_context.decision_module_name = channel_decision_modules[0]
 
-    print(f"A vote has been triggered. The decision module is: {decision_module}")
+    decision_module: DecisionModule = DECISION_MODULES[vote_context.decision_module_name]
+    print(f"A vote has been triggered. The decision module is: {vote_context.decision_module_name}")
 
-    if not options:
+    if not vote_context.options:
         raise Exception("No options were provided for voting.")
-
-    # TODO: fix
-    # if len(options) > 10 or (not quest.solo_mode and len(options) < 2):
-    #     await ctx.send("Error: A poll must have between 2 and 10 options.")
-    #     return
 
     # Define embed
     embed = discord.Embed(
-        title=f"Vote: {question}",
-        description=f"**Decision Module:** {decision_module.capitalize()}",
+        title=f"Vote: {vote_context.question}",
+        description=f"**Decision Module:** {vote_context.decision_module_name.capitalize()}",
         color=discord.Color.dark_gold(),
     )
 
     # Get module png
-    module_png = await get_module_png(decision_module)
+    module_png = await get_module_png(vote_context.decision_module_name)
 
     # Add module png to vote embed
     if module_png is not None:
@@ -137,116 +446,27 @@ async def vote(
         embed.set_image(url=f"attachment://module.png")
         print("Module png attached to embed")
 
-    # Create list of options with emojis
-    assigned_emojis = random.sample(CIRCLE_EMOJIS, len(options))
-
-    options_text = ""
-    for i, option in enumerate(options):
-        options_text += f"{assigned_emojis[i]} {option}\n"
-
     # Add a description of how decisions are made based on decision module
     embed.add_field(
-        name=f"How decisions are made under {decision_module.capitalize()}:",
-        value=DECISION_MODULES[decision_module]["description"],
+        name=f"How decisions are made under {vote_context.decision_module_name.capitalize()}:",
+        value=DECISION_MODULES[vote_context.decision_module_name]["description"],
         inline=False,
     )
 
-    # Create vote view UI
-    vote_view = VoteView(ctx, timeout)
+    await decision_module.create_vote_view(vote_context, embed, file)
 
-    # Add options to the view dropdown select menu
-    for i, option in enumerate(options):
-        if len(option) > 100:
-            truncated_option = option[:97] + "..."
-        else:
-            truncated_option = option
-        # truncate the option if it's longer than 100 characters
-        vote_view.add_option(
-            label=f"{truncated_option}",
-            value=str(i),
-            emoji=assigned_emojis[i],
-        )
+    # member_count = len(vote_context.ctx.channel.members) - 1  # -1 to account for the bot
 
-    # Send embed message and view
-    await ctx.send(embed=embed, file=file, view=vote_view)
-    # await vote_view.wait()
-
-    member_count = len(ctx.channel.members) - 1  # -1 to account for the bot
-    print("member count " + str(member_count))
-    # New code to check for completion before the timeout
-    start_time = time.time()
-
-    while True:
-        elapsed_time = time.time() - start_time
-        if len(vote_view.votes) == member_count or elapsed_time > timeout:
-            break
-        await asyncio.sleep(1)  # Check every second
-
-    # Calculate total votes per member interaction
-    results = await get_vote_results(ctx, vote_view.votes, options)
-
-    # Calculate winning option if exists
-    winning_option = VOTING_FUNCTIONS[decision_module](results) if results else None
-    results_message = get_results_message(results, winning_option)
+    results_message, winning_option = await decision_module.get_vote_result(
+        vote_context
+    )
 
     # Display results
     embed = discord.Embed(
-        title=f"Results for: {question}:",
+        title=f"Results for: {vote_context.question}",
         description=results_message,
         color=discord.Color.dark_gold(),
     )
 
-    if winning_option is not None:
-        decision_data = {"decision": winning_option, "decision_module": decision_module}
-        DECISION_DICT[question] = decision_data
-        if value_revision_manager.proposed_values_dict:
-            value_revision_manager.agora_values_dict.update(
-                value_revision_manager.proposed_values_dict
-            )
-        if topic == "group_name":
-            decision_manager.group_name = winning_option
-            prompt_object.group_name = winning_option
-        elif topic == "group_purpose":
-            prompt_object.group_purpose = winning_option
-        elif topic == "group_goal":
-            decision_manager.group_purpose = winning_option
-
-    else:
-        # If retries are configured, voting will be repeated
-        raise Exception("No winner was found.")
-
-    await ctx.send(embed=embed)
+    await vote_context.send_message(embed=embed)
     return winning_option
-
-
-async def get_vote_results(results, votes, options):
-    print("Getting vote results")
-    results = {}
-    # for each member return results of vote
-    for vote in votes.values():
-        option_index = int(vote)
-        option = options[option_index]
-        results[option] = results.get(option, 0) + 1
-
-    return results
-
-
-def get_results_message(results, winning_option):
-    total_votes = sum(results.values())
-    message = "**Vote Breakdown:**\n\n"
-    message += f"** Total votes:** {total_votes}\n\n"
-    for option, votes in results.items():
-        percentage = (votes / total_votes) * 100 if total_votes else 0
-        message += (
-            f"**Option:** {option}\n**Votes:** {votes} -- ({percentage:.2f}%)\n\n"
-        )
-
-    if winning_option:
-        message += f"**Winning option:** {winning_option}\n\n"
-        message += (
-            "A record of all decisions can be displayed by typing `-list_decisions`"
-        )
-    else:
-        message += "No winner was found.\n\n"
-
-    return message

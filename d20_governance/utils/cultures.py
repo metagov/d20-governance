@@ -83,7 +83,8 @@ class ValueRevisionManager:
             if not vote_result:
                 print("value dict not updated")
             else:
-                del value_revision_manager.agora_values_dict[select_value]
+                if select_value in value_revision_manager.agora_values_dict:
+                    del value_revision_manager.agora_values_dict[select_value]
                 value_revision_manager.agora_values_dict.update(vote_result)
                 message_content = ""
                 for (
@@ -244,8 +245,8 @@ class Wildcard(CultureModule):
         A LLM filter for messages made by users
         """
         print("applying wildcard module")
-        get_module = CULTURE_MODULES.get("wildcard", None)
-        llm_prompt = get_module.config["llm_disclosure"]
+        module = CULTURE_MODULES.get("wildcard", None)
+        llm_prompt = module.config["llm_disclosure"]
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
             input_variables=["input_text", "group_name", "group_goal", "group_purpose"],
@@ -405,7 +406,7 @@ class Values(CultureModule):
     async def randomly_check_values(self, bot, ctx, channel):
         while True:
             print("in a value check loop")
-            current_time = datetime.utcnow()
+            current_time = datetime.datetime.utcnow()
             print(f"time is: {current_time}")
             # Randomly generate delay between executions
             delay = random.randint(45, 55)
@@ -445,9 +446,7 @@ class Values(CultureModule):
             except discord.HTTPException as e:
                 print(f"Error occurrent while fetching random message: {e}")
 
-
 values_module = Values(CultureModule)
-
 
 async def assign_role_to_user(user, role_name):
     guild = user.guild
