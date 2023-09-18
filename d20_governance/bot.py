@@ -20,7 +20,6 @@ from discord.ui import View
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
-from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import (
     ACTIVE_GLOBAL_DECISION_MODULES,
     CONTINUOUS_INPUT_DECISION_MODULES,
@@ -121,7 +120,7 @@ class MyBot(commands.Bot):
 
                             CONTINUOUS_INPUT_DECISION_MODULES[
                                 module_name
-                            ].input_value += change
+                            ]["input_value"] += change
                             await display_module_status(
                                 context, CONTINUOUS_INPUT_DECISION_MODULES
                             )
@@ -399,7 +398,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     f"{Fore.BLUE}■ Progress condition met. Ending action_runner{Style.RESET_ALL}"
                 )
                 break
-            while retries >= 0:
+            while retries > 0:
                 try:
                     await execute_action(game_channel_ctx, command, args)
                     break
@@ -541,7 +540,7 @@ async def countdown(
 
     @tasks.loop(seconds=15)
     async def update_countdown():
-        nonlocal remaining_seconds, remaining_minutes
+        nonlocal remaining_seconds, remaining_minutes, message
         remaining_minutes = remaining_seconds / 60
         new_message = (
             f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
@@ -562,13 +561,13 @@ async def countdown(
 
     @tasks.loop(minutes=1)
     async def send_new_message():
-        nonlocal remaining_seconds, remaining_minutes
+        nonlocal remaining_seconds, remaining_minutes, message
         remaining_minutes = remaining_seconds / 60
         if remaining_minutes <= 0:
             await message.edit(content="```⏲️ Counting down finished.```")
             print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             send_new_message.stop()
-        if remaining_minutes <= remaining_minutes - 1:
+        else:
             new_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
             message = await channel.send(new_message)
             if bot.quest.progress_completed:
@@ -578,7 +577,7 @@ async def countdown(
                 send_new_message.stop()
 
     update_countdown.start()
-    send_new_message.start()
+    # send_new_message.start()
 
     try:
         while send_new_message.is_running() and update_countdown.is_running():
@@ -1351,7 +1350,8 @@ class TimeoutView(View):
 @bot.command()
 async def ask_to_proceed(ctx, countdown_timeout: int = None):
     view = TimeoutView(countdown_timeout=countdown_timeout)
-    await ctx.send("Do you need more time?", view=view)
+    message = await ctx.send("Do you need more time?", view=view)
+    view.set_message(message)
     await view.wait()
 
 
@@ -1644,7 +1644,7 @@ async def trigger_vote(
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
         options = list(bot.quest.players_to_submissions.values())
-        vote_context.decision_module_name = None  # choose decision module randomly
+        vote_context.decision_module_name = "random"  # choose decision module randomly
         vote_context.options = options
         await vote(vote_context=vote_context)
         # Reset the players_to_submissions dictionary for the next round

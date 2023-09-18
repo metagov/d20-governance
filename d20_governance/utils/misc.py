@@ -20,7 +20,6 @@ from discord.ui import View
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
-from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
 
 

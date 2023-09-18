@@ -88,7 +88,6 @@ stages:
       - action: wait 10 
       - action: set_global_decision_module "random"
       - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_purpose"
-      - action: ask_to_proceed 60
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
@@ -129,7 +128,6 @@ stages:
       - action: wait 10 
       - action: set_global_decision_module "random"
       - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_goal"
-      - action: ask_to_proceed 60
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"

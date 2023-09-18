@@ -8,8 +8,6 @@ import threading
 
 import discord
 from discord.ui import View
-
-from d20_governance.utils.decisions import *
 from d20_governance.utils.constants import (
     CIRCLE_EMOJIS,
     DECISION_DICT,
@@ -29,23 +27,7 @@ from d20_governance.utils.cultures import (
     prompt_object,
 )
 
-from typing import Any, Coroutine, List, Tuple
-
-
-# Voting functions
-majority = (
-    lambda results: max(results, key=results.get)
-    if max(results.values()) > sum(results.values()) / 2
-    else None
-)
-consensus = (
-    lambda results: max(results, key=results.get)
-    if max(results.values()) == sum(results.values())
-    else None
-)
-
-VOTING_FUNCTIONS = {"majority": majority, "consensus": consensus}
-
+from typing import Any, List
 
 async def get_module_png(module):
     """
@@ -113,6 +95,9 @@ class DecisionModule(ABC):
 
     def __getitem__(self, key):
         return self.config[key]
+
+    def __setitem__(self, key, value):
+        self.config[key] = value
 
     def _get_results_message(self, results):
         total_votes = sum(results.values())
@@ -571,14 +556,15 @@ async def vote(vote_context: VoteContext):
         if vote_context.quest.fast_mode:
             vote_context.timeout = 7
 
-    if vote_context.decision_module_name is None:
+    # TODO: avoid this special casing, random should not be indicated by the name
+    if vote_context.decision_module_name is None or vote_context.decision_module_name == "random":
         channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(
             vote_context.ctx.channel, []
         )
 
         if not channel_decision_modules:
             channel_decision_modules = await set_global_decision_module(
-                vote_context.ctx
+                vote_context.ctx, vote_context.decision_module_name
             )
 
         vote_context.decision_module_name = channel_decision_modules[0]
