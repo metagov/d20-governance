@@ -7,17 +7,22 @@ import traceback
 import sys
 import time
 import random
+
+from colorama import Fore, Style
 from typing import Union
+
 from discord.app_commands import command as slash_command
 from discord.interactions import Interaction
+from discord import app_commands
+from discord.ext import tasks, commands
+from discord.ui import View
+
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
 from d20_governance.utils.decisions import *
 from d20_governance.utils.voting import vote, set_global_decision_module
-from discord import app_commands
-from discord.ext import tasks, commands
-from discord.ui import Button, View
+
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -45,7 +50,7 @@ class MyBot(commands.Bot):
             level=logging.INFO,
             format="%(asctime)s %(levelname)s %(message)s",
         )
-        print(">> Logging to logs/bot.log <<")
+        print(f"{Fore.YELLOW}>> Logging to logs/bot.log << {Style.RESET_ALL}")
         with open(f"{LOGGING_PATH}/bot.log", "a") as f:
             f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
         logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
@@ -130,13 +135,11 @@ class MyBot(commands.Bot):
         except Exception as e:
             type, value, tb = sys.exc_info()
             traceback_str = "".join(traceback.format_exception(type, value, tb))
-            print(f"Unhandled exception:\n{traceback_str}")
+            print(f"{Fore.RED}Unhandled exception:\n{traceback_str}{Style.RESET_ALL}")
             logging.error(f"Unhandled exception:\n{traceback_str}")
             if bot.quest.game_channel:
-                print("quest game channel = true")
                 await bot.quest.game_channel.send("An error occured")
             else:
-                print("quest game channel = false")
                 await context.send("An error occurred.")
 
     @commands.Cog.listener()
@@ -144,23 +147,10 @@ class MyBot(commands.Bot):
         """
         Event handler for when the bot has been invited to a new guild.
         """
-        print(f"D20 Bot has been invited to server `{guild.name}`")
+        print(
+            f"{Fore.YELLOW}D20 Bot has been invited to server `{guild.name}`{Style.RESET_ALL}"
+        )
         await setup_server(guild)
-
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        if user.bot:
-            return
-
-        if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
-            if user.id in bot.voters:
-                await reaction.remove(user)
-                await user.send(
-                    f"Naughty naughty! You cannot vote twice!",
-                    delete_after=timeouts["vote"],
-                )
-            else:
-                bot.voters.add(user.id)
 
     @commands.Cog.listener()
     async def on_command(self, ctx):
@@ -168,7 +158,7 @@ class MyBot(commands.Bot):
         Event listener that prints command invoked, channel where invoked, and channel id
         """
         print(
-            f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+            f"{Fore.BLUE}⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id} {Style.RESET_ALL}"
         )
 
     @commands.Cog.listener()
@@ -181,14 +171,16 @@ class MyBot(commands.Bot):
             traceback.format_exception(type(error), error, error.__traceback__)
         )
         error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
-        print(error_message)
+        print(f"{Fore.RED}{error_message}{Style.RESET_ALL}")
         logging.error(error_message)
 
     @commands.Cog.listener()
     async def on_error(self, event):
         type, value, tb = sys.exc_info()
         traceback_str = "".join(traceback.format_exception(type, value, tb))
-        print(f"Unhandled exception in {event}:\n{traceback_str}")
+        print(
+            f"{Fore.RED}Unhandled exception in {event}:\n{traceback_str}{Style.RESET_ALL}"
+        )
         logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
 
 
@@ -263,7 +255,7 @@ async def start_quest(ctx, quest: Quest):
         llm_agent = get_llm_agent()
         num_stages = random.randint(5, 10)  # Adjust range as needed
         for _ in range(num_stages):
-            print("Generating stage with llm..")
+            print(f"{Fore.BLUE}Generating stage with llm..{Style.RESET_ALL}")
             stage = await generate_stage_llm(llm_agent)
             await process_stage(ctx, stage, quest)
 
@@ -288,9 +280,36 @@ async def start_quest(ctx, quest: Quest):
                 image_path=stage.get(QUEST_IMAGE_PATH_KEY),
             )
 
-            print(f"↷ Processing stage {stage.name}")
+            print(f"{Fore.BLUE}↷ Processing stage: '{stage.name}'{Style.RESET_ALL}")
 
             await process_stage(ctx, stage, quest, message_obj)
+
+
+# class VoteTimeoutView(View):
+#     def __init__(self, countdown_timeout):
+#         super().__init__(timeout=10.0)
+#         self.wait_finished = asyncio.Event()
+#         self.countdown_timeout = countdown_timeout
+
+#     @discord.ui.button(
+#         label="Extend Vote", style=discord.ButtonStyle.green, custom_id="extend_vote"
+#     )
+#     async def extend_vote_button(
+#         self, interaction: discord.Interaction, button: discord.ui.Button
+#     ):
+#         # Extend vote duration by 60 seconds
+#         self.timeout += 60
+#         await interaction.response.send_message("Vote duration extended by 60 seconds.")
+
+#     @discord.ui.button(
+#         label="Extend Vote", style=discord.ButtonStyle.green, custom_id="extend_vote"
+#     )
+#     async def extend_vote_button(
+#         self, interaction: discord.Interaction, button: discord.ui.Button
+#     ):
+#         # Extend vote duration by 60 seconds
+#         self.timeout += 60
+#         await interaction.response.send_message("Vote duration extended by 60 seconds.")
 
 
 async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Message):
@@ -362,7 +381,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
             command = globals().get(command_name)
             retries = action.retries if hasattr(action, "retries") else 0
             if bot.quest.progress_completed == True:
-                print("Progress condition met. Ending action_runner")
+                print(
+                    f"{Fore.BLUE}■ Progress condition met. Ending action_runner{Style.RESET_ALL}"
+                )
                 break
             while retries >= 0:
                 try:
@@ -370,11 +391,14 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     break
                 # TODO: Add more specific exceptions
                 except Exception as e:
-                    print(f"Error encountered: {e}")
+                    print(f"{Fore.RED}Error encountered: {e}{Style.RESET_ALL}")
                     if retries > 0:
                         # TODO: how can we avoid the global
                         global VOTE_RETRY
                         VOTE_RETRY = True
+                        # view = TimeoutView(countdown_timeout=60)
+                        # await ctx.send("Do you need more time?", view=view)
+                        # await view.wait()
                         print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
                             await clear_decision_input_values(game_channel_ctx)
@@ -449,7 +473,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                 args = progress_condition.arguments
                 tasks.append(function(game_channel_ctx, *args))
                 print(
-                    f"+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list"
+                    f"{Fore.BLUE}+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list{Style.RESET_ALL}"
                 )  # Debugging line
             for future in asyncio.as_completed(tasks):
                 condition_result = await future
@@ -488,10 +512,10 @@ async def countdown(
     message_interval_seconds = 60
     next_message_time = time.time() + message_interval_seconds
 
-    first_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
+    first_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}```"
     message = await channel.send(first_message)
 
-    @tasks.loop(seconds=10)
+    @tasks.loop(seconds=15)
     async def update_countdown():
         nonlocal remaining_seconds, remaining_minutes
         remaining_minutes = remaining_seconds / 60
@@ -502,7 +526,7 @@ async def countdown(
         if remaining_minutes <= 0:
             new_message = f"```⏲️ Counting down finished.```"
             await channel.send(new_message)
-            print("⧗ Countdown finished.")
+            print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             update_countdown.stop()
 
         # Check if all submissions have been submitted
@@ -514,16 +538,20 @@ async def countdown(
 
     @tasks.loop(minutes=1)
     async def send_new_message():
-        nonlocal remaining_minutes
+        nonlocal remaining_seconds, remaining_minutes
+        remaining_minutes = remaining_seconds / 60
         if remaining_minutes <= 0:
             await message.edit(content="```⏲️ Counting down finished.```")
-            print("⧗ Countdown finished.")
+            print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             send_new_message.stop()
         if remaining_minutes <= 2.5:
-            new_message = (
-                f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
-            )
+            new_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
             message = await channel.send(new_message)
+            if bot.quest.progress_completed:
+                await message.edit(
+                    content="```⏲️ All submissions submitted. Countdown finished.```"
+                )
+                send_new_message.stop()
 
     update_countdown.start()
     send_new_message.start()
@@ -536,7 +564,7 @@ async def countdown(
     except asyncio.CancelledError:
         update_countdown.stop()
         send_new_message.stop()
-        print("⧗ Countdown cancelled.")
+        print(f"{Fore.BLUE}⧗ Countdown cancelled.{Style.RESET_ALL}")
 
 
 async def all_submissions_submitted(ctx):
@@ -551,14 +579,17 @@ async def all_submissions_submitted(ctx):
         players_to_submissions = bot.quest.players_to_submissions
         if len(joined_players) == len(players_to_submissions):
             await ctx.send(
-                "Everyone has made their submission. The next stage will start in 5 seconds"
+                "```Everyone has made their submission. The next stage will start in 5 seconds```"
             )
-            print("All submissions submitted.")
+            print(f"{Fore.BLUE}✓ All submissions submitted.{Style.RESET_ALL}")
             bot.quest.progress_completed = True
             await asyncio.sleep(5)
             return True
-        print("⧗ Waiting for all submissions to be submitted.")
+        print("⧗ Waiting for all submissions to be submitted")
         await asyncio.sleep(1)  # Wait for a second before checking again
+
+
+# TODO: merge wait and progress_timeout
 
 
 async def wait(ctx, seconds: str):
@@ -568,11 +599,11 @@ async def wait(ctx, seconds: str):
     Used by in simulation yaml to add pauses in the simulations and check progress conditions
     """
     if bot.quest.fast_mode:
-        seconds = 5
-        print(f"Pausing for {seconds} seconds...")
+        seconds = 2
+        print(f"{Fore.BLUE}◫ Pausing for {seconds} seconds...{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     else:
-        print(f"Pausing for {seconds} seconds...")
+        print(f"{Fore.BLUE}◫ Pausing for {seconds} seconds...{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     return True
 
@@ -585,7 +616,7 @@ async def progress_timeout(ctx, seconds: str):
     """
     if bot.quest.fast_mode:
         seconds = 5
-        print(f"Progression Timeout")
+        print(f"{Fore.BLUE}▢ Progression Timeoutprint{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     else:
         print(f"Progression Timeout")
@@ -604,12 +635,10 @@ async def remind_me(interaction: discord.Interaction):
 async def turn_on_random_value_check(ctx):
     global values_check_task
     if bot.quest.game_channel == None:
-        print("bot quest = none")
         values_check_task = bot.loop.create_task(
             values_module.randomly_check_values(bot, ctx, ctx.channel)
         )
     else:
-        print("printing here")
         values_check_task = bot.loop.create_task(
             values_module.randomly_check_values(bot, ctx, bot.quest.game_channel)
         )
@@ -633,7 +662,7 @@ async def end(ctx):
         values_check_task.cancel()
         print("value check loop canceled")
 
-    print("Archiving...")
+    print(f"{Fore.BLUE}⇓ Archiving...{Style.RESET_ALL}")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
 
@@ -652,7 +681,7 @@ async def end(ctx):
 
     ARCHIVED_CHANNELS.append(ctx.channel)
 
-    print("Archived...")
+    print(f"{Fore.BLUE}⇓ Archived...{Style.RESET_ALL}")
 
 
 # VIEWS
@@ -1006,7 +1035,7 @@ async def embark(
     ctx = await bot.get_context(interaction)
 
     # Make Quest Builder view and return values from selections
-    print("Waiting for proposal to be built...")
+    print(f"{Fore.BLUE}Waiting for proposal to be built...{Style.RESET_ALL}")
 
     if not 1 <= number_of_players.value <= 8:
         await ctx.send("The game requires at least 2 and at most 8 players")
@@ -1036,14 +1065,14 @@ async def embark(
     )  # Empty initial value.
 
     await ctx.send(embed=embed, view=join_leave_view)
-    print("Waiting for players to join...")
+    print(f"{Fore.BLUE}Waiting for players to join...{Style.RESET_ALL}")
 
 
 async def make_game_channel(ctx, quest: Quest):
     """
     Game State: Setup the config and create unique quest channel
     """
-    print("Making temporary game channel...")
+    print(f"{Fore.BLUE}Making temporary game channel...{Style.RESET_ALL}")
 
     # Set permissions for bot
     bot_permissions = discord.PermissionOverwrite(read_messages=True)
@@ -1110,11 +1139,11 @@ async def turn_on_random_culture_module(ctx):
             await random_command.invoke(ctx)
         except Exception as e:
             error_msg = f"Failed to execute command {random_command_name}: {e}"
-            print(error_msg)
+            print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
             logging.error(error_msg)
     else:
         error_msg = f"Command {random_command_name} not found."
-        print(error_msg)
+        print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
         logging.error(error_msg)
 
 
@@ -1130,11 +1159,11 @@ async def turn_off_random_culture_module(ctx):
             random_culture_module_manager.random_culture_module = ""
         except Exception as e:
             error_msg = f"Failed to execute command {random_command_name}: {e}"
-            print(error_msg)
+            print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
             logging.error(error_msg)
     else:
         error_msg = f"Command {random_command_name} not found."
-        print(error_msg)
+        print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
         logging.error(error_msg)
 
 
@@ -1206,29 +1235,9 @@ async def values(ctx):
     await module.toggle_global_state(ctx)
 
     if module.config["global_state"] == True:
-        print("true")
         await turn_on_random_value_check(ctx)
     else:
-        print("false")
         await turn_off_random_value_check(ctx)
-
-
-# TODO: it would be nice to not have this toggled when displaying the info, maybe have a different command for display diversity info
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def diversity(ctx):
-    """
-    Toggle diversity module
-    """
-    module: Diversity = CULTURE_MODULES.get("diversity", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-    # Display the diversity counts if global state is true
-    if module.is_global_state_active():
-        await module.display_info(ctx)
 
 
 @bot.command()
@@ -1244,69 +1253,12 @@ async def amplify(ctx):
     await module.toggle_global_state(ctx)
 
 
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def ritual(ctx):
-    """
-    Toggle ritual module.
-    """
-    module: Ritual = CULTURE_MODULES.get("ritual", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-
-@bot.command(hidden=True)
-async def secret_message(ctx):
-    """
-    Secrecy: Randomly Send Messages to DMs
-    """
-    print("Secret message command triggered.")
-    await send_msg_to_random_player(bot.quest.game_channel)
-
-
-# TODO: I think we can probably remove this?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: False)
-async def vote_governance(ctx, governance_type: str):
-    """
-    Vote on governance module based on current or random decision module
-    """
-    if governance_type is None:
-        await ctx.send("Invalid governance type: {governance_type}")
-        return
-    modules = get_modules_for_type(governance_type)
-    module_names = [module["name"] for module in modules]
-    question = f"Which {governance_type} should we select?"
-    decision_module = await set_decision_module()
-    timeout = 60
-    winning_module_name = await vote(
-        ctx, question, decision_module, timeout, *module_names
-    )
-    # TODO: if no winning_module, hold retry logic or decide what to do
-    if winning_module_name:
-        winning_module = modules[module_names.index(winning_module_name)]
-        add_module_to_stack(winning_module)
-        await ctx.send(f" New module `{winning_module_name}` added to governance stack")
-        await post_governance(ctx)
-    else:
-        embed = discord.Embed(
-            title="Error - No winning module.",
-            color=discord.Color.red(),
-        )
-        await ctx.send(embed=embed)
-
-    return winning_module_name
-
-
 # PROGRESSION COMMANDS
-
-
 class TimeoutView(View):
-    def __init__(self):
-        super().__init__(timeout=15.0)
+    def __init__(self, countdown_timeout):
+        super().__init__(timeout=10.0)
         self.wait_finished = asyncio.Event()
+        self.countdown_timeout = countdown_timeout
 
     @discord.ui.button(label="Yes", style=discord.ButtonStyle.green, custom_id="yes")
     async def yes_button(
@@ -1317,7 +1269,11 @@ class TimeoutView(View):
             "Someone has answered yes. Starting the countdown."
         )
         countdown_task = asyncio.create_task(
-            countdown(interaction, timeout_seconds=120, text="until the next stage.")
+            countdown(
+                interaction,
+                timeout_seconds=self.countdown_timeout,
+                text="until the next stage.",
+            )
         )
         countdown_task.add_done_callback(lambda _: self.wait_finished.set())
 
@@ -1351,11 +1307,10 @@ class TimeoutView(View):
 
 
 @bot.command()
-async def ask_to_proceed(ctx):
-    view = TimeoutView()
+async def ask_to_proceed(ctx, countdown_timeout: int = None):
+    view = TimeoutView(countdown_timeout=countdown_timeout)
     await ctx.send("Do you need more time?", view=view)
     await view.wait()
-    print("view finished")
 
 
 # META GAME COMMANDS
@@ -1433,7 +1388,7 @@ async def quit(ctx):
     """
     Individually quit the quest
     """
-    print("Quiting...")
+    print(f"{Fore.BLUE}Quiting...{Style.RESET_ALL}")
     await ctx.send(f"{ctx.author.name} has quit the game!")
     # TODO: Implement the logic for quitting the game and ending it for the user
 
@@ -1444,9 +1399,9 @@ async def dissolve(ctx):
     """
     Trigger end of game
     """
-    print("Ending game...")
+    print(f"{Fore.BLUE}Ending game...{Style.RESET_ALL}")
     await end(ctx)
-    print("Game ended.")
+    print(f"{Fore.BLUE}Game ended.{Style.RESET_ALL}")
 
 
 @bot.command(hidden=True)
@@ -1491,11 +1446,11 @@ async def quiet(ctx, mode: string = None):
     if mode == "True":
         IS_QUIET = True
         await ctx.send("```Quiet mode is on```")
-        print("Quiet mode is on.")
+        print(f"{Fore.GREEN}Quiet mode is on.{Style.RESET_ALL}")
     if mode == "False":
         IS_QUIET = False
         await ctx.send("```Quiet mode is off```")
-        print("Quiet mode is off.")
+        print(f"{Fore.GREEN}Quiet mode is off.{Style.RESET_ALL}")
 
 
 # MISC COMMANDS
@@ -1581,7 +1536,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"📜 **{player_name}**:\n🗣️  {submission}")
+        submissions.append(f"🗣️ **{player_name}**:\n📜  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
@@ -1774,63 +1729,6 @@ async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]["file"]):
     await start_quest(ctx, quest)
 
 
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_randomize_snapshot(ctx):
-    """
-    Test making a randomized governance snapshot
-    """
-    shuffle_modules()
-    make_governance_snapshot()
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_png_creation(ctx):
-    """
-    Test governance stack png creation
-    """
-    make_governance_snapshot()
-    with open("output.png", "rb") as f:
-        png_file = discord.File(f, "output.svg")
-        await ctx.send(file=png_file)
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_img_generation(ctx, text="Obscurity"):
-    """
-    Test stability image generation
-    """
-    image = generate_image(text)
-
-    # Save the image to a file
-    image.save("generated_image.png")
-
-    # Post the image to the Discord channel
-    await ctx.send(file=discord.File("generated_image.png"))
-
-    # Clean up the image file
-    os.remove("generated_image.png")
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
-    """
-    Test stability image generation
-    """
-    if module in module_dict:
-        module_name = module_dict[module]["name"]
-        svg_icon = module_dict[module]["icon"]
-        image = make_module_png(module_name, svg_icon)
-    await ctx.send(file=discord.File(image))
-
-
 # COMMAND MANAGEMENT
 @bot.command(hidden=True)
 async def change_cmd_acl(ctx, setting_name, value, command_name=""):
@@ -1854,18 +1752,6 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
 
     if command_name != None:
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
-
-
-# GOVERNANCE INPUT
-async def clear_decision_input_values(ctx):
-    """
-    Set decision module input values to 0
-
-    Used during vote retries
-    """
-    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES:
-        CONTINUOUS_INPUT_DECISION_MODULES[decision_module]["input_value"] = 0
-    print("Decision input values set to 0")
 
 
 @bot.command(hidden=True)
