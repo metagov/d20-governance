@@ -51,7 +51,7 @@ async def get_module_png(module):
     """
     Get module png from make_module_png function based on module
     """
-    print("Getting module png")
+    print("- Getting module png")
     modules = {**DECISION_MODULES, **CULTURE_MODULES}
 
     if module in modules:
@@ -139,7 +139,7 @@ class DecisionModule(ABC):
             raise ValueError("No vote view set")
 
         await self._wait_for_votes_or_timeout(
-            vote_context.member_count, vote_context.timeout
+            vote_context, vote_context.member_count, vote_context.timeout
         )
 
         # Tally votes
@@ -159,12 +159,40 @@ class DecisionModule(ABC):
         self.record_vote_result(vote_context.question, vote_context.topic)
         return self._get_results_message(results), winning_option
 
-    async def _wait_for_votes_or_timeout(self, member_count, timeout):
+    async def _wait_for_votes_or_timeout(
+        self, vote_context: VoteContext, member_count, timeout
+    ):
         start_time = time.time()
+        extension_time = timeout - 45
+        extension_triggered = False
+
         while True:
             elapsed_time = time.time() - start_time
+            remaining_time = timeout - elapsed_time
+            print(f"Inside while vote loop: {remaining_time}")
+
+            # If all members have voted, break out of the loop
             if len(self.vote_view.votes) == member_count or elapsed_time > timeout:
                 break
+
+            # Set extension_triggered to True
+            if remaining_time <= extension_time and not extension_triggered:
+                print("Inside extension trigger if statement")
+                extension_triggered = True
+
+                extension_view = VoteTimeoutView(vote_context.ctx, self.vote_view)
+                extension_message = await vote_context.ctx.send(
+                    "```Do you want to extend the vote duration?```",
+                    view=extension_view,
+                )
+                try:
+                    await extension_view.wait()
+                    if extension_view.extension_triggered:
+                        timeout += 60  # Extend the timeout by 60 seconds
+                except asyncio.TimeoutError:
+                    await extension_message.delete()
+                    raise Exception("No winner was found")
+
             await asyncio.sleep(1)
 
     def _tally_votes(self, options):
@@ -429,9 +457,10 @@ async def set_global_decision_module(ctx, decision_module: str = None):
 
 
 class VoteTimeoutView(View):
-    def __init__(self, ctx):
+    def __init__(self, ctx, vote_view):
         super().__init__(timeout=15.0)
         self.ctx = ctx
+        self.vote_view = vote_view
         self.timeout = 0
         self.extension_triggered = False
         self.timeout_reached = False
@@ -444,14 +473,12 @@ class VoteTimeoutView(View):
     ):
         # Extend vote duration by 60 seconds
         if not self.extension_triggered:
-            vote_view = VoteView(self.ctx, self.timeout)
             await interaction.response.send_message(
                 "Vote duration extended by 60 seconds."
             )
-            vote_view.timeout += 60
+            self.vote_view.timeout += 60
             self.extension_triggered = True
-            if vote_view:
-                vote_view.set_extended(True)
+            self.vote_view.set_extended(True)
             button.disabled = True
             await interaction.message.edit(view=self)
             self.stop()
@@ -472,7 +499,7 @@ class VoteTimeoutView(View):
 
     async def interaction_check(self, interaction: discord.Interaction):
         # Check if the timeout has occurred
-        if self.timeout_reached():
+        if self.timeout_reached:
             # Disable all buttons if the timeout has occurred
             for child in self.children:
                 child.disabled = True
@@ -544,10 +571,6 @@ async def vote(vote_context: VoteContext):
         if vote_context.quest.fast_mode:
             vote_context.timeout = 7
 
-    if vote_context.options == None:
-        print("No options recieved to vote on")
-        return
-
     if vote_context.decision_module_name is None:
         channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(
             vote_context.ctx.channel, []
@@ -568,7 +591,8 @@ async def vote(vote_context: VoteContext):
     )
 
     if not vote_context.options:
-        raise Exception("No options were provided for voting.")
+        print("No options recieved to vote on")
+        return
 
     # Define embed
     embed = discord.Embed(
@@ -585,7 +609,7 @@ async def vote(vote_context: VoteContext):
         print("- Attaching module png to embed")
         file = discord.File(module_png, filename="module.png")
         embed.set_image(url=f"attachment://module.png")
-        print("Module png attached to embed")
+        print("- Module png attached to embed")
 
     # Add a description of how decisions are made based on decision module
     embed.add_field(
@@ -596,7 +620,9 @@ async def vote(vote_context: VoteContext):
 
     await decision_module.create_vote_view(vote_context, embed, file)
 
-    # member_count = len(vote_context.ctx.channel.members) - 1  # -1 to account for the bot
+    member_count = (
+        len(vote_context.ctx.channel.members) - 1
+    )  # -1 to account for the bot
 
     results_message, winning_option = await decision_module.get_vote_result(
         vote_context
@@ -608,25 +634,6 @@ async def vote(vote_context: VoteContext):
         description=results_message,
         color=discord.Color.dark_gold(),
     )
-
-    if winning_option is not None:
-        decision_data = {"decision": winning_option, "decision_module": decision_module}
-        DECISION_DICT[vote_context.question] = decision_data
-        if value_revision_manager.proposed_values_dict:
-            value_revision_manager.agora_values_dict.update(
-                value_revision_manager.proposed_values_dict
-            )
-        if vote_context.topic == "group_name":
-            decision_manager.group_name = winning_option
-            prompt_object.group_name = winning_option
-        elif vote_context.topic == "group_purpose":
-            prompt_object.group_purpose = winning_option
-        elif vote_context.topic == "group_goal":
-            decision_manager.group_purpose = winning_option
-
-    else:
-        # If retried are configured, voting will be repeated
-        raise Exception("No winner was found.")
 
     await vote_context.ctx.send(embed=embed)
     return winning_option

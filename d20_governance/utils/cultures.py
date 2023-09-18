@@ -169,6 +169,8 @@ class Obscurity(CultureModule):
     async def filter_message(
         self, message: discord.Message, message_string: str
     ) -> str:
+        print(f"{Fore.GREEN}※ applying obscurity module{Style.RESET_ALL}")
+
         # Get the method from the module based on the value of "mode"
         method = getattr(self, self.config["mode"])
 

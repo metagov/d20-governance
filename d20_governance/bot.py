@@ -568,7 +568,7 @@ async def countdown(
             await message.edit(content="```⏲️ Counting down finished.```")
             print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             send_new_message.stop()
-        if remaining_minutes <= 2.5:
+        if remaining_minutes <= remaining_minutes - 1:
             new_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
             message = await channel.send(new_message)
             if bot.quest.progress_completed:
@@ -640,10 +640,10 @@ async def progress_timeout(ctx, seconds: str):
     """
     if bot.quest.fast_mode:
         seconds = 5
-        print(f"{Fore.BLUE}▢ Progression Timeoutprint{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}▢ Progression Timeout{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     else:
-        print(f"Progression Timeout")
+        print(f"{Fore.BLUE}▢ Progression Timeout{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     bot.quest.progress_completed = True
     return True
@@ -982,7 +982,6 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        await value_revision_manager.store_proposal(
         await value_revision_manager.store_proposal(
             self.proposed_value_name, self.proposed_value_definition
         )
