@@ -382,6 +382,7 @@ DECISION_MODULES = {
             "icon": GOVERNANCE_SVG_ICONS["decision"],
             "input_value": 0,
             "valid_for_continuous_input": True,
+            "valid_for_global_module": True,
         }
     ),
     "consensus": Consensus(
@@ -396,6 +397,7 @@ DECISION_MODULES = {
             "icon": GOVERNANCE_SVG_ICONS["decision"],
             "input_value": 0,
             "valid_for_continuous_input": True,
+            "valid_for_global_module": True,
         }
     ),
     "lazy_consensus": LazyConsensus(
@@ -410,6 +412,7 @@ DECISION_MODULES = {
             "icon": GOVERNANCE_SVG_ICONS["decision"],
             "input_value": 0,
             "valid_for_continuous_input": False,
+            "valid_for_global_module": False,
         }
     ),
 }
@@ -420,22 +423,17 @@ CONTINUOUS_INPUT_DECISION_MODULES = {
     if attributes["valid_for_continuous_input"]
 }
 
-
 async def set_global_decision_module(ctx, decision_module: str = None):
     channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
+    if decision_module is not None:
+        decision_module = decision_module = DECISION_MODULES.get(decision_module, None)
 
-    if len(channel_decision_modules) > 0:
-        channel_decision_modules = []
+    # TODO: stop using random as a parameter, if no decision module is indicated, choose a random one
+    if decision_module is None or decision_module == "random":
+        valid_modules = [v for v in DECISION_MODULES.values() if v["valid_for_global_module"]]
+        decision_module = random.choice(valid_modules)
 
-    if decision_module is None and not channel_decision_modules:
-        decision_module = await set_decision_module()
-        print(decision_module)
-
-    if decision_module == "random":
-        decision_modules = ["majority", "consensus"]
-        decision_module = random.choice(decision_modules)
-
-    channel_decision_modules.append(decision_module)
+    channel_decision_modules.append(decision_module["name"])
     ACTIVE_GLOBAL_DECISION_MODULES[ctx.channel] = channel_decision_modules
     print(f"Global Decision Module set to: {channel_decision_modules}")
     return channel_decision_modules
@@ -606,10 +604,6 @@ async def vote(vote_context: VoteContext):
 
     await decision_module.create_vote_view(vote_context, embed, file)
 
-    member_count = (
-        len(vote_context.ctx.channel.members) - 1
-    )  # -1 to account for the bot
-
     results_message, winning_option = await decision_module.get_vote_result(
         vote_context
     )
@@ -621,5 +615,5 @@ async def vote(vote_context: VoteContext):
         color=discord.Color.dark_gold(),
     )
 
-    await vote_context.ctx.send(embed=embed)
+    await vote_context.send_message(embed=embed)
     return winning_option

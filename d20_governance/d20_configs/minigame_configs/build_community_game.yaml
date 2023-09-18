@@ -28,12 +28,12 @@ stages:
       - action: turn_on_random_culture_module
       - action: wait 4 
       - action: send_deliberation_questions "deliberation_questions_for_name"
-      - action: countdown 240 "until voting"
+      - action: countdown 10 "until voting"
       - action: ask_to_proceed 120
       - action: wait 5 
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210
+      - progress_condition: progress_timeout 360
     image_path: "assets/imgs/pre_generated/name.png"
 
   - stage: Vote on Group Name
@@ -74,7 +74,7 @@ stages:
       - action: ask_to_proceed 120
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210 
+      - progress_condition: progress_timeout 360
     image_path: "assets/imgs/pre_generated/goal.png"
 
   - stage: Vote on Group Purpose
@@ -114,7 +114,7 @@ stages:
       - action: ask_to_proceed 120
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210 
+      - progress_condition: progress_timeout 360
     image_path: "assets/imgs/pre_generated/goal.png"
 
   - stage: Vote on Group Purpose

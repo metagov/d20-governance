@@ -589,7 +589,6 @@ async def countdown(
         send_new_message.stop()
         print(f"{Fore.BLUE}⧗ Countdown cancelled.{Style.RESET_ALL}")
 
-
 async def all_submissions_submitted(ctx):
     """
     Check that all submissions are submited
