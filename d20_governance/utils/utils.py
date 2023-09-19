@@ -81,9 +81,9 @@ class Progress_Condition:
 
 class DecisionManager:
     def __init__(self):
-        self.group_name = ""
-        self.group_purpose = ""
-        self.group_goal = ""
+        self.decision_one = ""
+        self.decision_two = ""
+        self.decision_three = ""
 
 
 decision_manager = DecisionManager()
@@ -801,23 +801,6 @@ def make_governance_snapshot():
         img_cropped.save("governance_stack_snapshot.png")
 
     FILE_COUNT += 1  # Increment the file count for the next snapshot
-
-
-async def get_module_png(module):
-    """
-    Get module png from make_module_png function based on module
-    """
-    print("- Getting module png")
-    modules = {**DECISION_MODULES, **CULTURE_MODULES}
-
-    if module in modules:
-        name = modules[module]["name"]
-        svg_icon = modules[module]["icon"]
-        image_url = await make_module_png(name, svg_icon)
-        return image_url
-    else:
-        print(f"Module {module} not found in module dictionaries")
-        return None
 
 
 async def make_module_png(module, svg_icon):

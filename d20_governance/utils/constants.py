@@ -97,21 +97,12 @@ SIMULATIONS = {
 }
 
 # DELIBERATION QUESTIONS
-deliberation_questions_for_name = [
-    "What emotions or associations should our name evoke?",
-    "Should the name be descriptive or abstract?",
-    "Should our name resonate with the community we are embedded in?",
+deliberation_questions = [
+    "As you discuss and deliberate your proposals, consider: what emotional associations might your proposals evoke",
+    "As you discuss and deliberate your proposals, consider: does your proposal tends towards the descriptive and abstract, or specific and concrete?",
+    "As you discuss and deliberate your proposals, consider: does your proposal resonate in any way with the community that the group is embeeded in?",
 ]
-deliberation_questions_for_purpose = [
-    "What emotions or associations might we attach to our purpose?",
-    "Should our purpose descriptive and specific or abstract and broad?",
-    "How does the purpose of our group align with the community we are embedded in?",
-]
-deliberation_questions_for_goal = [
-    "What emotions or associations might we attach to our goal?",
-    "Should our goal descriptive or abstract?",
-    "How does the goal of our group align with the community we are embedded in?",
-]
+
 
 values_check_task = None
 

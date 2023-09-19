@@ -29,6 +29,7 @@ from d20_governance.utils.cultures import (
 
 from typing import Any, List
 
+
 async def get_module_png(module):
     """
     Get module png from make_module_png function based on module
@@ -222,13 +223,15 @@ class DecisionModule(ABC):
         winning_option = self.winning_option
         decision_data = {"decision": winning_option, "decision_module": self["name"]}
         DECISION_DICT[question] = decision_data
-        if topic == "group_name":
-            decision_manager.group_name = winning_option
-            prompt_object.group_name = winning_option
-        elif topic == "group_purpose":
-            prompt_object.group_purpose = winning_option
-        elif topic == "group_goal":
-            decision_manager.group_purpose = winning_option
+        if topic == "decision_one":
+            decision_manager.decision_one = winning_option
+            prompt_object.decision_one = winning_option
+        elif topic == "decision_two":
+            decision_manager.decision_two = winning_option
+            prompt_object.decision_two = winning_option
+        elif topic == "decision_three":
+            decision_manager.decision_three = winning_option
+            prompt_object.decision_three = winning_option
 
     @abstractmethod
     def get_winning_option(self, vote_context, results):
@@ -423,6 +426,7 @@ CONTINUOUS_INPUT_DECISION_MODULES = {
     if attributes["valid_for_continuous_input"]
 }
 
+
 async def set_global_decision_module(ctx, decision_module: str = None):
     channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(ctx.channel, [])
     if decision_module is not None:
@@ -430,7 +434,9 @@ async def set_global_decision_module(ctx, decision_module: str = None):
 
     # TODO: stop using random as a parameter, if no decision module is indicated, choose a random one
     if decision_module is None or decision_module == "random":
-        valid_modules = [v for v in DECISION_MODULES.values() if v["valid_for_global_module"]]
+        valid_modules = [
+            v for v in DECISION_MODULES.values() if v["valid_for_global_module"]
+        ]
         decision_module = random.choice(valid_modules)
 
     channel_decision_modules.append(decision_module["name"])
@@ -555,7 +561,10 @@ async def vote(vote_context: VoteContext):
             vote_context.timeout = 7
 
     # TODO: avoid this special casing, random should not be indicated by the name
-    if vote_context.decision_module_name is None or vote_context.decision_module_name == "random":
+    if (
+        vote_context.decision_module_name is None
+        or vote_context.decision_module_name == "random"
+    ):
         channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(
             vote_context.ctx.channel, []
         )

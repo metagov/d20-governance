@@ -118,9 +118,9 @@ class MyBot(commands.Bot):
                                 )
                                 return
 
-                            CONTINUOUS_INPUT_DECISION_MODULES[
-                                module_name
-                            ]["input_value"] += change
+                            CONTINUOUS_INPUT_DECISION_MODULES[module_name][
+                                "input_value"
+                            ] += change
                             await display_module_status(
                                 context, CONTINUOUS_INPUT_DECISION_MODULES
                             )
@@ -398,7 +398,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     f"{Fore.BLUE}■ Progress condition met. Ending action_runner{Style.RESET_ALL}"
                 )
                 break
-            while retries > 0:
+            while retries >= 0:
                 try:
                     await execute_action(game_channel_ctx, command, args)
                     break
@@ -540,7 +540,7 @@ async def countdown(
 
     @tasks.loop(seconds=15)
     async def update_countdown():
-        nonlocal remaining_seconds, remaining_minutes, message
+        nonlocal remaining_seconds, remaining_minutes
         remaining_minutes = remaining_seconds / 60
         new_message = (
             f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
@@ -561,13 +561,13 @@ async def countdown(
 
     @tasks.loop(minutes=1)
     async def send_new_message():
-        nonlocal remaining_seconds, remaining_minutes, message
+        nonlocal remaining_seconds, remaining_minutes
         remaining_minutes = remaining_seconds / 60
         if remaining_minutes <= 0:
             await message.edit(content="```⏲️ Counting down finished.```")
             print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             send_new_message.stop()
-        else:
+        if remaining_minutes <= remaining_minutes - 1:
             new_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
             message = await channel.send(new_message)
             if bot.quest.progress_completed:
@@ -577,7 +577,7 @@ async def countdown(
                 send_new_message.stop()
 
     update_countdown.start()
-    # send_new_message.start()
+    send_new_message.start()
 
     try:
         while send_new_message.is_running() and update_countdown.is_running():
@@ -588,6 +588,7 @@ async def countdown(
         update_countdown.stop()
         send_new_message.stop()
         print(f"{Fore.BLUE}⧗ Countdown cancelled.{Style.RESET_ALL}")
+
 
 async def all_submissions_submitted(ctx):
     """
@@ -627,23 +628,6 @@ async def wait(ctx, seconds: str):
     else:
         print(f"{Fore.BLUE}◫ Pausing for {seconds} seconds...{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
-    return True
-
-
-async def progress_timeout(ctx, seconds: str):
-    """
-    Simulation waits
-
-    Used by in simulation yaml to add pauses in the simulations and check progress conditions
-    """
-    if bot.quest.fast_mode:
-        seconds = 5
-        print(f"{Fore.BLUE}▢ Progression Timeout{Style.RESET_ALL}")
-        await asyncio.sleep(int(seconds))
-    else:
-        print(f"{Fore.BLUE}▢ Progression Timeout{Style.RESET_ALL}")
-        await asyncio.sleep(int(seconds))
-    bot.quest.progress_completed = True
     return True
 
 
@@ -1147,7 +1131,7 @@ async def make_game_channel(ctx, quest: Quest):
 @bot.command(hidden=True)
 async def construct_and_post_prompt(ctx):
     # assign prompt, affiliation, and purpose to the prompts dictionary
-    prompt = f"Group name: {prompt_object.group_name}, Group goal: {prompt_object.group_purpose}, Group goal: {prompt_object.group_goal}"
+    prompt = f"You are from {prompt_object.decision_one}. Please rewrite the following input ina way that makes the speaker sound {prompt_object.decision_three} while maintaining the original meaning and intent. Incorporate the theme of {prompt_object.decision_two}. Don't complete any sentences, just rewrite them."
 
     # assign the prompt to the wildcard culture module config
     module = CULTURE_MODULES.get("wildcard", None)
@@ -1703,12 +1687,8 @@ async def send_deliberation_questions(ctx, questions):
         await asyncio.sleep(timeout_seconds)
         return
 
-    if questions == "deliberation_questions_for_name":
-        questions = deliberation_questions_for_name
-    if questions == "deliberation_questions_for_purpose":
-        questions = deliberation_questions_for_purpose
-    if questions == "deliberation_questions_for_goal":
-        questions = deliberation_questions_for_goal
+    if questions == "deliberation_questions":
+        questions = deliberation_questions
 
     random_question = random.choice(questions)
     embed = discord.Embed(title="A Deliberation Question:", description=random_question)
@@ -2099,7 +2079,7 @@ async def process_message(ctx, message):
                 if module_name == "wildcard":
                     get_module = CULTURE_MODULES.get("wildcard", None)
                     llm_prompt = get_module.config["llm_disclosure"]
-                    prompt_result = f"{filtered_message}\n\n```Message made using prompt created by {prompt_object.group_name} with\n* purpose:{prompt_object.group_purpose}\n* and goal: {prompt_object.group_goal}```"
+                    prompt_result = f"{filtered_message}\n\n```Message filtered by the voice of group: {prompt_object.decision_one}.```"
                     await send_webhook_message(webhook, message, prompt_result)
                 else:
                     await send_webhook_message(webhook, message, filtered_message)

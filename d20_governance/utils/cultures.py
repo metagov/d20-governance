@@ -237,9 +237,9 @@ class Diversity(CultureModule):
 
 class PromptObject:
     def __init__(self):
-        self.group_name = ""
-        self.group_goal = ""
-        self.group_purpose = ""
+        self.decision_one = ""
+        self.decision_two = ""
+        self.decision_three = ""
 
 
 prompt_object = PromptObject()
@@ -257,15 +257,20 @@ class Wildcard(CultureModule):
         llm_prompt = module.config["llm_disclosure"]
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
-            input_variables=["input_text", "group_name", "group_goal", "group_purpose"],
-            template="Transform the content of the following input text: {input_text}. The aim is to make the content of the input text sound as though it was influences by the implict voice of the group that made this prompt. To do this use the name of the group ({group_name}), the group's goal ({group_goal}), and the purpose of the group ({group_purpose}). Do not speak as through you are the group, instead use the attributes of the group to influence the content, mainintaining the perspective of teh original input text. The resulting message should be roughly the same length as the input text.",
+            input_variables=[
+                "input_text",
+                "group_name",
+                "group_topic",
+                "group_way_of_speaking",
+            ],
+            template="You are from {group_name}. Please rewrite the following input ina way that makes the speaker sound {group_way_of_speaking} while maintaining the original meaning and intent. Incorporate the theme of {group_topic}. Don't complete any sentences, just rewrite them. Input: {input_text}",
         )
         chain = LLMChain(llm=llm, prompt=prompt)
         response = await chain.arun(
             {
-                "group_name": prompt_object.group_name,
-                "group_purpose": prompt_object.group_purpose,
-                "group_goal": prompt_object.group_goal,
+                "group_name": prompt_object.decision_one,
+                "group_topic": prompt_object.decision_two,
+                "group_way_of_speaking": prompt_object.decision_three,
                 "input_text": message_string,
             }
         )
