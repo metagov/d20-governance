@@ -103,7 +103,7 @@ deliberation_questions = [
     "As you discuss and deliberate your proposals, consider: does your proposal resonate in any way with the community that the group is embeeded in?",
 ]
 
-
+# INIT
 values_check_task = None
 
 # QUEST KEYS

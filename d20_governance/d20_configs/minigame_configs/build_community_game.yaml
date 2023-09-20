@@ -7,6 +7,7 @@ stages:
       You're a group within a larger community. Your community and your group are beset by unusual and sometimes bewildering communication confusion -- the new confusion --. 
       
       Your task is explore this space of conversational confusion as a small group of dedicated community members, with the mission of collectively deciding on you group's: 
+
       1️⃣ Name
       2️⃣ Main topic of interest
       3️⃣ Way of speaking
@@ -28,9 +29,11 @@ stages:
       Remember, you can change your submission using `/resubmit`. Be creative and have fun! 🚀
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
+
+      🧠 You can type `/remind_me` at any point during the quest to be reminded of the current task
     actions:
       - action: turn_on_random_culture_module
-      - action: wait 4 
+      - action: wait 3
       - action: send_deliberation_questions "deliberation_questions"
       - action: countdown 240 "until voting"
       - action: ask_to_proceed 120
@@ -43,14 +46,14 @@ stages:
     message: |
       It's time to vote! 🗳️ 
 
-      Here are the proposals that have been submitted. You have *1 minute* to vote for your favorite group name. 😄✅
+      Here are the proposals that have been submitted. You have *2 minutes* to vote for your favorite group name. 😄✅
     actions:
       - action: turn_off_random_culture_module
       - action: wait 3 
       - action: post_submissions
-      - action: wait 10 
+      - action: wait 8
       - action: set_global_decision_module "random"
-      - action: trigger_vote 'What should our name be?' 60 "submissions" "decision_one"
+      - action: trigger_vote 'What should our name be?' 120 "submissions" "decision_one"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
@@ -62,7 +65,7 @@ stages:
   
   - stage: Group's Main Topic of Interest
     message: |
-      Step 2: Group Topic 💬📣
+      Step 2: Group Topic 🧠🖥️
 
       What is your group's main topic of interest. What do you tend to discuss the most with each other? 
       
@@ -71,9 +74,11 @@ stages:
       Remember, if you make a mistake or change your mind you can use `/resubmit` to change your submission.
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
+
+      🧠 Reminder: you can type `/remind_me` at any point during the quest to be reminded of the current task
     actions:
       - action: turn_on_random_culture_module
-      - action: wait 4 
+      - action: wait 3
       - action: send_deliberation_questions "deliberation_questions"
       - action: countdown 240 "until voting"
       - action: ask_to_proceed 120
@@ -85,19 +90,19 @@ stages:
     message: |
       Voting time! Choose your favorite proposal for the group's main topic of interest. 🗳️📢
 
-      You have *1 minute* to vote on your group's voice.
+      You have *2 minutes* to vote on your group's voice.
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: wait 10 
+      - action: wait 8
       - action: set_global_decision_module "random"
-      - action: trigger_vote 'What do you think the main topic of interest should be for this group?' 60 "submissions" "decision_two"
+      - action: trigger_vote 'What do you think the main topic of interest should be for this group?' 120 "submissions" "decision_two"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: wait 5 
+      - action: wait 5
     progress_conditions: []
     image_path: None
 
@@ -116,9 +121,11 @@ stages:
       Remember, if you make a mistake or change your mind you can use `/resubmit` to change your submission.
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
+
+      🧠 Reminder: you can type `/remind_me` at any point during the quest to be reminded of the current task
     actions:
       - action: turn_on_random_culture_module
-      - action: wait 4 
+      - action: wait 3 
       - action: send_deliberation_questions "deliberation_questions"
       - action: countdown 240 "until voting"
       - action: ask_to_proceed 120
@@ -134,9 +141,9 @@ stages:
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: wait 10 
+      - action: wait 8 
       - action: set_global_decision_module "random"
-      - action: trigger_vote 'In what way do you think this group speaks?' 60 "submissions" "decision_three"
+      - action: trigger_vote 'In what way do you think this group speaks?' 120 "submissions" "decision_three"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
@@ -151,9 +158,9 @@ stages:
     message: |
       Congratulations on completing this quest! 🥳🎉
 
-      A new `wildcard` culture module has been added to this community. You can try it here and see it in action in #d20-agora. To turn on the module, type `-wildcard`. 👏🎮
+      A new `wildcard` culture module has been added to this community. You can try it here and see it in action in #d20-agora. To turn on the module, type `/wildcard`. 👏🎮
     actions:
-      - action: countdown 30 "until this simulation auto-archives"
+      - action: countdown 300 "until this simulation auto-archives"
       - action: end
     progress_conditions: []
     image_path: None

@@ -5,7 +5,7 @@ import datetime
 import discord
 from discord import app_commands
 
-from d20_governance.utils.constants import *
+from d20_governance.utils.constants import GOVERNANCE_SVG_ICONS
 
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
@@ -107,6 +107,16 @@ class ValueRevisionManager:
 
 
 value_revision_manager = ValueRevisionManager()
+
+
+class PromptObject:
+    def __init__(self):
+        self.decision_one = ""
+        self.decision_two = ""
+        self.decision_three = ""
+
+
+prompt_object = PromptObject()
 
 
 class CultureModule(ABC):
@@ -217,32 +227,6 @@ class Obscurity(CultureModule):
         words = message_string.split()
         camel_case_words = [word.capitalize() for word in words]
         return "".join(camel_case_words)
-
-
-class Diversity(CultureModule):
-    async def display_info(self, ctx):
-        # Display the message count for each user
-        message = "Message count by user:\n"
-
-        # Sort the user_message_count dictionary by message count in descending order
-        sorted_user_message_count = sorted(
-            USER_MESSAGE_COUNT.items(), key=lambda x: x[1], reverse=True
-        )
-
-        for user_id, count in sorted_user_message_count:
-            user = await ctx.guild.fetch_member(user_id)
-            message += f"{user.name}: {count}\n"
-        await ctx.send(f"```{message}```")
-
-
-class PromptObject:
-    def __init__(self):
-        self.decision_one = ""
-        self.decision_two = ""
-        self.decision_three = ""
-
-
-prompt_object = PromptObject()
 
 
 class Wildcard(CultureModule):
@@ -415,49 +399,49 @@ class Values(CultureModule):
         )
         return response, alignment
 
-    # FIXME: current_time variable not being assigned correctly
-    async def randomly_check_values(self, bot, ctx, channel):
-        while True:
-            print("in a value check loop")
-            current_time = datetime.datetime.utcnow()
-            print(f"time is: {current_time}")
-            # Randomly generate delay between executions
-            delay = random.randint(45, 55)
+    # TODO: Finish implementing and refine
+    # async def randomly_check_values(self, bot, ctx, channel):
+    #     while True:
+    #         print("in a value check loop")
+    #         current_time = datetime.datetime.utcnow()
+    #         print(f"time is: {current_time}")
+    #         # Randomly generate delay between executions
+    #         delay = random.randint(45, 55)
 
-            # Wait for the specified delay
-            await asyncio.sleep(delay)
+    #         # Wait for the specified delay
+    #         await asyncio.sleep(delay)
 
-            try:
-                # Fetch a random message from a game channel
-                messages = []
-                async for message in channel.history(limit=100, after=current_time):
-                    if (
-                        message.content.startswith("※")
-                        or isinstance(message, discord.Message)
-                        and not message.author.bot
-                    ):
-                        messages.append(message)
+    #         try:
+    #             # Fetch a random message from a game channel
+    #             messages = []
+    #             async for message in channel.history(limit=100, after=current_time):
+    #                 if (
+    #                     message.content.startswith("※")
+    #                     or isinstance(message, discord.Message)
+    #                     and not message.author.bot
+    #                 ):
+    #                     messages.append(message)
 
-                if not messages:
-                    print("No valid messages found in the channel")
-                    return
+    #             if not messages:
+    #                 print("No valid messages found in the channel")
+    #                 return
 
-                # Generate a list of valid message IDs
-                valid_message_ids = [message.id for message in messages]
+    #             # Generate a list of valid message IDs
+    #             valid_message_ids = [message.id for message in messages]
 
-                random_message_id = random.choice(valid_message_ids)
+    #             random_message_id = random.choice(valid_message_ids)
 
-                random_message = await channel.fetch_message(random_message_id)
-                print("fetched random message")
+    #             random_message = await channel.fetch_message(random_message_id)
+    #             print("fetched random message")
 
-                # Check values of the random message
-                await self.check_values(bot, channel, random_message)
-            except Exception as e:
-                print(f"Error occurred while checking values: {e}")
-            except discord.NotFound:
-                print("Random message not found")
-            except discord.HTTPException as e:
-                print(f"Error occurrent while fetching random message: {e}")
+    #             # Check values of the random message
+    #             await self.check_values(bot, channel, random_message)
+    #         except Exception as e:
+    #             print(f"Error occurred while checking values: {e}")
+    #         except discord.NotFound:
+    #             print("Random message not found")
+    #         except discord.HTTPException as e:
+    #             print(f"Error occurrent while fetching random message: {e}")
 
 
 values_module = Values(CultureModule)
@@ -609,7 +593,7 @@ CULTURE_MODULES = {
             "llm_disclosure": None,
             "activated_message": "Messages will now be process through an LLM.",
             "deactivated_message": "Messages will no longer be processed through an LLM.",
-            "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
+            "url": "",  # TODO: Add Wildcard URL
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
             "values_list": None,
@@ -666,22 +650,6 @@ CULTURE_MODULES = {
             "values_list": None,
         }
     ),
-    "diversity": Diversity(
-        {
-            "name": "diversity",
-            "global_state": False,
-            "local_state": False,
-            "mode": None,
-            "help": False,
-            "message_alter_mode": None,
-            "activated_message": "A measure of diversity influences the distribution of power.",
-            "deactivated_message": "Measurements of diversity continue, but no longer govern this environment's interactions.",
-            "url": "",  # TODO: make ritual img
-            "icon": GOVERNANCE_SVG_ICONS["culture"],
-            "input_value": 0,
-            "values_list": None,
-        }
-    ),
     "amplify": Amplify(
         {
             "name": "amplify",
@@ -693,7 +661,7 @@ CULTURE_MODULES = {
             "llm_disclosure": "Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone.",
             "activated_message": "Sentiment amplification abounds.",
             "deactivated_message": "Sentiment amplification has ceased.",
-            "url": "",  # TODO: make ritual img
+            "url": "",  # TODO: make amplify img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
             "values_list": None,
@@ -711,7 +679,7 @@ CULTURE_MODULES = {
             "llm_disclosure": "You hold and maintain a set of mutually agreed upon values. The values you maintain are the values defined by the community. You review the contents of messages sent for validation and analyze the contents in terms of the values you hold. You describe in what ways the input text are aligned or unaligned with the values you hold.",
             "activated_message": "A means of validating the cultural alignment of this online communiuty is nafculture_moduow available. Respond to a message with check-values.",
             "deactivated_message": "Automatic measurement of values is no longer present, through an essence of the culture remains, and you can respond to messages with `check-values` to check value alignment.",
-            "url": "",  # TODO: make ritual img
+            "url": "",  # TODO: make values img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
             "values_list": values_list,

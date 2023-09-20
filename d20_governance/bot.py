@@ -11,7 +11,7 @@ import random
 from colorama import Fore, Style
 from typing import Union
 
-from discord.app_commands import command as slash_command
+from discord.app_commands import command as slash_commands
 from discord.interactions import Interaction
 from discord import app_commands
 from discord.ext import tasks, commands
@@ -54,7 +54,21 @@ class MyBot(commands.Bot):
         """
         Event handler for when the bot has logged in and is ready to start interacting with Discord
         """
-        await bot.tree.sync()
+        with open("assets/imgs/game_icons/d20-gov-icon.png", "rb") as avatar_file:
+            avatar = avatar_file.read()
+
+        try:
+            await bot.user.edit(username="D20 Governance Bot", avatar=avatar)
+        except discord.errors.HTTPException as e:
+            if "avatar" in str(e):
+                print("Changing avatar too fast, skipping this change.")
+
+        try:
+            synced = await bot.tree.sync()
+            print(f"Synced {len(synced)} command(s).")
+        except Exception as e:
+            print(e)
+
         logging.basicConfig(
             filename="logs/bot.log",
             level=logging.INFO,
@@ -193,8 +207,93 @@ class MyBot(commands.Bot):
         )
         logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
 
+    async def setup_hook(self) -> None:
+        await self.add_cog(CultureModulesCog(self))
 
-bot = MyBot(command_prefix="-", description=description, intents=intents)
+
+class CultureModulesCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    async def wildcard(self, ctx):
+        """
+        Toggle wildcard module
+        """
+
+        # get the wildcard module object
+        module = CULTURE_MODULES.get("wildcard", None)
+        if module is None:
+            return
+
+        # toggle the global state of the module
+        await module.toggle_global_state(ctx)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def obscurity(self, ctx, mode: str = None):
+        """
+        Toggle obscurity module
+        """
+        available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
+        module = CULTURE_MODULES.get("obscurity", None)
+        if module is None:
+            return
+
+        if mode is None:
+            await module.toggle_global_state(ctx)
+        if mode not in available_modes:
+            embed = discord.Embed(
+                title=f"Error - The mode '{mode}' is not available.",
+                color=discord.Color.red(),
+            )
+        else:
+            module.config["mode"] = mode
+            await module.toggle_global_state(ctx)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def eloquence(self, ctx):
+        """
+        Toggle eloquence module
+        """
+        module = CULTURE_MODULES.get("eloquence", None)
+        if module is None:
+            return
+
+        await module.toggle_global_state(ctx)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def values(self, ctx):
+        """
+        Toggle values module
+        """
+        module = CULTURE_MODULES.get("values", None)
+        if module is None:
+            return
+
+        await module.toggle_global_state(ctx)
+
+        if module.config["global_state"] == True:
+            await turn_on_random_value_check(ctx)
+        else:
+            await turn_off_random_value_check(ctx)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def amplify(self, ctx):
+        """
+        Toggle amplify module
+        """
+        module: Amplify = CULTURE_MODULES.get("amplify", None)
+        if module is None:
+            return
+
+        await module.toggle_global_state(ctx)
+
+
+bot = MyBot(command_prefix="/", description=description, intents=intents)
 bot.remove_command("help")
 
 
@@ -204,41 +303,48 @@ def run_bot():
 
 @bot.tree.command(name="help", description="Help information")
 async def help(interaction: discord.Interaction, command: str = None):
-    prefix = bot.command_prefix
-    if command:
-        # Display help for a specific command
-        cmd = bot.get_command(command)
-        if not cmd:
-            await interaction.response.send_message(
-                f"Sorry, I couldn't find command **{command}**.", ephemeral=True
-            )
-            await interaction.response.send_message(
-                f"Sorry, I couldn't find command **{command}**.", ephemeral=True
-            )
-            return
-        cmd_help = cmd.help or "No help available."
-        help_embed = discord.Embed(
-            title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
+    prefix = "/"
+
+    # Loop through slash commands
+    slash_cmds = [c for c in bot.tree.walk_commands()]
+    slash_cmds.sort(key=lambda c: c.name)
+    slash_cmd_field = ""
+    for cmd in slash_cmds:
+        description = cmd.description
+        slash_cmd_field += (
+            f"**{prefix}{cmd.name}**\n{description or 'No description available.'}\n"
         )
-        await interaction.response.send_message(embed=help_embed, ephemeral=True)
-    else:
-        # Display a list of available commands
-        cmds = [c.name for c in bot.commands if not c.hidden]
-        cmds.sort()
-        embed = discord.Embed(
-            title="Commands List",
-            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.\n\nTo play with the bot, visit `#d20-agora` and select any of the culture modules. You can also `/embark` from the same channel on a quest to form a new group identity and voice.",
-            color=0x00FF00,
-        )
-        for cmd in cmds:
-            command = bot.get_command(cmd)
-            description = command.brief or command.short_doc
-            embed.add_field(
-                name=f"{prefix}{cmd}",
-                value=description or "No description available.",
-                inline=False,
-            )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # Loop through value culture module commands
+    cog = bot.get_cog("CultureModulesCog")
+    if cog:
+        cog_cmd_field = ""
+        for cmd in cog.get_commands():
+            description = cmd.brief or cmd.help
+            cog_cmd_field += f"**{prefix}{cmd.name}**\n{description or 'No description available.'}\n"
+
+    embed = discord.Embed(
+        title="Commands and About",
+        description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.\n\nTo play with the bot, visit `#d20-agora` and select any of the culture modules.\n\nYou can also `/embark` from the `#d20-agora` on a quest to form a new group identity and voice.\n",
+    )
+
+    embed.add_field(
+        name="Slash Commands",
+        value=slash_cmd_field,
+        inline=False,
+    )
+    embed.add_field(
+        name="Value Module Commands",
+        value=cog_cmd_field,
+        inline=False,
+    )
+    embed.add_field(
+        name="Continuous Input Mechanism",
+        value="* You can turn culture modules on and off in `#d20-agora` using `<culture module> +1` or `<culture module -1>`.\n* For example: `eloquence +1` or `amplify -1`.",
+        inline=False,
+    )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # QUEST FLOW
@@ -631,7 +737,9 @@ async def wait(ctx, seconds: str):
     return True
 
 
-@bot.tree.command(name="remind_me", description="Send most recent stage message")
+@bot.tree.command(
+    name="remind_me", description="Send most recent stage message (used in quest)"
+)
 async def remind_me(interaction: discord.Interaction):
     await interaction.response.send_message(
         reminder_manager.current_stage_message, ephemeral=True
@@ -1018,7 +1126,9 @@ class ValueRevisionView(discord.ui.View):
 
 
 # QUEST START AND PROGRESSION
-@bot.tree.command(name="embark", description="Propose a quest to embark on")
+@bot.tree.command(
+    name="embark", description="Propose a quest to embark on (used in #d20-agora)"
+)
 # @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 @app_commands.choices(
     quest_mode=[
@@ -1079,14 +1189,12 @@ async def embark(
     embed = discord.Embed(
         title=f"{ctx.author.display_name} has proposed a game for {number_of_players.value} players: Join or Leave"
     )
-    embed.add_field(
-        name="**Current Players:**", value="", inline=False
-    )  # Empty initial value.
+    embed.add_field(name="**Current Players:**", value="", inline=False)
     embed.add_field(
         name="**Players needed to start:**",
         value=str(number_of_players.value),
         inline=False,
-    )  # Empty initial value.
+    )
 
     await ctx.send(embed=embed, view=join_leave_view)
     print(f"{Fore.BLUE}Waiting for players to join...{Style.RESET_ALL}")
@@ -1099,22 +1207,40 @@ async def make_game_channel(ctx, quest: Quest):
     print(f"{Fore.BLUE}Making temporary game channel...{Style.RESET_ALL}")
 
     # Set permissions for bot
-    bot_permissions = discord.PermissionOverwrite(read_messages=True)
+    bot_permissions = discord.PermissionOverwrite(
+        read_messages=True,
+        use_application_commands=True,
+    )
+
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
         ctx.guild.get_member_named(player): discord.PermissionOverwrite(
-            read_messages=True, manage_messages=False
+            read_messages=True,
+            send_messages=True,
+            create_private_threads=False,
+            create_public_threads=False,
+            send_messages_in_threads=False,
+            use_application_commands=True,
+            send_voice_messages=False,
+            mention_everyone=False,
+            manage_nicknames=False,
+            manage_messages=False,
+            add_reactions=True,
         )
         for player in quest.joined_players
     }
+
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
-        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        ctx.guild.default_role: discord.PermissionOverwrite(
+            read_messages=False, use_application_commands=True
+        ),
         # Users that joined can view channel
         ctx.guild.me: bot_permissions,
-        **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
+        # Merge player_overwrites with the main overwrites dictionary
+        **player_overwrites,
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
 
@@ -1191,92 +1317,6 @@ async def turn_off_random_culture_module(ctx):
         logging.error(error_msg)
 
 
-@bot.command()
-async def wildcard(ctx):
-    """
-    Toggle eloquence module
-
-    Defaults to toggling culture module unless true or false are passed to set global state
-    """
-
-    # get the wildcard module object
-    module = CULTURE_MODULES.get("wildcard", None)
-    if module is None:
-        return
-
-    # toggle the global state of the module
-    await module.toggle_global_state(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def obscurity(ctx, mode: str = None):
-    """
-    Toggle obscurity module
-    """
-    available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
-    module = CULTURE_MODULES.get("obscurity", None)
-    if module is None:
-        return
-
-    if mode is None:
-        await module.toggle_global_state(ctx)
-    if mode not in available_modes:
-        embed = discord.Embed(
-            title=f"Error - The mode '{mode}' is not available.",
-            color=discord.Color.red(),
-        )
-    else:
-        module.config["mode"] = mode
-        await module.toggle_global_state(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def eloquence(ctx):
-    """
-    Toggle eloquence module
-
-    Defaults to toggling culture module unless true or false are passed to set global state
-    """
-    module = CULTURE_MODULES.get("eloquence", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def values(ctx):
-    """
-    Toggle values module
-    """
-    module = CULTURE_MODULES.get("values", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-    if module.config["global_state"] == True:
-        await turn_on_random_value_check(ctx)
-    else:
-        await turn_off_random_value_check(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def amplify(ctx):
-    """
-    Toggle amplify module
-    """
-    module: Amplify = CULTURE_MODULES.get("amplify", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-
 # PROGRESSION COMMANDS
 class TimeoutView(View):
     def __init__(self, countdown_timeout):
@@ -1330,7 +1370,7 @@ class TimeoutView(View):
         self.wait_finished.clear()
 
 
-@bot.command()
+@bot.command(hidden=True)
 async def ask_to_proceed(ctx, countdown_timeout: int = None):
     view = TimeoutView(countdown_timeout=countdown_timeout)
     message = await ctx.send("Do you need more time?", view=view)
@@ -1339,25 +1379,6 @@ async def ask_to_proceed(ctx, countdown_timeout: int = None):
 
 
 # META GAME COMMANDS
-@bot.command()
-@access_control()
-async def info(
-    ctx,
-    culture_module=None,
-    current_decision_module=None,
-    starting_decision_module=None,
-):
-    """
-    View meta information
-    """
-    # TODO Pass starting or current decision module into the info command
-    decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
-    await ctx.send(embed=embed)
-
-
 @bot.command(hidden=True)
 async def list_decisions(ctx):
     """
@@ -1497,7 +1518,7 @@ async def setcool(ctx, duration=0):
     await ctx.send(f"Global cooloff duration set to {timeouts['cooldown']}")
 
 
-@bot.tree.command(name="submit", description="Make a submission.")
+@bot.tree.command(name="submit", description="Make a submission (used in quest).")
 async def submit(interaction: discord.Interaction, submission: str):
     """
     Submit a message
@@ -1512,7 +1533,9 @@ async def submit(interaction: discord.Interaction, submission: str):
     await submit_message(interaction, submission, confirmation_message)
 
 
-@bot.tree.command(name="resubmit", description="Change your submission.")
+@bot.tree.command(
+    name="resubmit", description="Change your submission (used in quest)."
+)
 async def resubmit(interaction: discord.Interaction, submission: str):
     """
     Resubmit/revise a message
@@ -1585,7 +1608,7 @@ async def post_proposal_values(ctx):
 
 @bot.tree.command(
     name="propose_value_revision",
-    description="Press enter to select and propose a revision to the values list",
+    description="Press enter to select and propose a revision to the values list (used in #d20-agora)",
 )
 async def propose_value_revision(interaction: discord.Interaction):
     view = ValueRevisionView()
@@ -1632,40 +1655,6 @@ async def trigger_vote(
         await vote(vote_context=vote_context)
         # Reset the players_to_submissions dictionary for the next round
         bot.quest.reset_submissions()
-
-
-# General purpose for agora and generalized abstraction for quests
-# TODO: WIP, need to convert to select > modal similar to propose_revision command
-@bot.tree.command(
-    name="propose", description="Propose an element of this group's constitution."
-)
-@app_commands.choices(
-    decision_method=[
-        app_commands.Choice(name="Majority", value="majority"),
-        app_commands.Choice(name="Consensus", value="consensus"),
-    ]
-)
-@app_commands.choices(
-    duration=[
-        app_commands.Choice(name="Short (20 seconds)", value=20),
-        app_commands.Choice(name="Medium (60 seconds)", value=60),
-        app_commands.Choice(name="Long (90 seconds)", value=90),
-    ]
-)
-# TODO: vote not invoked correctly, needs to be updated; move to experimental
-async def propose(
-    interaction: discord.Interaction,
-    proposal: str,
-    duration: app_commands.Choice[int],
-    decision_method: app_commands.Choice[str],
-):
-    """
-    Call vote on values, submissions, etc
-    """
-    quest = bot.quest
-    options = ["Approve proposal", "Object proposal"]
-
-    await vote(interaction, quest, proposal, options, duration, decision_method)
 
 
 async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> str:
