@@ -39,10 +39,10 @@ class OrderedSet:
     def __len__(self):
         return len(
             self.list
-        )  # The lengthof the ListSet is the length of the internal list
+        )  # The length of the ListSet is the length of the internal list
 
     def __bool__(self):
-        return len(self) > 0  # Theinstance is "Truthy" if there are elements in it
+        return len(self) > 0  # The instance is "Truthy" if there are elements in it
 
 
 class RandomCultureModuleManager:
@@ -122,6 +122,8 @@ prompt_object = PromptObject()
 class CultureModule(ABC):
     def __init__(self, config):
         self.config = config  # This hold the configuration for the module
+        if "channels" not in self.config:
+            self.config["channels"] = set()
 
     async def filter_message(
         self, message: discord.Message, message_string: str
@@ -161,6 +163,26 @@ class CultureModule(ABC):
             await self.deactivate_global_state(ctx)
         else:
             await self.activate_global_state(ctx)
+
+    async def toggle_local_state_per_channel(self, ctx, channel):
+        if self.is_local_state_active_in_channel(channel):
+            await self.deactivate_local_state_in_channel(ctx, channel)
+        else:
+            await self.activate_local_state_in_channel(ctx, channel)
+
+    def is_local_state_active_in_channel(self, channel):
+        return channel in self.config["channels"]
+
+    async def activate_local_state_in_channel(self, ctx, channel):
+        self.config["channels"].add(channel)
+        await toggle_culture_module(ctx, self.config["name"], True)
+        await display_culture_module_state(ctx, self.config["name"], True)
+
+    async def deactivate_local_state_in_channel(self, ctx, channel):
+        if channel in self.config["channels"]:
+            self.config["channels"].remove(channel)
+            await toggle_culture_module(ctx, self.config["name"], False)
+            await display_culture_module_state(ctx, self.config["name"], False)
 
     # Timeout method
     async def timeout(self, timeout):
@@ -442,9 +464,6 @@ class Values(CultureModule):
     #             print("Random message not found")
     #         except discord.HTTPException as e:
     #             print(f"Error occurrent while fetching random message: {e}")
-
-
-values_module = Values(CultureModule)
 
 
 async def assign_role_to_user(user, role_name):

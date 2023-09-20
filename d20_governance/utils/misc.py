@@ -85,19 +85,6 @@
 #     await send_msg_to_random_player(bot.quest.game_channel)
 
 
-# @bot.command()
-# @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-# async def ritual(ctx):
-#     """
-#     Toggle ritual module.
-#     """
-#     module: Ritual = CULTURE_MODULES.get("ritual", None)
-#     if module is None:
-#         return
-
-#     await module.toggle_global_state(ctx)
-
-
 # @bot.command(hidden=True)
 # @commands.check(lambda ctx: False)
 # async def vote_governance(ctx, governance_type: str):
@@ -217,3 +204,22 @@
 #         }
 #     ),
 # }
+
+# async def turn_on_random_value_check(ctx):
+#     global values_check_task
+#     if bot.quest.game_channel == None:
+#         values_check_task = bot.loop.create_task(
+#             values_module.randomly_check_values(bot, ctx, ctx.channel)
+#         )
+#     else:
+#         values_check_task = bot.loop.create_task(
+#             values_module.randomly_check_values(bot, ctx, bot.quest.game_channel)
+#         )
+#     print("value check loop turned on")
+
+
+# async def turn_off_random_value_check(ctx):
+#     global values_check_task
+#     if values_check_task is not None and not values_check_task.done():
+#         values_check_task.cancel()
+#         print("value check loop turned off")

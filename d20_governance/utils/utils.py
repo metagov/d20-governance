@@ -14,7 +14,6 @@ import shlex
 import os
 
 from d20_governance.utils.constants import *
-from d20_governance.utils.cultures import CULTURE_MODULES, value_revision_manager
 
 from discord.ext import commands
 
@@ -77,16 +76,6 @@ class Progress_Condition:
             progress_condition=progress_condition,
             arguments=arguments,
         )
-
-
-class DecisionManager:
-    def __init__(self):
-        self.decision_one = ""
-        self.decision_two = ""
-        self.decision_three = ""
-
-
-decision_manager = DecisionManager()
 
 
 class ReminderManager:

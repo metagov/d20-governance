@@ -2,7 +2,7 @@ title: Group Voice
 stages:
   - stage: The Quest Begins
     message: |
-      Welcome to a D20 Governance Game: Build a Group Voice! 🌍💬
+      Welcome to **D20 Governance Game: Build a Group Voice!** 🌍💬
 
       You're a group within a larger community. Your community and your group are beset by unusual and sometimes bewildering communication confusion -- the new confusion --. 
       
@@ -20,7 +20,7 @@ stages:
 
   - stage: Group Name
     message: |
-      Step 1: Group Name 🏷️🎯
+      **Step 1: Group Name** 🏷️🎯
 
       A group's name is an important first step in creating a sense of meaning. 
       
@@ -40,11 +40,12 @@ stages:
       - action: wait 5 
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 360
     image_path: "assets/imgs/pre_generated/name.png"
 
   - stage: Vote on Group Name
     message: |
-      It's time to vote! 🗳️ 
+      **It's time to vote!** 🗳️ 
 
       Here are the proposals that have been submitted. You have *2 minutes* to vote for your favorite group name. 😄✅
     actions:
@@ -57,6 +58,7 @@ stages:
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
         failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
+      - action: rename_channel
       - action: list_decisions
       - action: clear_decision_input_values
       - action: wait 5 
@@ -65,7 +67,7 @@ stages:
   
   - stage: Group's Main Topic of Interest
     message: |
-      Step 2: Group Topic 🧠🖥️
+      **Step 2: Group Topic** 🧠🖥️
 
       What is your group's main topic of interest. What do you tend to discuss the most with each other? 
       
@@ -84,11 +86,14 @@ stages:
       - action: ask_to_proceed 120
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 360
     image_path: "assets/imgs/pre_generated/goal.png"
 
   - stage: Vote on The Group's Main Topic of Interest
     message: |
-      Voting time! Choose your favorite proposal for the group's main topic of interest. 🗳️📢
+      **Voting time!**
+      
+      Choose your favorite proposal for the group's main topic of interest. 🗳️📢
 
       You have *2 minutes* to vote on your group's voice.
     actions:
@@ -108,7 +113,7 @@ stages:
 
   - stage: Group Way of Speaking
     message: |
-      Step 3: Group Way of Speaking 💬📣
+      **Step 3: Group Way of Speaking** 💬📣
 
       How does this group like to speak? Is the group more formal or informal? Do you tend to be more poetic or more technical? Are you playful or serious? 
 
@@ -131,11 +136,14 @@ stages:
       - action: ask_to_proceed 120
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
+      - progress_condition: progress_timeout 360
     image_path: "assets/imgs/pre_generated/goal.png"
 
   - stage: Vote on Group Way of Speaking
     message: |
-      Voting time! Choose your favorite proposal for the group's way of speaking. 🗳️📢
+      **Voting time!**
+      
+      Choose your favorite proposal for the group's way of speaking. 🗳️📢
 
       You have *1 minute* to vote on your group's way of speaking.
     actions:

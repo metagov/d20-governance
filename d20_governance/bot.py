@@ -29,6 +29,7 @@ from d20_governance.utils.voting import (
     vote_state_manager,
     vote,
     set_global_decision_module,
+    decision_manager,
 )
 from discord import app_commands
 from discord.ext import tasks, commands
@@ -61,11 +62,13 @@ class MyBot(commands.Bot):
             await bot.user.edit(username="D20 Governance Bot", avatar=avatar)
         except discord.errors.HTTPException as e:
             if "avatar" in str(e):
-                print("Changing avatar too fast, skipping this change.")
+                print(
+                    f"{Fore.BLACK}Changing avatar too fast, skipping this change.{Style.RESET_ALL}"
+                )
 
         try:
             synced = await bot.tree.sync()
-            print(f"Synced {len(synced)} command(s).")
+            print(f"{Fore.YELLOW}Synced {len(synced)} command(s).{Style.RESET_ALL}")
         except Exception as e:
             print(e)
 
@@ -207,6 +210,7 @@ class MyBot(commands.Bot):
         )
         logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
 
+    @commands.Cog.listener()
     async def setup_hook(self) -> None:
         await self.add_cog(CultureModulesCog(self))
 
@@ -225,9 +229,13 @@ class CultureModulesCog(commands.Cog):
         module = CULTURE_MODULES.get("wildcard", None)
         if module is None:
             return
+        if module.config["llm_disclosure"] is None:
+            await ctx.send(
+                "Cannot activate the **Wildcard Module** at this time. Play the **Build a Group Voice** quest by typing `/embark` in #d20-agora in order to make this module."
+            )
+            return
 
-        # toggle the global state of the module
-        await module.toggle_global_state(ctx)
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -241,7 +249,7 @@ class CultureModulesCog(commands.Cog):
             return
 
         if mode is None:
-            await module.toggle_global_state(ctx)
+            await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
         if mode not in available_modes:
             embed = discord.Embed(
                 title=f"Error - The mode '{mode}' is not available.",
@@ -249,7 +257,7 @@ class CultureModulesCog(commands.Cog):
             )
         else:
             module.config["mode"] = mode
-            await module.toggle_global_state(ctx)
+            await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -261,7 +269,7 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_global_state(ctx)
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -273,12 +281,7 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_global_state(ctx)
-
-        if module.config["global_state"] == True:
-            await turn_on_random_value_check(ctx)
-        else:
-            await turn_off_random_value_check(ctx)
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -290,7 +293,19 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_global_state(ctx)
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def ritual(self, ctx):
+        """
+        Toggle ritual module.
+        """
+        module: Ritual = CULTURE_MODULES.get("ritual", None)
+        if module is None:
+            return
+
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
 
 
 bot = MyBot(command_prefix="/", description=description, intents=intents)
@@ -667,7 +682,7 @@ async def countdown(
 
     @tasks.loop(minutes=1)
     async def send_new_message():
-        nonlocal remaining_seconds, remaining_minutes
+        nonlocal remaining_seconds, remaining_minutes, message
         remaining_minutes = remaining_seconds / 60
         if remaining_minutes <= 0:
             await message.edit(content="```⏲️ Counting down finished.```")
@@ -737,6 +752,23 @@ async def wait(ctx, seconds: str):
     return True
 
 
+async def progress_timeout(ctx, seconds: str):
+    """
+    Progression timeout
+
+    Used in simulation yamls to define limits for progression checks
+    """
+    if bot.quest.fast_mode:
+        seconds = 7
+        print(f"Progression timeout in {seconds} seconds...")
+        await asyncio.sleep(int(seconds))
+    else:
+        print(f"Progression timeout in {seconds} seconds...")
+        await asyncio.sleep(int(seconds))
+    bot.quest.progress_completed = True
+    return True
+
+
 @bot.tree.command(
     name="remind_me", description="Send most recent stage message (used in quest)"
 )
@@ -744,26 +776,6 @@ async def remind_me(interaction: discord.Interaction):
     await interaction.response.send_message(
         reminder_manager.current_stage_message, ephemeral=True
     )
-
-
-async def turn_on_random_value_check(ctx):
-    global values_check_task
-    if bot.quest.game_channel == None:
-        values_check_task = bot.loop.create_task(
-            values_module.randomly_check_values(bot, ctx, ctx.channel)
-        )
-    else:
-        values_check_task = bot.loop.create_task(
-            values_module.randomly_check_values(bot, ctx, bot.quest.game_channel)
-        )
-    print("value check loop turned on")
-
-
-async def turn_off_random_value_check(ctx):
-    global values_check_task
-    if values_check_task is not None and not values_check_task.done():
-        values_check_task.cancel()
-        print("value check loop turned off")
 
 
 async def end(ctx):
@@ -1252,6 +1264,23 @@ async def make_game_channel(ctx, quest: Quest):
     )
 
 
+@bot.command()
+async def rename_channel(ctx):
+    """
+    Rename the quest channel
+    """
+    print(f"{Fore.BLUE}Renaming temporary game channel...{Style.RESET_ALL}")
+
+    current_channel = ctx.channel
+    print(current_channel)
+
+    new_channel_name = f"d20-{decision_manager.decision_one}-voice"
+
+    bot.quest.game_channel = await current_channel.edit(name=new_channel_name)
+
+    await ctx.send(f"```This channel has been renamed to #{new_channel_name}```")
+
+
 # CULTURE MODULES
 # Community generated wildcard culture module
 @bot.command(hidden=True)
@@ -1671,15 +1700,25 @@ async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> 
 # STREAM OF DELIBERATION QUESTIONS
 @bot.command(hidden=True)
 async def send_deliberation_questions(ctx, questions):
+    # Check if the bot is in fast mode
     if hasattr(bot, "quest") and bot.quest.fast_mode:
         timeout_seconds = 15
         await asyncio.sleep(timeout_seconds)
         return
 
+    # Make a copy of the deliberation questions list
+    copy_of_deliberation_questions = deliberation_questions.copy()
+
     if questions == "deliberation_questions":
         questions = deliberation_questions
 
-    random_question = random.choice(questions)
+    # Reset the list if there are no more deliberation questions left
+    if len(questions) == 0:
+        questions = copy_of_deliberation_questions
+
+    random_index = random.randint(0, len(questions) - 1)
+    random_question = questions.pop(random_index)
+
     embed = discord.Embed(title="A Deliberation Question:", description=random_question)
     await ctx.channel.send(embed=embed)
 

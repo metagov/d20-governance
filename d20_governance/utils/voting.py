@@ -8,24 +8,20 @@ import threading
 
 import discord
 from discord.ui import View
+
 from d20_governance.utils.constants import (
     CIRCLE_EMOJIS,
     DECISION_DICT,
     GOVERNANCE_SVG_ICONS,
 )
 from d20_governance.utils.utils import (
-    decision_manager,
     Quest,
     add_module_to_stack,
     get_current_governance_stack,
     get_modules_for_type,
     make_module_png,
 )
-from d20_governance.utils.cultures import (
-    CULTURE_MODULES,
-    value_revision_manager,
-    prompt_object,
-)
+from d20_governance.utils.cultures import CULTURE_MODULES, prompt_object
 
 from typing import Any, List
 
@@ -45,6 +41,16 @@ async def get_module_png(module):
     else:
         print(f"Module {module} not found in module dictionaries")
         return None
+
+
+class DecisionManager:
+    def __init__(self):
+        self.decision_one = ""
+        self.decision_two = ""
+        self.decision_three = ""
+
+
+decision_manager = DecisionManager()
 
 
 class VoteStateManager:
