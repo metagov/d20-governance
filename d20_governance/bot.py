@@ -445,7 +445,32 @@ async def start_quest(ctx, quest: Quest):
 #         self.timeout += 60
 #         await interaction.response.send_message("Vote duration extended by 60 seconds.")
 
+async def process_retry(ctx, retry_message):
+    await clear_decision_input_values(ctx)
+    await ctx.send(retry_message)
+    await ctx.send(
+        "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
+    )
+    await display_module_status(
+        ctx, CONTINUOUS_INPUT_DECISION_MODULES
+    )
+    await ctx.send(
+        f"```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to {INPUT_SPECTRUM['threshold']}, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
+    )
 
+    """
+    For 60 seconds, tally continuous votes; if threshold is reached for any module, it will be set as decision module, 
+    otherwise status quo will remain  
+    """
+    for _ in range(60):
+        reached_threshold = await calculate_continuous_inputs(ctx)
+        if reached_threshold:
+            return
+        await asyncio.sleep(1)
+
+    await ctx.send("No winner was found. The status quo will remain.")
+
+        
 async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Message):
     """
     Run stages from yaml config
@@ -534,37 +559,8 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                         # await view.wait()
                         print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
-                            await clear_decision_input_values(game_channel_ctx)
-                            await game_channel_ctx.send(action.retry_message)
-                            await game_channel_ctx.send(
-                                "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
-                            )
-                            await display_module_status(
-                                game_channel_ctx, CONTINUOUS_INPUT_DECISION_MODULES
-                            )
-                            await game_channel_ctx.send(
-                                "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
-                            )
-                            loop_count = 0
-                            # TODO: fixup this loop
-                            while True:
-                                condition_result = await calculate_module_inputs(
-                                    game_channel_ctx, retry=True, tally=False
-                                )
-                                if condition_result:
-                                    VOTE_RETRY = False
-                                    break
-                                loop_count += 1
-                                print(f"⧗ {loop_count} seconds to set new decision")
-                                if loop_count == 60:
-                                    VOTE_RETRY = False
-                                    print("Tallying Inputs")
-                                    await calculate_module_inputs(
-                                        game_channel_ctx, retry=True, tally=True
-                                    )
-                                    break
-                                await asyncio.sleep(1)
-                            retries -= 1
+                            await process_retry(game_channel_ctx, action.retry_message)
+                        retries -= 1
                     else:
                         if (
                             hasattr(action, "failure_message")
@@ -1819,7 +1815,7 @@ async def clear_decision_input_values(ctx):
     Used during vote retries
     """
     for decision_module in CONTINUOUS_INPUT_DECISION_MODULES.values():
-        decision_module.input_value = 0
+        decision_module["input_value"] = 0
     print("Decision input values set to 0")
 
 
@@ -1854,36 +1850,29 @@ async def update_decision_module(context, new_decision_module):
         ACTIVE_GLOBAL_DECISION_MODULES[context.channel] = channel_decision_modules
 
 
-async def calculate_module_inputs(context, retry=None, tally=None):
+async def calculate_continuous_inputs(ctx):
     """
     Change local state of modules based on calculation of module inputs
     """
 
-    if retry:
-        max_value = max(
-            module.input_value for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
-        )
-        max_keys = [
-            module_name
-            for module_name, module in CONTINUOUS_INPUT_DECISION_MODULES.items()
-            if module.input_value == max_value
-        ]
+    max_value = max(
+        module["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
+    )
+    max_module_names = [
+        module_name
+        for module_name, module in CONTINUOUS_INPUT_DECISION_MODULES.items()
+        if module["input_value"] == max_value
+    ]
 
-        if not tally:
-            if max_value == INPUT_SPECTRUM["scale"] and len(max_keys) == 1:
-                await update_decision_module(context, max_keys[0])
-                await context.send(f"```{max_keys[0]} mode activated!```")
-                return True
+    # If threshold has been reached in only one module, update the decision module
+    if max_value >= INPUT_SPECTRUM["threshold"] and len(max_module_names) == 1:
+        await update_decision_module(ctx, max_module_names[0])
+        await ctx.send(f"```{max_module_names[0]} mode activated!```")
+        return True
+    else:
+        return False
 
-        else:
-            if len(max_keys) > 1:
-                await context.send(
-                    f"```Poll resulted in tie. Previous decision module kept.```"
-                )
-            else:
-                await update_decision_module(context, max_keys[0])
-                await context.send(f"```{max_keys[0]} mode activated!```")
-
+    # TODO: re-evaluate the following logic, right now it will not be invoked
     # Calculate culture inputs
     async def evaluate_module_state(module_name):
         module = CULTURE_MODULES.get(module_name, None)
@@ -1894,18 +1883,18 @@ async def calculate_module_inputs(context, retry=None, tally=None):
         # If local state not true and input value passes threshold
         if (
             not module.is_local_state_active()
-            and module.config["input_value"] > INPUT_SPECTRUM["threshold"]
+            and module.config["input_value"] >= INPUT_SPECTRUM["threshold"]
         ):
             module.activate_local_state()
             # If global state is true let user know that module is already activated
             if module.is_global_state_active():
                 # already on
-                await context.send(
+                await ctx.send(
                     f"```{module_name.capitalize()} module is already activated!```"
                 )
             else:
                 # Otherwiseactivate the global module
-                await module.activate_global_state(context)
+                await module.activate_global_state(ctx)
 
         # If local state is true and value is equales or gos under threshold
         elif (
@@ -1918,18 +1907,18 @@ async def calculate_module_inputs(context, retry=None, tally=None):
             # TODO: There is still a logical knot in here that needs to be unwound
             # If global state is false, the next step shouldn't be to deactivate the global state
             if not module.is_global_state_active():
-                await module.deactivate_global_state(context)
+                await module.deactivate_global_state(ctx)
 
             # If global state is true
             else:
                 # TODO: This is practically it's own function and can be made more modular in the future
                 # Turn off global state based on timeout value
                 timeout = 20
-                await module.deactivate_global_state(context, timeout)
+                await module.deactivate_global_state(ctx, timeout)
                 # Send a countdown message to user letting them know the module they turned off will turn back on
                 countdown_message = f"until {module_name} turns back on"
                 await countdown(
-                    context,
+                    ctx,
                     timeout_seconds=timeout,
                     text=countdown_message,
                 )
@@ -1940,8 +1929,8 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                     # If value is less than or equal to threshold after timeout set input value to spectrum max
                     if module.config["input_value"] <= INPUT_SPECTRUM["threshold"]:
                         module.config["input_value"] = INPUT_SPECTRUM["scale"]
-                        await display_module_status(context, CULTURE_MODULES)
-                        await context.send(
+                        await display_module_status(ctx, CULTURE_MODULES)
+                        await ctx.send(
                             f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
                         )
 
@@ -2009,7 +1998,6 @@ async def display_module_status(context, module_dict):
             )
 
     await context.send(embed=embed)
-    await calculate_module_inputs(context)
 
 
 # MESSAGE PROCESSING

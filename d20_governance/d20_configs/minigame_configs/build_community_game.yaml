@@ -16,7 +16,7 @@ stages:
     actions:
       - action: wait 5 
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/name.png"
+    image_path: "assets/imgs/pre_generated/d20_1.png"
 
   - stage: Group Name
     message: |
@@ -41,7 +41,7 @@ stages:
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
       - progress_condition: progress_timeout 360
-    image_path: "assets/imgs/pre_generated/name.png"
+    image_path: "assets/imgs/pre_generated/quill_1.png"
 
   - stage: Vote on Group Name
     message: |
@@ -87,7 +87,7 @@ stages:
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
       - progress_condition: progress_timeout 360
-    image_path: "assets/imgs/pre_generated/goal.png"
+    image_path: "assets/imgs/pre_generated/book_1.png"
 
   - stage: Vote on The Group's Main Topic of Interest
     message: |
@@ -137,7 +137,7 @@ stages:
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
       - progress_condition: progress_timeout 360
-    image_path: "assets/imgs/pre_generated/goal.png"
+    image_path: "assets/imgs/pre_generated/speech_2.png"
 
   - stage: Vote on Group Way of Speaking
     message: |
