@@ -534,6 +534,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
     async def action_runner():
         for action in actions:
             command_name = action.action
+            print(f"{Fore.BLUE}↷ Processing action: '{command_name}'{Style.RESET_ALL}")
             if command_name is None:
                 raise Exception(f"Command {command_name} not found.")
             args = action.arguments
@@ -595,11 +596,12 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     )
                     break
 
+
     async def progress_checker():
-        if progress_conditions == None or len(progress_conditions) == 0:
+        if progress_conditions is None or len(progress_conditions) == 0:
             return
         while True:
-            if bot.quest.progress_completed == True:
+            if bot.quest.progress_completed:
                 print("At least one progress condition met")
                 break
             tasks = []
@@ -613,11 +615,17 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                 print(
                     f"{Fore.BLUE}+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list{Style.RESET_ALL}"
                 )  # Debugging line
-            for future in asyncio.as_completed(tasks):
+            
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            
+            for future in done:
                 condition_result = await future
                 if condition_result:
+                    for task in pending:
+                        task.cancel() # Ensures all pending progress conditions are cancelled to avoid impacting future stages
                     return True
             await asyncio.sleep(1)  # sleep before checking again to avoid busy looping
+
 
     # Run simultaneously and wait for both the action_runner and progress_checker to complete
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
@@ -761,6 +769,7 @@ async def progress_timeout(ctx, seconds: str):
     else:
         print(f"Progression timeout in {seconds} seconds...")
         await asyncio.sleep(int(seconds))
+    print(f"{Fore.BLUE}⧗ Progression timeout reached.{Style.RESET_ALL}")
     bot.quest.progress_completed = True
     return True
 
