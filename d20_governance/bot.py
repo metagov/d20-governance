@@ -366,6 +366,8 @@ async def help(interaction: discord.Interaction, command: str = None):
 def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
+    global QUEST_IN_PROGRESS
+    QUEST_IN_PROGRESS = True
     return quest
 
 
@@ -738,8 +740,6 @@ async def all_submissions_submitted(ctx):
 
 
 # TODO: merge wait and progress_timeout
-
-
 async def wait(ctx, seconds: str):
     """
     Simulation waits
@@ -792,7 +792,8 @@ async def end(ctx):
     if values_check_task is not None and not values_check_task.done():
         values_check_task.cancel()
         print("value check loop canceled")
-
+    global QUEST_IN_PROGRESS
+    QUEST_IN_PROGRESS = False
     print(f"{Fore.BLUE}⇓ Archiving...{Style.RESET_ALL}")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
@@ -1190,6 +1191,10 @@ async def embark(
 
     if not 1 <= number_of_players.value <= 8:
         await ctx.send("The game requires at least 2 and at most 8 players")
+        return
+    
+    if QUEST_IN_PROGRESS:
+        await ctx.send("There is already a quest in progress.")
         return
 
     # Quest setup
@@ -1780,6 +1785,10 @@ async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]["file"]):
     gen_images = args.image
 
     # Set up quest
+    if QUEST_IN_PROGRESS:
+        await ctx.send("There is already a quest in progress.")
+        return
+    
     quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=True)
     quest.add_player(ctx.author.name)
 

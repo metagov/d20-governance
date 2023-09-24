@@ -176,6 +176,7 @@ ACCESS_CONTROL_SETTINGS = {
 IS_QUIET = False
 MAX_VOTE_TRIGGERS = 3
 VOTE_RETRY = False
+QUEST_IN_PROGRESS = False
 
 # MISC DICTS
 USER_MESSAGE_COUNT = {}  # Stores the number of messages sent by each user

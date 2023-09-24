@@ -260,7 +260,6 @@ class Wildcard(CultureModule):
         """
         print(f"{Fore.GREEN}※ applying wildcard module{Style.RESET_ALL}")
         module = CULTURE_MODULES.get("wildcard", None)
-        llm_prompt = module.config["llm_disclosure"]
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
             input_variables=[

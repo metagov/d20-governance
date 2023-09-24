@@ -591,6 +591,7 @@ async def vote(vote_context: VoteContext):
 
     if not vote_context.options:
         print("No options recieved to vote on")
+        await vote_context.send_message("No options recieved to vote on!")
         return
 
     # Define embed
