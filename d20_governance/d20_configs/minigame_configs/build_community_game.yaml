@@ -63,7 +63,7 @@ stages:
       - action: clear_decision_input_values
       - action: wait 5 
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/hourglass.png"
   
   - stage: Group's Main Topic of Interest
     message: |
@@ -109,7 +109,7 @@ stages:
       - action: clear_decision_input_values
       - action: wait 5
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/hourglass_2.png"
 
   - stage: Group Way of Speaking
     message: |
@@ -160,7 +160,7 @@ stages:
       - action: wait 5 
       - action: construct_and_post_prompt
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/clock.png"
   
   - stage: End
     message: |
@@ -171,4 +171,4 @@ stages:
       - action: countdown 300 "until this simulation auto-archives"
       - action: end
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/sunset.png"
