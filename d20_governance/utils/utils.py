@@ -14,11 +14,12 @@ import shlex
 import os
 
 from d20_governance.utils.constants import *
-from d20_governance.utils.cultures import CULTURE_MODULES, value_revision_manager
 
 from discord.ext import commands
+
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
+from colorama import Fore, Style
 
 from langchain.memory import ConversationBufferMemory
 from langchain import OpenAI, LLMChain, PromptTemplate
@@ -75,16 +76,6 @@ class Progress_Condition:
             progress_condition=progress_condition,
             arguments=arguments,
         )
-
-
-class DecisionManager:
-    def __init__(self):
-        self.group_name = ""
-        self.group_purpose = ""
-        self.group_goal = ""
-
-
-decision_manager = DecisionManager()
 
 
 class ReminderManager:
@@ -280,9 +271,6 @@ async def setup_server(guild):
     }
     agora_category = discord.utils.get(guild.categories, name="d20-explore")
     agora_channel = discord.utils.get(guild.text_channels, name="d20-agora")
-    values_space_channel = discord.utils.get(
-        guild.text_channels, name="d20-values-space"
-    )
     if not agora_channel:
         # Create channel in the d20-explore category and apply permisions
         agora_channel = await guild.create_text_channel(
@@ -290,14 +278,6 @@ async def setup_server(guild):
         )
         logging.info(
             f"Created channel '{agora_channel.name}' under category '{agora_category}'."
-        )
-    if not values_space_channel:
-        # Create channel in the d20-explore category and apply permisions
-        values_space_channel = await guild.create_text_channel(
-            name="d20-values-space", overwrites=overwrites, category=agora_category
-        )
-        logging.info(
-            f"Created channel '{values_space_channel.name}' under category '{agora_category}'."
         )
     else:
         pass
@@ -318,7 +298,7 @@ async def setup_server(guild):
 
 
 async def execute_action(game_channel_ctx, command, args):
-    print(f"> Executing {command} with arguments {args}")
+    print(f"{Fore.BLUE}▶ Executing {command} with arguments {args}{Style.RESET_ALL}")
 
     # Pass the arguments to the command's callback function
     # await command.callback(channel_ctx, *args)
@@ -582,7 +562,7 @@ def set_module_font_size(module_level=0):
     """
     Set and return font size based on module level
     """
-    print("Seting font path and size")
+    print("- Seting font path and size")
 
     # Set base font size
     initial_font_size = 20
@@ -599,7 +579,7 @@ def get_module_text_box_size_and_font(draw, module, module_level=0):
     """
     Calculate the module text box size based on font size
     """
-    print("Geting module text box size")
+    print("- Geting module text box size")
 
     # Return font pathand size
     font_path_and_size = set_module_font_size(module_level)
@@ -616,7 +596,7 @@ def get_module_elements_and_dimensions(
     """
     Return module elements and dimensions
     """
-    print("Getting module elements and dimensions")
+    print("- Getting module elements and dimensions")
 
     # Return text width, height, and font path and size based on level of module nesting
     text_width, text_height, font_path_and_size = get_module_text_box_size_and_font(
@@ -639,7 +619,7 @@ def add_svg_icon(img, icon_path, x, y, module_level, size=None):
     """
     Load the SVG icon, replace its fill color with black, and draw it on the canvas.
     """
-    print("Converting, drawing, and returning svg icon")
+    print("- Converting, drawing, and returning svg icon")
 
     # Set buffer
     buf = BytesIO()
@@ -700,7 +680,7 @@ def draw_nested_modules(
     # Add the module's uniqueID to the set of drwn modules
     drawn_modules.add(uniqueID)
     print(
-        f"Depth Level:{module_level}, UniqueID:{uniqueID}"
+        f"- Depth Level:{module_level}, UniqueID:{uniqueID}"
     )  # TODO: Remove, here for testing at the moment
 
     # Calculate the dimensions of the module name and select the appropriate font size
@@ -812,23 +792,6 @@ def make_governance_snapshot():
     FILE_COUNT += 1  # Increment the file count for the next snapshot
 
 
-async def get_module_png(module):
-    """
-    Get module png from make_module_png function based on module
-    """
-    print("Getting module png")
-    modules = {**DECISION_MODULES, **CULTURE_MODULES}
-
-    if module in modules:
-        name = modules[module]["name"]
-        svg_icon = modules[module]["icon"]
-        image_url = await make_module_png(name, svg_icon)
-        return image_url
-    else:
-        print(f"Module {module} not found in module dictionaries")
-        return None
-
-
 async def make_module_png(module, svg_icon):
     """
     Make a PNG file for the given module
@@ -837,7 +800,7 @@ async def make_module_png(module, svg_icon):
 
     This makes a single module image instead of nesting multiple modules
     """
-    print("Making module png")
+    print("- Making module png")
 
     # Initialize the image canvas
     # Set large to eventually crop
@@ -880,7 +843,7 @@ async def make_module_png(module, svg_icon):
     max_y = y + icon_and_text_height + MODULE_PADDING * 2
 
     # Crop the image
-    print("Cropping image")
+    print("- Cropping image")
     img_cropped = img.crop(
         (
             0,
@@ -891,7 +854,7 @@ async def make_module_png(module, svg_icon):
     )
 
     # Save the cropped image to a PNG file
-    print("Saving cropped image to PNG")
+    print("- Saving cropped image to PNG")
     os.makedirs("assets/user_created/governance_modules", exist_ok=True)
     module_img = f"assets/user_created/governance_modules/{module}.png"
     img_cropped.save(module_img)
@@ -978,9 +941,7 @@ async def check_cmd_channel(ctx, channel_name):
 
     # Check if the command is being invoked by a user
     if ctx.message.author and not ctx.message.author.bot:
-        print("True")
         if ctx.channel.name != channel.name:
-            print("True")
             embed = discord.Embed(
                 title="Error: This command cannot be run in this channel.",
                 description=f"Run this command in <#{channel.id}>",
@@ -998,18 +959,20 @@ async def check_cmd_channel(ctx, channel_name):
 def check_dirs():
     if not os.path.exists(AUDIO_MESSAGES_PATH):
         os.makedirs(AUDIO_MESSAGES_PATH)
-        print(f"Created {AUDIO_MESSAGES_PATH} directory")
+        print(f"{Fore.YELLOW}Created {AUDIO_MESSAGES_PATH} directory{Style.RESET_ALL}")
     if not os.path.exists(GOVERNANCE_STACK_SNAPSHOTS_PATH):
         os.makedirs(GOVERNANCE_STACK_SNAPSHOTS_PATH)
-        print(f"Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory")
+        print(
+            f"{Fore.YELLOW}Created {GOVERNANCE_STACK_SNAPSHOTS_PATH} directory{Style.RESET_ALL}"
+        )
     if not os.path.exists(LOGGING_PATH):
         os.makedirs(LOGGING_PATH)
-        print(f"Created {LOGGING_PATH} directory")
+        print(f"{Fore.YELLOW}Created {LOGGING_PATH} directory{Style.RESET_ALL}")
     if not os.path.exists(LOG_FILE_NAME):
         with open(LOG_FILE_NAME, "w") as f:
             f.write("This is a new log file.")
-            print(f"Creates {LOG_FILE_NAME} file")
-    print("All necessary repo directories are present")
+            print(f"{Fore.YELLOW}Created {LOG_FILE_NAME} file{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}All necessary repo directories are present{Style.RESET_ALL}")
 
 
 # Cleanup
@@ -1057,7 +1020,18 @@ async def delete_all_webhooks(guild):
     # Delete each webhook
     for webhook in webhooks:
         await webhook.delete()
-        print("Webhooks from all guilds deleted")
+        print(f"{Fore.YELLOW}Webhooks from all guilds deleted{Style.RESET_ALL}")
+
+
+async def clear_decision_input_values(ctx):
+    """
+    Set decision module input values to 0
+
+    Used during vote retries
+    """
+    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES:
+        CONTINUOUS_INPUT_DECISION_MODULES[decision_module]["input_value"] = 0
+    print("Decision input values set to 0")
 
 
 # LLM HELPERS

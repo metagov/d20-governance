@@ -1,146 +1,174 @@
-title: 'Group Quest'
+title: Group Voice
 stages:
   - stage: The Quest Begins
     message: |
-      Welcome to Governance Game: Build a Group Voice! 🌍💬
+      Welcome to **D20 Governance Game: Build a Group Voice!** 🌍💬
 
-      You're a group within a larger community. Your task is to form a new group identity that will shape discussions and values in the agora. Let's get started! 
+      You're a group within a larger community. Your community and your group are beset by unusual and sometimes bewildering communication confusion -- the new confusion --. 
+      
+      Your task is explore this space of conversational confusion as a small group of dedicated community members, with the mission of collectively deciding on you group's: 
 
-      Your mission:
-      1️⃣ Give your group a name
-      2️⃣ Give your group a purpose
-      3️⃣ Give your group a goal
+      1️⃣ Name
+      2️⃣ Main topic of interest
+      3️⃣ Way of speaking
+
+      Your answers to these questions will temporarily shape the way the community communicates with each other in the agora. Will you be a force for clarity or a force for confusion? 
     actions:
-      - action: pause 5
+      - action: wait 5 
     progress_conditions: []
-    image_path: "assets/imgs/pre_generated/name.png"
+    image_path: "assets/imgs/pre_generated/d20_1.png"
 
   - stage: Group Name
     message: |
-      Step 1: Name and Goal 🏷️🎯
+      **Step 1: Group Name** 🏷️🎯
 
-      Take a moment to propose a name for your group. Type `/submit_ <submission>` to submit your proposal.
+      A group's name is an important first step in creating a sense of meaning. 
+      
+      Take a moment to propose a name for your group. Type `/submit <submission>` to submit your proposal.
 
       Remember, you can change your submission using `/resubmit`. Be creative and have fun! 🚀
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
+
+      🧠 You can type `/remind_me` at any point during the quest to be reminded of the current task
     actions:
-      - action: select_random_culture_module
-      - action: pause 4
-      - action: send_deliberation_questions "deliberation_questions_for_name"
-      - action: countdown 210 "until voting"
-      - action: pause 5
+      - action: turn_on_random_culture_module
+      - action: wait 3
+      - action: send_deliberation_questions "deliberation_questions"
+      - action: countdown 240 "until voting"
+      - action: ask_to_proceed 120
+      - action: wait 5 
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210
-    image_path: "assets/imgs/pre_generated/name.png"
+      - progress_condition: progress_timeout 360
+    image_path: "assets/imgs/pre_generated/quill_1.png"
 
   - stage: Vote on Group Name
     message: |
-      It's time to vote! 🗳️ 
+      **It's time to vote!** 🗳️ 
 
-      Here are the proposals that have been submitted. You have *1 minute* to vote for your favorite group name. 😄✅
+      Here are the proposals that have been submitted. You have *2 minutes* to vote for your favorite group name. 😄✅
     actions:
       - action: turn_off_random_culture_module
+      - action: wait 3 
       - action: post_submissions
-      - action: pause 10
+      - action: wait 8
       - action: set_global_decision_module "random"
-      - action: trigger_vote 'What should our name be?' 60 "submissions" "group_name"
+      - action: trigger_vote 'What should our name be?' 120 "submissions" "decision_one"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
-        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
+      - action: rename_channel
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: pause 5
+      - action: wait 5 
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/hourglass.png"
   
-  - stage: Group Purpose
+  - stage: Group's Main Topic of Interest
     message: |
-      Step 2: Group Purpose 💬📣
+      **Step 2: Group Topic** 🧠🖥️
 
-      Discuss what your groups motivating purpose is. Propose your ideas using `/submit <submission>`. 🗣️🎙️
+      What is your group's main topic of interest. What do you tend to discuss the most with each other? 
+      
+      Propose the topic that you think this group should be focued on using `/submit <submission>`. 🗣️🎙️
 
-      If you make a mistake or change your mind you can use `/resubmit` to change your submission.
+      Remember, if you make a mistake or change your mind you can use `/resubmit` to change your submission.
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
+
+      🧠 Reminder: you can type `/remind_me` at any point during the quest to be reminded of the current task
     actions:
-      - action: select_random_culture_module
-      - action: pause 4
-      - action: send_deliberation_questions "deliberation_questions_for_purpose"
-      - action: countdown 210 "until voting"
+      - action: turn_on_random_culture_module
+      - action: wait 3
+      - action: send_deliberation_questions "deliberation_questions"
+      - action: countdown 240 "until voting"
+      - action: ask_to_proceed 120
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210
-    image_path: "assets/imgs/pre_generated/goal.png"
+      - progress_condition: progress_timeout 360
+    image_path: "assets/imgs/pre_generated/book_1.png"
 
-  - stage: Vote on Group Purpose
+  - stage: Vote on The Group's Main Topic of Interest
     message: |
-      Voting time! Choose your favorite proposal for the group's voice. 🗳️📢
+      **Voting time!**
+      
+      Choose your favorite proposal for the group's main topic of interest. 🗳️📢
 
-      You have *1 minute* to vote on your group's voice.
+      You have *2 minutes* to vote on your group's voice.
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: pause 10
+      - action: wait 8
       - action: set_global_decision_module "random"
-      - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_purpose"
+      - action: trigger_vote 'What do you think the main topic of interest should be for this group?' 120 "submissions" "decision_two"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
-        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: pause 5
+      - action: wait 5
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/hourglass_2.png"
 
-  - stage: Group Goal
+  - stage: Group Way of Speaking
     message: |
-      Step 3: Group Goal 💬📣
+      **Step 3: Group Way of Speaking** 💬📣
 
-      Discuss the goal of your group. Propose your ideas using `/submit <submission>`. 🗣️🎙️
+      How does this group like to speak? Is the group more formal or informal? Do you tend to be more poetic or more technical? Are you playful or serious? 
 
-      If you make a mistake or change your mind you can use `/resubmit` to change your submission.
+      Example ways of speaking include: professional, authoritative, humorous, light-hearted, friendly, etc.
+      
+      The way a group talks to each other can have a deep impact on how a group and community identifies and communicates. 
+      
+      Propose your ideal way of speaking using `/submit <submission>`. 🗣️🎙️
+
+      Remember, if you make a mistake or change your mind you can use `/resubmit` to change your submission.
 
       🤖 Beware that a random culture module has been imposed on the conversation during this deliberation and proposal period. 🤖
+
+      🧠 Reminder: you can type `/remind_me` at any point during the quest to be reminded of the current task
     actions:
-      - action: select_random_culture_module
-      - action: pause 4
-      - action: send_deliberation_questions "deliberation_questions_for_goal"
-      - action: countdown 210 "until voting"
+      - action: turn_on_random_culture_module
+      - action: wait 3 
+      - action: send_deliberation_questions "deliberation_questions"
+      - action: countdown 240 "until voting"
+      - action: ask_to_proceed 120
     progress_conditions: 
       - progress_condition: all_submissions_submitted 
-      - progress_condition: progress_timeout 210
-    image_path: "assets/imgs/pre_generated/goal.png"
+      - progress_condition: progress_timeout 360
+    image_path: "assets/imgs/pre_generated/speech_2.png"
 
-  - stage: Vote on Group Purpose
+  - stage: Vote on Group Way of Speaking
     message: |
-      Voting time! Choose your favorite proposal for the group's voice. 🗳️📢
+      **Voting time!**
+      
+      Choose your favorite proposal for the group's way of speaking. 🗳️📢
 
-      You have *1 minute* to vote on your group's voice.
+      You have *1 minute* to vote on your group's way of speaking.
     actions:
       - action: turn_off_random_culture_module
       - action: post_submissions
-      - action: pause 10
+      - action: wait 8 
       - action: set_global_decision_module "random"
-      - action: trigger_vote 'What should our animating purpose be?' 60 "submissions" "group_goal"
+      - action: trigger_vote 'In what way do you think this group speaks?' 120 "submissions" "decision_three"
         retries: 1
         retry_message: "```You have failed to reach decision! You will have another chance to vote soon.```"
-        failure_message: "```Bummer. After several tries, your community has failed to reach a majority vote. The game is now over.```"
+        failure_message: "```Bummer. After several tries, your community has failed to reach a decision. The game is now over.```"
       - action: list_decisions
       - action: clear_decision_input_values
-      - action: pause 5
+      - action: wait 5 
       - action: construct_and_post_prompt
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/clock.png"
   
   - stage: End
     message: |
       Congratulations on completing this quest! 🥳🎉
 
-      A new `wildcard` culture module has been added to this community. You can try it here and see it in action in #d20-agora. To turn on the module, type `-wildcard`. 👏🎮
+      A new `wildcard` culture module has been added to this community. You can try it here and see it in action in #d20-agora. To turn on the module, type `/wildcard`. 👏🎮
     actions:
-      - action: countdown 30 "until this simulation auto-archives"
+      - action: countdown 300 "until this simulation auto-archives"
       - action: end
     progress_conditions: []
-    image_path: None
+    image_path: "assets/imgs/pre_generated/sunset.png"

@@ -97,22 +97,13 @@ SIMULATIONS = {
 }
 
 # DELIBERATION QUESTIONS
-deliberation_questions_for_name = [
-    "What emotions or associations should our name evoke?",
-    "Should the name be descriptive or abstract?",
-    "Should our name resonate with the community we are embedded in?",
-]
-deliberation_questions_for_purpose = [
-    "What emotions or associations might we attach to our purpose?",
-    "Should our purpose descriptive and specific or abstract and broad?",
-    "How does the purpose of our group align with the community we are embedded in?",
-]
-deliberation_questions_for_goal = [
-    "What emotions or associations might we attach to our goal?",
-    "Should our goal descriptive or abstract?",
-    "How does the goal of our group align with the community we are embedded in?",
+deliberation_questions = [
+    "As you discuss and deliberate your proposals, consider: what emotional associations might your proposals evoke",
+    "As you discuss and deliberate your proposals, consider: does your proposal tends towards the descriptive and abstract, or specific and concrete?",
+    "As you discuss and deliberate your proposals, consider: does your proposal resonate in any way with the community that the group is embeeded in?",
 ]
 
+# INIT
 values_check_task = None
 
 # QUEST KEYS
@@ -165,65 +156,13 @@ FILE_COUNT = 0  # Global variable to store the count of created files
 MAX_MODULE_LEVELS = 5
 MODULE_PADDING = 10
 
-# DECISION MODULES
-ACTIVE_GLOBAL_DECISION_MODULES = {}
-
-DECISION_MODULES = {
-    "majority": {
-        "name": "majority",
-        "description": "Majority requires a simiple majority from the number of people who voteon the options.",
-        "state": False,
-        "activated": False,
-        "activated_message": "",
-        "deactivated_message": "",
-        "url": "",  # TODO: make decision img
-        "icon": GOVERNANCE_SVG_ICONS["decision"],
-        "input_value": 0,
-        "valid_for_continuous_input": True,
-    },
-    "consensus": {
-        "name": "consensus",
-        "description": "Consensus requires everyone in the simulation to vote on the same option.",
-        "state": False,
-        "activated": False,
-        "activated_message": "",
-        "deactivated_message": "",
-        "url": "",  # TODO: make decision img
-        "icon": GOVERNANCE_SVG_ICONS["decision"],
-        "input_value": 0,
-        "valid_for_continuous_input": True,
-    },
-    "lazy_consensus": {
-        "name": "lazy consensus",
-        "description": "Lazy consensus decision-making allows options to pass by default unless they are objected to.",
-        "state": False,
-        "activated": False,
-        "activated_message": "",
-        "deactivated_message": "",
-        "url": "",  # TODO: make decision img
-        "icon": GOVERNANCE_SVG_ICONS["decision"],
-        "input_value": 0,
-        "valid_for_continuous_input": False,
-    },
-}
-
-CONTINUOUS_INPUT_DECISION_MODULES = {
-    module: attributes
-    for module, attributes in DECISION_MODULES.items()
-    if attributes["valid_for_continuous_input"]
-}
-
 # DECISIONS LOG
-
 DECISION_DICT = {}
-
-# GENERAL CULTURE STORAGE
-PROMPTS = {}
 
 # SPECTRUM VALUES
 INPUT_SPECTRUM = {
-    "scale": 10,
-    "threshold": 7,
+    "scale": 3,
+    "threshold": 1, 
 }
 
 # INTERNAL ACCESS CONTROL SETTINGS
@@ -237,6 +176,7 @@ ACCESS_CONTROL_SETTINGS = {
 IS_QUIET = False
 MAX_VOTE_TRIGGERS = 3
 VOTE_RETRY = False
+QUEST_IN_PROGRESS = False
 
 # MISC DICTS
 USER_MESSAGE_COUNT = {}  # Stores the number of messages sent by each user

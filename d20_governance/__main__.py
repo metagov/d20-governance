@@ -1,7 +1,7 @@
 import datetime
-from bot import run_bot
-from utils.constants import LOGGING_PATH
-from utils.utils import clean_temp_files, check_dirs
+from d20_governance.bot import run_bot
+from d20_governance.utils.constants import LOGGING_PATH
+from d20_governance.utils.utils import clean_temp_files, check_dirs
 
 if __name__ == "__main__":
     try:

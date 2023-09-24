@@ -7,15 +7,33 @@ import traceback
 import sys
 import time
 import random
-from discord.app_commands import command as slash_command
+
+from colorama import Fore, Style
+from typing import Union
+
+from discord.app_commands import command as slash_commands
 from discord.interactions import Interaction
+from discord import app_commands
+from discord.ext import tasks, commands
+from discord.ui import View
+
 from d20_governance.utils.utils import *
 from d20_governance.utils.constants import *
 from d20_governance.utils.cultures import *
-from d20_governance.utils.decisions import *
-from d20_governance.utils.voting import vote, set_global_decision_module
+from d20_governance.utils.voting import (
+    ACTIVE_GLOBAL_DECISION_MODULES,
+    CONTINUOUS_INPUT_DECISION_MODULES,
+    VoteContext,
+    VoteFailedException,
+    set_decision_module,
+    vote_state_manager,
+    vote,
+    set_global_decision_module,
+    decision_manager,
+)
 from discord import app_commands
-from discord.ext import tasks
+from discord.ext import tasks, commands
+from discord.ui import Button, View
 
 description = """📦 A bot for experimenting with modular governance 📦"""
 
@@ -37,13 +55,29 @@ class MyBot(commands.Bot):
         """
         Event handler for when the bot has logged in and is ready to start interacting with Discord
         """
-        await bot.tree.sync()
+        with open("assets/imgs/game_icons/d20-gov-icon.png", "rb") as avatar_file:
+            avatar = avatar_file.read()
+
+        try:
+            await bot.user.edit(username="D20 Governance Bot", avatar=avatar)
+        except discord.errors.HTTPException as e:
+            if "avatar" in str(e):
+                print(
+                    f"{Fore.BLACK}Changing avatar too fast, skipping this change.{Style.RESET_ALL}"
+                )
+
+        try:
+            synced = await bot.tree.sync()
+            print(f"{Fore.YELLOW}Synced {len(synced)} command(s).{Style.RESET_ALL}")
+        except Exception as e:
+            print(e)
+
         logging.basicConfig(
             filename="logs/bot.log",
             level=logging.INFO,
             format="%(asctime)s %(levelname)s %(message)s",
         )
-        print(">> Logging to logs/bot.log <<")
+        print(f"{Fore.YELLOW}>> Logging to logs/bot.log << {Style.RESET_ALL}")
         with open(f"{LOGGING_PATH}/bot.log", "a") as f:
             f.write(f"\n\n--- Bot started at {datetime.datetime.now()} ---\n\n")
         logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
@@ -128,13 +162,11 @@ class MyBot(commands.Bot):
         except Exception as e:
             type, value, tb = sys.exc_info()
             traceback_str = "".join(traceback.format_exception(type, value, tb))
-            print(f"Unhandled exception:\n{traceback_str}")
+            print(f"{Fore.RED}Unhandled exception:\n{traceback_str}{Style.RESET_ALL}")
             logging.error(f"Unhandled exception:\n{traceback_str}")
             if bot.quest.game_channel:
-                print("quest game channel = true")
                 await bot.quest.game_channel.send("An error occured")
             else:
-                print("quest game channel = false")
                 await context.send("An error occurred.")
 
     @commands.Cog.listener()
@@ -142,23 +174,10 @@ class MyBot(commands.Bot):
         """
         Event handler for when the bot has been invited to a new guild.
         """
-        print(f"D20 Bot has been invited to server `{guild.name}`")
+        print(
+            f"{Fore.YELLOW}D20 Bot has been invited to server `{guild.name}`{Style.RESET_ALL}"
+        )
         await setup_server(guild)
-
-    @commands.Cog.listener()
-    async def on_reaction_add(self, reaction, user):
-        if user.bot:
-            return
-
-        if hasattr(bot, "vote_message") and reaction.message.id == bot.vote_message.id:
-            if user.id in bot.voters:
-                await reaction.remove(user)
-                await user.send(
-                    f"Naughty naughty! You cannot vote twice!",
-                    delete_after=timeouts["vote"],
-                )
-            else:
-                bot.voters.add(user.id)
 
     @commands.Cog.listener()
     async def on_command(self, ctx):
@@ -166,7 +185,7 @@ class MyBot(commands.Bot):
         Event listener that prints command invoked, channel where invoked, and channel id
         """
         print(
-            f"⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id}"
+            f"{Fore.BLUE}⁂ Invoked: `/{ctx.command.name}` in channel `{ctx.channel.name}`, ID: {ctx.channel.id} {Style.RESET_ALL}"
         )
 
     @commands.Cog.listener()
@@ -179,18 +198,117 @@ class MyBot(commands.Bot):
             traceback.format_exception(type(error), error, error.__traceback__)
         )
         error_message = f"Error invoking command: {ctx.command.name if ctx.command else 'Command does not exist'} - {error}\n{traceback_text}"
-        print(error_message)
+        print(f"{Fore.RED}{error_message}{Style.RESET_ALL}")
         logging.error(error_message)
 
     @commands.Cog.listener()
     async def on_error(self, event):
         type, value, tb = sys.exc_info()
         traceback_str = "".join(traceback.format_exception(type, value, tb))
-        print(f"Unhandled exception in {event}:\n{traceback_str}")
+        print(
+            f"{Fore.RED}Unhandled exception in {event}:\n{traceback_str}{Style.RESET_ALL}"
+        )
         logging.error(f"Unhandled exception in {event}:\n{traceback_str}")
 
+    @commands.Cog.listener()
+    async def setup_hook(self) -> None:
+        await self.add_cog(CultureModulesCog(self))
 
-bot = MyBot(command_prefix="-", description=description, intents=intents)
+
+class CultureModulesCog(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    async def wildcard(self, ctx):
+        """
+        Toggle wildcard module
+        """
+
+        # get the wildcard module object
+        module = CULTURE_MODULES.get("wildcard", None)
+        if module is None:
+            return
+        if module.config["llm_disclosure"] is None:
+            await ctx.send(
+                "Cannot activate the **Wildcard Module** at this time. Play the **Build a Group Voice** quest by typing `/embark` in #d20-agora in order to make this module."
+            )
+            return
+
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def obscurity(self, ctx, mode: str = None):
+        """
+        Toggle obscurity module
+        """
+        available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
+        module = CULTURE_MODULES.get("obscurity", None)
+        if module is None:
+            return
+
+        if mode is None:
+            await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+        if mode not in available_modes:
+            embed = discord.Embed(
+                title=f"Error - The mode '{mode}' is not available.",
+                color=discord.Color.red(),
+            )
+        else:
+            module.config["mode"] = mode
+            await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def eloquence(self, ctx):
+        """
+        Toggle eloquence module
+        """
+        module = CULTURE_MODULES.get("eloquence", None)
+        if module is None:
+            return
+
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def values(self, ctx):
+        """
+        Toggle values module
+        """
+        module = CULTURE_MODULES.get("values", None)
+        if module is None:
+            return
+
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def amplify(self, ctx):
+        """
+        Toggle amplify module
+        """
+        module: Amplify = CULTURE_MODULES.get("amplify", None)
+        if module is None:
+            return
+
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+    @commands.command()
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
+    async def ritual(self, ctx):
+        """
+        Toggle ritual module.
+        """
+        module: Ritual = CULTURE_MODULES.get("ritual", None)
+        if module is None:
+            return
+
+        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+
+
+bot = MyBot(command_prefix="/", description=description, intents=intents)
 bot.remove_command("help")
 
 
@@ -200,44 +318,56 @@ def run_bot():
 
 @bot.tree.command(name="help", description="Help information")
 async def help(interaction: discord.Interaction, command: str = None):
-    prefix = bot.command_prefix
-    if command:
-        # Display help for a specific command
-        cmd = bot.get_command(command)
-        if not cmd:
-            await interaction.response.send_message(
-                f"Sorry, I couldn't find command **{command}**.", ephemeral=True
-            )
-            return
-        cmd_help = cmd.help or "No help available."
-        help_embed = discord.Embed(
-            title=f"{prefix}{command} help", description=cmd_help, color=0x00FF00
+    prefix = "/"
+
+    # Loop through slash commands
+    slash_cmds = [c for c in bot.tree.walk_commands()]
+    slash_cmds.sort(key=lambda c: c.name)
+    slash_cmd_field = ""
+    for cmd in slash_cmds:
+        description = cmd.description
+        slash_cmd_field += (
+            f"**{prefix}{cmd.name}**\n{description or 'No description available.'}\n"
         )
-        await interaction.response.send_message(embed=help_embed, ephemeral=True)
-    else:
-        # Display a list of available commands
-        cmds = [c.name for c in bot.commands if not c.hidden]
-        cmds.sort()
-        embed = discord.Embed(
-            title="Commands List",
-            description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.\n\nTo play with the bot, visit `#d20-agora` and select any of the culture modules. You can also `/embark` from the same channel on a quest to form a new group identity and voice.",
-            color=0x00FF00,
-        )
-        for cmd in cmds:
-            command = bot.get_command(cmd)
-            description = command.brief or command.short_doc
-            embed.add_field(
-                name=f"{prefix}{cmd}",
-                value=description or "No description available.",
-                inline=False,
-            )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # Loop through value culture module commands
+    cog = bot.get_cog("CultureModulesCog")
+    if cog:
+        cog_cmd_field = ""
+        for cmd in cog.get_commands():
+            description = cmd.brief or cmd.help
+            cog_cmd_field += f"**{prefix}{cmd.name}**\n{description or 'No description available.'}\n"
+
+    embed = discord.Embed(
+        title="Commands and About",
+        description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.\n\nTo play with the bot, visit `#d20-agora` and select any of the culture modules.\n\nYou can also `/embark` from the `#d20-agora` on a quest to form a new group identity and voice.\n",
+    )
+
+    embed.add_field(
+        name="Slash Commands",
+        value=slash_cmd_field,
+        inline=False,
+    )
+    embed.add_field(
+        name="Value Module Commands",
+        value=cog_cmd_field,
+        inline=False,
+    )
+    embed.add_field(
+        name="Continuous Input Mechanism",
+        value="* You can turn culture modules on and off in `#d20-agora` using `<culture module> +1` or `<culture module -1>`.\n* For example: `eloquence +1` or `amplify -1`.",
+        inline=False,
+    )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # QUEST FLOW
 def setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode):
     quest = Quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode)
     bot.quest = quest
+    global QUEST_IN_PROGRESS
+    QUEST_IN_PROGRESS = True
     return quest
 
 
@@ -261,7 +391,7 @@ async def start_quest(ctx, quest: Quest):
         llm_agent = get_llm_agent()
         num_stages = random.randint(5, 10)  # Adjust range as needed
         for _ in range(num_stages):
-            print("Generating stage with llm..")
+            print(f"{Fore.BLUE}Generating stage with llm..{Style.RESET_ALL}")
             stage = await generate_stage_llm(llm_agent)
             await process_stage(ctx, stage, quest)
 
@@ -286,11 +416,63 @@ async def start_quest(ctx, quest: Quest):
                 image_path=stage.get(QUEST_IMAGE_PATH_KEY),
             )
 
-            print(f"↷ Processing stage {stage.name}")
+            print(f"{Fore.BLUE}↷ Processing stage: '{stage.name}'{Style.RESET_ALL}")
 
             await process_stage(ctx, stage, quest, message_obj)
 
 
+# class VoteTimeoutView(View):
+#     def __init__(self, countdown_timeout):
+#         super().__init__(timeout=10.0)
+#         self.wait_finished = asyncio.Event()
+#         self.countdown_timeout = countdown_timeout
+
+#     @discord.ui.button(
+#         label="Extend Vote", style=discord.ButtonStyle.green, custom_id="extend_vote"
+#     )
+#     async def extend_vote_button(
+#         self, interaction: discord.Interaction, button: discord.ui.Button
+#     ):
+#         # Extend vote duration by 60 seconds
+#         self.timeout += 60
+#         await interaction.response.send_message("Vote duration extended by 60 seconds.")
+
+#     @discord.ui.button(
+#         label="Extend Vote", style=discord.ButtonStyle.green, custom_id="extend_vote"
+#     )
+#     async def extend_vote_button(
+#         self, interaction: discord.Interaction, button: discord.ui.Button
+#     ):
+#         # Extend vote duration by 60 seconds
+#         self.timeout += 60
+#         await interaction.response.send_message("Vote duration extended by 60 seconds.")
+
+async def process_retry(ctx, retry_message):
+    await clear_decision_input_values(ctx)
+    await ctx.send(retry_message)
+    await ctx.send(
+        "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
+    )
+    await display_module_status(
+        ctx, CONTINUOUS_INPUT_DECISION_MODULES
+    )
+    await ctx.send(
+        f"```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to {INPUT_SPECTRUM['threshold']}, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
+    )
+
+    """
+    For 60 seconds, tally continuous votes; if threshold is reached for any module, it will be set as decision module, 
+    otherwise status quo will remain  
+    """
+    for _ in range(60):
+        reached_threshold = await calculate_continuous_inputs(ctx)
+        if reached_threshold:
+            return
+        await asyncio.sleep(1)
+
+    await ctx.send("No winner was found. The status quo will remain.")
+
+        
 async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Message):
     """
     Run stages from yaml config
@@ -354,58 +536,34 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
     async def action_runner():
         for action in actions:
             command_name = action.action
+            print(f"{Fore.BLUE}↷ Processing action: '{command_name}'{Style.RESET_ALL}")
             if command_name is None:
                 raise Exception(f"Command {command_name} not found.")
             args = action.arguments
             command = globals().get(command_name)
             retries = action.retries if hasattr(action, "retries") else 0
             if bot.quest.progress_completed == True:
-                print("Progress condition met. Ending action_runner")
+                print(
+                    f"{Fore.BLUE}■ Progress condition met. Ending action_runner{Style.RESET_ALL}"
+                )
                 break
             while retries >= 0:
                 try:
                     await execute_action(game_channel_ctx, command, args)
                     break
-                # TODO: Add more specific exceptions
-                except Exception as e:
-                    print(f"Error encountered: {e}")
+                except VoteFailedException as ve:
+                    print(f"{Fore.RED}Vote failed: {ve} Retrying...{Style.RESET_ALL}")
                     if retries > 0:
-                        # TODO: how can we avoid the global
+                        # TODO: avoid the global
                         global VOTE_RETRY
                         VOTE_RETRY = True
+                        # view = TimeoutView(countdown_timeout=60)
+                        # await ctx.send("Do you need more time?", view=view)
+                        # await view.wait()
                         print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
-                            await clear_decision_input_values(game_channel_ctx)
-                            await game_channel_ctx.send(action.retry_message)
-                            await game_channel_ctx.send(
-                                "```💡--Do Not Dispair!--💡\n\nYou have a chance to change how you make decisions```"
-                            )
-                            await display_module_status(
-                                game_channel_ctx, CONTINUOUS_INPUT_DECISION_MODULES
-                            )
-                            await game_channel_ctx.send(
-                                "```👀--Instructions--👀\n\n* Post a message with the decision type you want to use\n\n* For example, type: consensus +1\n\n* You can express your preference multiple times and use +1 or -1 after the decision type\n\n* The decision module with the most votes in 60 seconds, or the first to 10, will be the new decision making module during the next decision retry.\n\n* You have 60 seconds before the next decision is retried. ⏳```"
-                            )
-                            loop_count = 0
-                            # TODO: fixup this loop
-                            while True:
-                                condition_result = await calculate_module_inputs(
-                                    game_channel_ctx, retry=True, tally=False
-                                )
-                                if condition_result:
-                                    VOTE_RETRY = False
-                                    break
-                                loop_count += 1
-                                print(f"⧗ {loop_count} seconds to set new decision")
-                                if loop_count == 60:
-                                    VOTE_RETRY = False
-                                    print("Tallying Inputs")
-                                    await calculate_module_inputs(
-                                        game_channel_ctx, retry=True, tally=True
-                                    )
-                                    break
-                                await asyncio.sleep(1)
-                            retries -= 1
+                            await process_retry(game_channel_ctx, action.retry_message)
+                        retries -= 1
                     else:
                         if (
                             hasattr(action, "failure_message")
@@ -417,7 +575,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
 
                             embed = discord.Embed(
                                 title=f"Results for: `{vote_state_manager.question}`:",
-                                description=f"In absence of collective decision making, the bot as autocratically selected a result randomly. Result: {winning_option}",
+                                description=f"In absence of collective decision making, the bot as autocratically selected a random result. Result: {winning_option}",
                                 color=discord.Color.dark_gold(),
                             )
 
@@ -430,12 +588,22 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                             DECISION_DICT[vote_state_manager.question] = decision_data
                             await game_channel_ctx.send(embed=embed)
                             break
+                except Exception as e:
+                    # For all other errors, log the error and continue to the next action
+                    print(
+                        f"Unexpected error encountered: {e}, continuing to next action."
+                    )
+                    logging.error(
+                        f"Unexpected error encountered: {e}, continuing to next action."
+                    )
+                    break
+
 
     async def progress_checker():
-        if progress_conditions == None or len(progress_conditions) == 0:
+        if progress_conditions is None or len(progress_conditions) == 0:
             return
         while True:
-            if bot.quest.progress_completed == True:
+            if bot.quest.progress_completed:
                 print("At least one progress condition met")
                 break
             tasks = []
@@ -447,23 +615,40 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                 args = progress_condition.arguments
                 tasks.append(function(game_channel_ctx, *args))
                 print(
-                    f"+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list"
+                    f"{Fore.BLUE}+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list{Style.RESET_ALL}"
                 )  # Debugging line
-            for future in asyncio.as_completed(tasks):
+            
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            
+            for future in done:
                 condition_result = await future
                 if condition_result:
+                    for task in pending:
+                        task.cancel() # Ensures all pending progress conditions are cancelled to avoid impacting future stages
                     return True
             await asyncio.sleep(1)  # sleep before checking again to avoid busy looping
+
 
     # Run simultaneously and wait for both the action_runner and progress_checker to complete
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete
     await asyncio.gather(action_runner(), progress_checker())
 
 
-async def countdown(ctx, timeout_seconds, text: str = None):
+async def countdown(
+    ctx_interaction: Union[discord.ext.commands.Context, discord.Interaction],
+    timeout_seconds=None,
+    text: str = None,
+):
     """
     Send an updating countdown display
     """
+    if isinstance(ctx_interaction, discord.ext.commands.Context):
+        channel = ctx_interaction.channel
+    elif isinstance(ctx_interaction, discord.Interaction):
+        channel = ctx_interaction.channel
+    else:
+        raise ValueError("Either ctx or interaction must be provided.")
+
     if hasattr(bot, "quest") and bot.quest.fast_mode:
         timeout_seconds = 10
 
@@ -475,10 +660,12 @@ async def countdown(ctx, timeout_seconds, text: str = None):
     message_interval_seconds = 60
     next_message_time = time.time() + message_interval_seconds
 
-    first_message = f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
-    message = await ctx.send(first_message)
+    first_message = (
+        f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}```"
+    )
+    message = await channel.send(first_message)
 
-    @tasks.loop(seconds=10)
+    @tasks.loop(seconds=15)
     async def update_countdown():
         nonlocal remaining_seconds, remaining_minutes
         remaining_minutes = remaining_seconds / 60
@@ -488,11 +675,11 @@ async def countdown(ctx, timeout_seconds, text: str = None):
         await message.edit(content=new_message)
         if remaining_minutes <= 0:
             new_message = f"```⏲️ Counting down finished.```"
-            await ctx.send(new_message)
-            print("⧗ Countdown finished.")
+            await channel.send(new_message)
+            print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             update_countdown.stop()
 
-        # Check is all submissions have been submitted
+        # Check if all submissions have been submitted
         if bot.quest.progress_completed:
             await message.edit(
                 content="```⏲️ All submissions submitted. Countdown finished.```"
@@ -501,16 +688,20 @@ async def countdown(ctx, timeout_seconds, text: str = None):
 
     @tasks.loop(minutes=1)
     async def send_new_message():
-        nonlocal remaining_minutes
+        nonlocal remaining_seconds, remaining_minutes, message
+        remaining_minutes = remaining_seconds / 60
         if remaining_minutes <= 0:
             await message.edit(content="```⏲️ Counting down finished.```")
-            print("⧗ Countdown finished.")
+            print(f"{Fore.BLUE}⧗ Countdown finished.{Style.RESET_ALL}")
             send_new_message.stop()
-        if remaining_minutes <= 2.5:
-            new_message = (
-                f"```⏱️ {remaining_minutes:.2f} minutes remaining {text}.\n👇 👇 👇```"
-            )
-            message = await ctx.send(new_message)
+        if remaining_minutes <= remaining_minutes - 1:
+            new_message = f"```⏳ Counting Down: {remaining_minutes:.2f} minutes remaining {text}.```"
+            message = await channel.send(new_message)
+            if bot.quest.progress_completed:
+                await message.edit(
+                    content="```⏲️ All submissions submitted. Countdown finished.```"
+                )
+                send_new_message.stop()
 
     update_countdown.start()
     send_new_message.start()
@@ -523,7 +714,7 @@ async def countdown(ctx, timeout_seconds, text: str = None):
     except asyncio.CancelledError:
         update_countdown.stop()
         send_new_message.stop()
-        print("⧗ Countdown cancelled.")
+        print(f"{Fore.BLUE}⧗ Countdown cancelled.{Style.RESET_ALL}")
 
 
 async def all_submissions_submitted(ctx):
@@ -537,28 +728,30 @@ async def all_submissions_submitted(ctx):
         joined_players = bot.quest.joined_players
         players_to_submissions = bot.quest.players_to_submissions
         if len(joined_players) == len(players_to_submissions):
-            print("All submissions submitted.")
+            await ctx.send(
+                "```Everyone has made their submission. The next stage will start in 5 seconds```"
+            )
+            print(f"{Fore.BLUE}✓ All submissions submitted.{Style.RESET_ALL}")
             bot.quest.progress_completed = True
+            await asyncio.sleep(5)
             return True
-        print("⧗ Waiting for all submissions to be submitted.")
+        print("⧗ Waiting for all submissions to be submitted")
         await asyncio.sleep(1)  # Wait for a second before checking again
 
 
-# TODO: what's the difference between pause / progress_timeout, can they be collapsed
-
-
-async def pause(ctx, seconds: str):
+# TODO: merge wait and progress_timeout
+async def wait(ctx, seconds: str):
     """
-    Simulation pauses
+    Simulation waits
 
-    Used by in simulation yaml to add pauses in the simulations
+    Used by in simulation yaml to add pauses in the simulations and check progress conditions
     """
     if bot.quest.fast_mode:
-        seconds = 1
-        print(f"Pausing for {seconds} seconds...")
+        seconds = 2
+        print(f"{Fore.BLUE}◫ Pausing for {seconds} seconds...{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     else:
-        print(f"Pausing for {seconds} seconds...")
+        print(f"{Fore.BLUE}◫ Pausing for {seconds} seconds...{Style.RESET_ALL}")
         await asyncio.sleep(int(seconds))
     return True
 
@@ -576,37 +769,18 @@ async def progress_timeout(ctx, seconds: str):
     else:
         print(f"Progression timeout in {seconds} seconds...")
         await asyncio.sleep(int(seconds))
+    print(f"{Fore.BLUE}⧗ Progression timeout reached.{Style.RESET_ALL}")
     bot.quest.progress_completed = True
     return True
 
 
-@bot.tree.command(name="remind_me", description="Send most recent stage message")
+@bot.tree.command(
+    name="remind_me", description="Send most recent stage message (used in quest)"
+)
 async def remind_me(interaction: discord.Interaction):
     await interaction.response.send_message(
         reminder_manager.current_stage_message, ephemeral=True
     )
-
-
-async def turn_on_random_value_check(ctx):
-    global values_check_task
-    if bot.quest.game_channel == None:
-        print("bot quest = none")
-        values_check_task = bot.loop.create_task(
-            values_module.randomly_check_values(bot, ctx, ctx.channel)
-        )
-    else:
-        print("printing here")
-        values_check_task = bot.loop.create_task(
-            values_module.randomly_check_values(bot, ctx, bot.quest.game_channel)
-        )
-    print("value check loop turned on")
-
-
-async def turn_off_random_value_check(ctx):
-    global values_check_task
-    if values_check_task is not None and not values_check_task.done():
-        values_check_task.cancel()
-        print("value check loop turned off")
 
 
 async def end(ctx):
@@ -618,8 +792,9 @@ async def end(ctx):
     if values_check_task is not None and not values_check_task.done():
         values_check_task.cancel()
         print("value check loop canceled")
-
-    print("Archiving...")
+    global QUEST_IN_PROGRESS
+    QUEST_IN_PROGRESS = False
+    print(f"{Fore.BLUE}⇓ Archiving...{Style.RESET_ALL}")
     # Archive temporary channel
     archive_category = discord.utils.get(ctx.guild.categories, name="d20-archive")
 
@@ -638,7 +813,7 @@ async def end(ctx):
 
     ARCHIVED_CHANNELS.append(ctx.channel)
 
-    print("Archived...")
+    print(f"{Fore.BLUE}⇓ Archived...{Style.RESET_ALL}")
 
 
 # VIEWS
@@ -915,7 +1090,7 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        value_revision_manager.store_proposal(
+        await value_revision_manager.store_proposal(
             self.proposed_value_name, self.proposed_value_definition
         )
 
@@ -924,17 +1099,35 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
         )
 
         await asyncio.sleep(2)
-        vote_result = await lazy_consensus(
-            channel=interaction.channel,
-            question=f"Should we change the following value **{value_revision_manager.selected_value}** to the newly proposed value: **{self.proposed_value_name}: {self.proposed_value_definition}**?",
-            options=value_revision_manager.proposed_values_dict,
-            timeout=20,
+        print(f"proposed value: ")
+
+        # Create a dictionary with only the proposed name and value
+        current_proposal = {
+            self.proposed_value_name.value: self.proposed_value_definition.value
+        }
+
+        member_count = (
+            len(interaction.channel.members) - 1
+        )  # subtract one to account for bot
+        question = f"Should we change the value *{value_revision_manager.selected_value}* to the newly proposed value: *{self.proposed_value_name}*?"
+        vote_context = VoteContext.create(
+            interaction.channel.send,
+            member_count,
+            question=question,
+            options=current_proposal,
+            timeout=30,
+            decision_module_name="lazy_consensus",
         )
 
-        value_revision_manager.update_values_dict(
-            value_revision_manager.selected_value, vote_result
-        )
-        value_revision_manager.clear_proposed_values()
+        vote_result = await vote(vote_context)
+
+        # Check if the proposed value was accepted (i.e., not objected to)
+        if self.proposed_value_name.value in vote_result:
+            await value_revision_manager.update_values_dict(
+                value_revision_manager.selected_value, vote_result
+            )
+
+        await value_revision_manager.clear_proposed_values()
 
 
 class ValueRevisionView(discord.ui.View):
@@ -951,7 +1144,9 @@ class ValueRevisionView(discord.ui.View):
 
 
 # QUEST START AND PROGRESSION
-@bot.tree.command(name="embark", description="Propose a quest to embark on")
+@bot.tree.command(
+    name="embark", description="Propose a quest to embark on (used in #d20-agora)"
+)
 # @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
 @app_commands.choices(
     quest_mode=[
@@ -992,10 +1187,14 @@ async def embark(
     ctx = await bot.get_context(interaction)
 
     # Make Quest Builder view and return values from selections
-    print("Waiting for proposal to be built...")
+    print(f"{Fore.BLUE}Waiting for proposal to be built...{Style.RESET_ALL}")
 
     if not 1 <= number_of_players.value <= 8:
         await ctx.send("The game requires at least 2 and at most 8 players")
+        return
+    
+    if QUEST_IN_PROGRESS:
+        await ctx.send("There is already a quest in progress.")
         return
 
     # Quest setup
@@ -1012,42 +1211,58 @@ async def embark(
     embed = discord.Embed(
         title=f"{ctx.author.display_name} has proposed a game for {number_of_players.value} players: Join or Leave"
     )
-    embed.add_field(
-        name="**Current Players:**", value="", inline=False
-    )  # Empty initial value.
+    embed.add_field(name="**Current Players:**", value="", inline=False)
     embed.add_field(
         name="**Players needed to start:**",
         value=str(number_of_players.value),
         inline=False,
-    )  # Empty initial value.
+    )
 
     await ctx.send(embed=embed, view=join_leave_view)
-    print("Waiting for players to join...")
+    print(f"{Fore.BLUE}Waiting for players to join...{Style.RESET_ALL}")
 
 
 async def make_game_channel(ctx, quest: Quest):
     """
     Game State: Setup the config and create unique quest channel
     """
-    print("Making temporary game channel...")
+    print(f"{Fore.BLUE}Making temporary game channel...{Style.RESET_ALL}")
 
     # Set permissions for bot
-    bot_permissions = discord.PermissionOverwrite(read_messages=True)
+    bot_permissions = discord.PermissionOverwrite(
+        read_messages=True,
+        use_application_commands=True,
+    )
+
     # Create a dictionary containing overwrites for each player that joined,
     # giving them read_messages access to the temp channel and preventing message_delete
     player_overwrites = {
         ctx.guild.get_member_named(player): discord.PermissionOverwrite(
-            read_messages=True, manage_messages=False
+            read_messages=True,
+            send_messages=True,
+            create_private_threads=False,
+            create_public_threads=False,
+            send_messages_in_threads=False,
+            use_application_commands=True,
+            send_voice_messages=False,
+            mention_everyone=False,
+            manage_nicknames=False,
+            manage_messages=False,
+            add_reactions=True,
         )
         for player in quest.joined_players
     }
+
     # Create a temporary channel in the d20-quests category
     overwrites = {
         # Default user cannot view channel
-        ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        ctx.guild.default_role: discord.PermissionOverwrite(
+            read_messages=False, use_application_commands=True
+        ),
         # Users that joined can view channel
         ctx.guild.me: bot_permissions,
-        **player_overwrites,  # Merge player_overwrites with the main overwrites dictionary
+        # Merge player_overwrites with the main overwrites dictionary
+        **player_overwrites,
     }
     quests_category = discord.utils.get(ctx.guild.categories, name="d20-quests")
 
@@ -1059,12 +1274,29 @@ async def make_game_channel(ctx, quest: Quest):
     )
 
 
+@bot.command()
+async def rename_channel(ctx):
+    """
+    Rename the quest channel
+    """
+    print(f"{Fore.BLUE}Renaming temporary game channel...{Style.RESET_ALL}")
+
+    current_channel = ctx.channel
+    print(current_channel)
+
+    new_channel_name = f"d20-{decision_manager.decision_one}-voice"
+
+    bot.quest.game_channel = await current_channel.edit(name=new_channel_name)
+
+    await ctx.send(f"```This channel has been renamed to #{new_channel_name}```")
+
+
 # CULTURE MODULES
 # Community generated wildcard culture module
 @bot.command(hidden=True)
 async def construct_and_post_prompt(ctx):
     # assign prompt, affiliation, and purpose to the prompts dictionary
-    prompt = f"Group name: {prompt_object.group_name}, Group goal: {prompt_object.group_purpose}, Group goal: {prompt_object.group_goal}"
+    prompt = f"You are from {prompt_object.decision_one}. Please rewrite the following input ina way that makes the speaker sound {prompt_object.decision_three} while maintaining the original meaning and intent. Incorporate the theme of {prompt_object.decision_two}. Don't complete any sentences, just rewrite them."
 
     # assign the prompt to the wildcard culture module config
     module = CULTURE_MODULES.get("wildcard", None)
@@ -1079,11 +1311,11 @@ async def construct_and_post_prompt(ctx):
 
 
 @bot.command(hidden=True)
-async def select_random_culture_module(ctx):
+async def turn_on_random_culture_module(ctx):
     """
     Randomly select a culture module to turn on
     """
-    culture_commands = ["eloquence", "obscurity", "amplify", "values"]
+    culture_commands = ["eloquence", "obscurity", "amplify"]
     random_command_name = random.choice(culture_commands)
     logging.info(f"Selected random culture module: {random_command_name}")
 
@@ -1096,11 +1328,11 @@ async def select_random_culture_module(ctx):
             await random_command.invoke(ctx)
         except Exception as e:
             error_msg = f"Failed to execute command {random_command_name}: {e}"
-            print(error_msg)
+            print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
             logging.error(error_msg)
     else:
         error_msg = f"Command {random_command_name} not found."
-        print(error_msg)
+        print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
         logging.error(error_msg)
 
 
@@ -1116,196 +1348,76 @@ async def turn_off_random_culture_module(ctx):
             random_culture_module_manager.random_culture_module = ""
         except Exception as e:
             error_msg = f"Failed to execute command {random_command_name}: {e}"
-            print(error_msg)
+            print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
             logging.error(error_msg)
     else:
         error_msg = f"Command {random_command_name} not found."
-        print(error_msg)
+        print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
         logging.error(error_msg)
 
 
-@bot.command()
-async def wildcard(ctx):
-    """
-    Toggle eloquence module
+# PROGRESSION COMMANDS
+class TimeoutView(View):
+    def __init__(self, countdown_timeout):
+        super().__init__(timeout=10.0)
+        self.wait_finished = asyncio.Event()
+        self.countdown_timeout = countdown_timeout
 
-    Defaults to toggling culture module unless true or false are passed to set global state
-    """
-
-    # get the wildcard module object
-    module = CULTURE_MODULES.get("wildcard", None)
-    if module is None:
-        return
-
-    # toggle the global state of the module
-    await module.toggle_global_state(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def obscurity(ctx, mode: str = None):
-    """
-    Toggle obscurity module
-    """
-    available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
-    module = CULTURE_MODULES.get("obscurity", None)
-    if module is None:
-        return
-
-    if mode is None:
-        await module.toggle_global_state(ctx)
-    if mode not in available_modes:
-        embed = discord.Embed(
-            title=f"Error - The mode '{mode}' is not available.",
-            color=discord.Color.red(),
+    @discord.ui.button(label="Yes", style=discord.ButtonStyle.green, custom_id="yes")
+    async def yes_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # await interaction.response.defer()
+        await interaction.response.send_message(
+            "Someone has answered yes. Starting the countdown."
         )
-    else:
-        module.config["mode"] = mode
-        await module.toggle_global_state(ctx)
+        countdown_task = asyncio.create_task(
+            countdown(
+                interaction,
+                timeout_seconds=self.countdown_timeout,
+                text="until the next stage.",
+            )
+        )
+        countdown_task.add_done_callback(lambda _: self.wait_finished.set())
 
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def eloquence(ctx):
-    """
-    Toggle eloquence module
-
-    Defaults to toggling culture module unless true or false are passed to set global state
-    """
-    module = CULTURE_MODULES.get("eloquence", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def values(ctx):
-    """
-    Toggle values module
-    """
-    module = CULTURE_MODULES.get("values", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-    if module.config["global_state"] == True:
-        print("true")
-        await turn_on_random_value_check(ctx)
-    else:
-        print("false")
-        await turn_off_random_value_check(ctx)
-
-
-# TODO: it would be nice to not have this toggled when displaying the info, maybe have a different command for display diversity info
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def diversity(ctx):
-    """
-    Toggle diversity module
-    """
-    module: Diversity = CULTURE_MODULES.get("diversity", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-    # Display the diversity counts if global state is true
-    if module.is_global_state_active():
-        await module.display_info(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def amplify(ctx):
-    """
-    Toggle amplify module
-    """
-    module: Amplify = CULTURE_MODULES.get("amplify", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-
-@bot.command()
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
-async def ritual(ctx):
-    """
-    Toggle ritual module.
-    """
-    module: Ritual = CULTURE_MODULES.get("ritual", None)
-    if module is None:
-        return
-
-    await module.toggle_global_state(ctx)
-
-
-@bot.command(hidden=True)
-async def secret_message(ctx):
-    """
-    Secrecy: Randomly Send Messages to DMs
-    """
-    print("Secret message command triggered.")
-    await send_msg_to_random_player(bot.quest.game_channel)
-
-
-# TODO: I think we can probably remove this?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: False)
-async def vote_governance(ctx, governance_type: str):
-    """
-    Vote on governance module based on current or random decision module
-    """
-    if governance_type is None:
-        await ctx.send("Invalid governance type: {governance_type}")
-        return
-    modules = get_modules_for_type(governance_type)
-    module_names = [module["name"] for module in modules]
-    question = f"Which {governance_type} should we select?"
-    decision_module = await set_decision_module()
-    timeout = 60
-    winning_module_name = await vote(
-        ctx, question, decision_module, timeout, *module_names
+    @discord.ui.button(
+        label="I don't need more time.",
+        style=discord.ButtonStyle.gray,
+        custom_id="no",
     )
-    # TODO: if no winning_module, hold retry logic or decide what to do
-    if winning_module_name:
-        winning_module = modules[module_names.index(winning_module_name)]
-        add_module_to_stack(winning_module)
-        await ctx.send(f" New module `{winning_module_name}` added to governance stack")
-        await post_governance(ctx)
-    else:
-        embed = discord.Embed(
-            title="Error - No winning module.",
-            color=discord.Color.red(),
-        )
-        await ctx.send(embed=embed)
+    async def no_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # await interaction.response.defer()
+        await interaction.response.send_message("Noted", ephemeral=True)
+        return
 
-    return winning_module_name
+    def set_message(self, message):
+        self.message = message
+
+    async def on_timeout(self):
+        # Disable the button after the timeout
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        # Update the message to reflect the change
+        await self.message.edit(view=self)
+        self.wait_finished.set()
+
+    async def wait(self):
+        await self.wait_finished.wait()
+        self.wait_finished.clear()
+
+
+@bot.command(hidden=True)
+async def ask_to_proceed(ctx, countdown_timeout: int = None):
+    view = TimeoutView(countdown_timeout=countdown_timeout)
+    message = await ctx.send("Do you need more time?", view=view)
+    view.set_message(message)
+    await view.wait()
 
 
 # META GAME COMMANDS
-@bot.command()
-@access_control()
-async def info(
-    ctx,
-    culture_module=None,
-    current_decision_module=None,
-    starting_decision_module=None,
-):
-    """
-    View meta information
-    """
-    # TODO Pass starting or current decision module into the info command
-    decision_module = current_decision_module or starting_decision_module
-    embed = discord.Embed(title="Current Stats", color=discord.Color.dark_gold())
-    embed.add_field(name="Current Decision Module:\n", value=f"{decision_module}\n\n")
-    embed.add_field(name="Current Culture Module:\n", value=f"{culture_module}")
-    await ctx.send(embed=embed)
-
-
 @bot.command(hidden=True)
 async def list_decisions(ctx):
     """
@@ -1361,7 +1473,7 @@ async def quit(ctx):
     """
     Individually quit the quest
     """
-    print("Quiting...")
+    print(f"{Fore.BLUE}Quiting...{Style.RESET_ALL}")
     await ctx.send(f"{ctx.author.name} has quit the game!")
     # TODO: Implement the logic for quitting the game and ending it for the user
 
@@ -1372,9 +1484,9 @@ async def dissolve(ctx):
     """
     Trigger end of game
     """
-    print("Ending game...")
+    print(f"{Fore.BLUE}Ending game...{Style.RESET_ALL}")
     await end(ctx)
-    print("Game ended.")
+    print(f"{Fore.BLUE}Game ended.{Style.RESET_ALL}")
 
 
 @bot.command(hidden=True)
@@ -1419,11 +1531,11 @@ async def quiet(ctx, mode: string = None):
     if mode == "True":
         IS_QUIET = True
         await ctx.send("```Quiet mode is on```")
-        print("Quiet mode is on.")
+        print(f"{Fore.GREEN}Quiet mode is on.{Style.RESET_ALL}")
     if mode == "False":
         IS_QUIET = False
         await ctx.send("```Quiet mode is off```")
-        print("Quiet mode is off.")
+        print(f"{Fore.GREEN}Quiet mode is off.{Style.RESET_ALL}")
 
 
 # MISC COMMANDS
@@ -1445,7 +1557,7 @@ async def setcool(ctx, duration=0):
     await ctx.send(f"Global cooloff duration set to {timeouts['cooldown']}")
 
 
-@bot.tree.command(name="submit", description="Make a submission.")
+@bot.tree.command(name="submit", description="Make a submission (used in quest).")
 async def submit(interaction: discord.Interaction, submission: str):
     """
     Submit a message
@@ -1460,7 +1572,9 @@ async def submit(interaction: discord.Interaction, submission: str):
     await submit_message(interaction, submission, confirmation_message)
 
 
-@bot.tree.command(name="resubmit", description="Change your submission.")
+@bot.tree.command(
+    name="resubmit", description="Change your submission (used in quest)."
+)
 async def resubmit(interaction: discord.Interaction, submission: str):
     """
     Resubmit/revise a message
@@ -1509,7 +1623,7 @@ async def post_submissions(ctx):
     # Go through all nicknames and their submissions
     for player_name, submission in players_to_submissions.items():
         # Append a string formatted with the nickname and their submission
-        submissions.append(f"📜 **{player_name}**:\n🗣️  {submission}")
+        submissions.append(f"🙋 **{player_name}**:\n📜  {submission}")
 
     # Join all submissions together with a newline in between each one
     formatted_submissions = "\n\n\n".join(submissions)
@@ -1533,7 +1647,7 @@ async def post_proposal_values(ctx):
 
 @bot.tree.command(
     name="propose_value_revision",
-    description="Press enter to select and propose a revision to the values list",
+    description="Press enter to select and propose a revision to the values list (used in #d20-agora)",
 )
 async def propose_value_revision(interaction: discord.Interaction):
     view = ValueRevisionView()
@@ -1556,55 +1670,30 @@ async def trigger_vote(
     """
     vote_state_manager.question = question
     quest = bot.quest
+    member_count = len(ctx.channel.members) - 1  # subtract one to account for bot
+    vote_context = VoteContext.create(
+        ctx.send,
+        member_count,
+        ctx=ctx,
+        question=question,
+        timeout=int(timeout),
+        topic=topic,
+        quest=quest,
+    )
     if type == "values":
-        contenders = list(value_revision_manager.proposed_values_dict.values())
-        non_objection_options = await lazy_consensus(
-            ctx=ctx,
-            quest=quest,
-            question=question,
-            options=value_revision_manager.proposed_values_dict,
-            timeout=int(timeout),
-        )
+        options = list(value_revision_manager.proposed_values_dict.values())
+        vote_context.decision_module_name = "lazy_consensus"
+        vote_context.options = options
+        non_objection_options = await vote(vote_context=vote_context)
         value_revision_manager.agora_values_dict.update(non_objection_options)
     if type == "submissions":
         # Get all keys (player_names) from the players_to_submissions dictionary and convert it to a list
-        contenders = list(bot.quest.players_to_submissions.values())
-        await vote(ctx, quest, question, contenders, int(timeout), topic)
+        options = list(bot.quest.players_to_submissions.values())
+        vote_context.decision_module_name = "random"  # choose decision module randomly
+        vote_context.options = options
+        await vote(vote_context=vote_context)
         # Reset the players_to_submissions dictionary for the next round
         bot.quest.reset_submissions()
-
-
-# General purpose for agora and generalized abstraction for quests
-# TODO: WIP, need to convert to select > modal similar to propose_revision command
-@bot.tree.command(
-    name="propose", description="Propose an element of this group's constitution."
-)
-@app_commands.choices(
-    decision_method=[
-        app_commands.Choice(name="Majority", value="majority"),
-        app_commands.Choice(name="Consensus", value="consensus"),
-    ]
-)
-@app_commands.choices(
-    duration=[
-        app_commands.Choice(name="Short (20 seconds)", value=20),
-        app_commands.Choice(name="Medium (60 seconds)", value=60),
-        app_commands.Choice(name="Long (90 seconds)", value=90),
-    ]
-)
-async def propose(
-    interaction: discord.Interaction,
-    proposal: str,
-    duration: app_commands.Choice[int],
-    decision_method: app_commands.Choice[str],
-):
-    """
-    Call vote on values, submissions, etc
-    """
-    quest = bot.quest
-    options = ["Approve proposal", "Object proposal"]
-
-    await vote(interaction, quest, proposal, options, duration, decision_method)
 
 
 async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> str:
@@ -1621,19 +1710,25 @@ async def prompt_user(interaction: discord.Interaction, prompt_message: str) -> 
 # STREAM OF DELIBERATION QUESTIONS
 @bot.command(hidden=True)
 async def send_deliberation_questions(ctx, questions):
+    # Check if the bot is in fast mode
     if hasattr(bot, "quest") and bot.quest.fast_mode:
         timeout_seconds = 15
         await asyncio.sleep(timeout_seconds)
         return
 
-    if questions == "deliberation_questions_for_name":
-        questions = deliberation_questions_for_name
-    if questions == "deliberation_questions_for_purpose":
-        questions = deliberation_questions_for_purpose
-    if questions == "deliberation_questions_for_goal":
-        questions = deliberation_questions_for_goal
+    # Make a copy of the deliberation questions list
+    copy_of_deliberation_questions = deliberation_questions.copy()
 
-    random_question = random.choice(questions)
+    if questions == "deliberation_questions":
+        questions = deliberation_questions
+
+    # Reset the list if there are no more deliberation questions left
+    if len(questions) == 0:
+        questions = copy_of_deliberation_questions
+
+    random_index = random.randint(0, len(questions) - 1)
+    random_question = questions.pop(random_index)
+
     embed = discord.Embed(title="A Deliberation Question:", description=random_question)
     await ctx.channel.send(embed=embed)
 
@@ -1690,6 +1785,10 @@ async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]["file"]):
     gen_images = args.image
 
     # Set up quest
+    if QUEST_IN_PROGRESS:
+        await ctx.send("There is already a quest in progress.")
+        return
+    
     quest = setup_quest(quest_mode, gen_images, gen_audio, fast_mode, solo_mode=True)
     quest.add_player(ctx.author.name)
 
@@ -1700,63 +1799,6 @@ async def solo(ctx, *args, quest_mode=SIMULATIONS["build_a_community"]["file"]):
     )
     await ctx.send(embed=embed)
     await start_quest(ctx, quest)
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_randomize_snapshot(ctx):
-    """
-    Test making a randomized governance snapshot
-    """
-    shuffle_modules()
-    make_governance_snapshot()
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_png_creation(ctx):
-    """
-    Test governance stack png creation
-    """
-    make_governance_snapshot()
-    with open("output.png", "rb") as f:
-        png_file = discord.File(f, "output.svg")
-        await ctx.send(file=png_file)
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_img_generation(ctx, text="Obscurity"):
-    """
-    Test stability image generation
-    """
-    image = generate_image(text)
-
-    # Save the image to a file
-    image.save("generated_image.png")
-
-    # Post the image to the Discord channel
-    await ctx.send(file=discord.File("generated_image.png"))
-
-    # Clean up the image file
-    os.remove("generated_image.png")
-
-
-# TODO: can we remove?
-@bot.command(hidden=True)
-@commands.check(lambda ctx: check_cmd_channel(ctx, "d20-testing"))
-async def test_module_png_generation(ctx, module, module_dict=CULTURE_MODULES):
-    """
-    Test stability image generation
-    """
-    if module in module_dict:
-        module_name = module_dict[module]["name"]
-        svg_icon = module_dict[module]["icon"]
-        image = make_module_png(module_name, svg_icon)
-    await ctx.send(file=discord.File(image))
 
 
 # COMMAND MANAGEMENT
@@ -1784,15 +1826,14 @@ async def change_cmd_acl(ctx, setting_name, value, command_name=""):
         ACCESS_CONTROL_SETTINGS["command_name"] = command_name
 
 
-# GOVERNANCE INPUT
 async def clear_decision_input_values(ctx):
     """
     Set decision module input values to 0
 
     Used during vote retries
     """
-    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES:
-        CONTINUOUS_INPUT_DECISION_MODULES[decision_module]["input_value"] = 0
+    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES.values():
+        decision_module["input_value"] = 0
     print("Decision input values set to 0")
 
 
@@ -1827,37 +1868,29 @@ async def update_decision_module(context, new_decision_module):
         ACTIVE_GLOBAL_DECISION_MODULES[context.channel] = channel_decision_modules
 
 
-async def calculate_module_inputs(context, retry=None, tally=None):
+async def calculate_continuous_inputs(ctx):
     """
     Change local state of modules based on calculation of module inputs
     """
 
-    if retry:
-        max_value = max(
-            CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"]
-            for module in CONTINUOUS_INPUT_DECISION_MODULES
-        )
-        max_keys = [
-            module
-            for module in CONTINUOUS_INPUT_DECISION_MODULES
-            if CONTINUOUS_INPUT_DECISION_MODULES[module]["input_value"] == max_value
-        ]
+    max_value = max(
+        module["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
+    )
+    max_module_names = [
+        module_name
+        for module_name, module in CONTINUOUS_INPUT_DECISION_MODULES.items()
+        if module["input_value"] == max_value
+    ]
 
-        if not tally:
-            if max_value == INPUT_SPECTRUM["scale"] and len(max_keys) == 1:
-                await update_decision_module(context, max_keys[0])
-                await context.send(f"```{max_keys[0]} mode activated!```")
-                return True
+    # If threshold has been reached in only one module, update the decision module
+    if max_value >= INPUT_SPECTRUM["threshold"] and len(max_module_names) == 1:
+        await update_decision_module(ctx, max_module_names[0])
+        await ctx.send(f"```{max_module_names[0]} mode activated!```")
+        return True
+    else:
+        return False
 
-        else:
-            if len(max_keys) > 1:
-                await context.send(
-                    f"```Poll resulted in tie. Previous decision module kept.```"
-                )
-            else:
-                await update_decision_module(context, max_keys[0])
-                await context.send(f"```{max_keys[0]} mode activated!```")
-
+    # TODO: re-evaluate the following logic, right now it will not be invoked
     # Calculate culture inputs
     async def evaluate_module_state(module_name):
         module = CULTURE_MODULES.get(module_name, None)
@@ -1868,18 +1901,18 @@ async def calculate_module_inputs(context, retry=None, tally=None):
         # If local state not true and input value passes threshold
         if (
             not module.is_local_state_active()
-            and module.config["input_value"] > INPUT_SPECTRUM["threshold"]
+            and module.config["input_value"] >= INPUT_SPECTRUM["threshold"]
         ):
             module.activate_local_state()
             # If global state is true let user know that module is already activated
             if module.is_global_state_active():
                 # already on
-                await context.send(
+                await ctx.send(
                     f"```{module_name.capitalize()} module is already activated!```"
                 )
             else:
                 # Otherwiseactivate the global module
-                await module.activate_global_state(context)
+                await module.activate_global_state(ctx)
 
         # If local state is true and value is equales or gos under threshold
         elif (
@@ -1892,17 +1925,21 @@ async def calculate_module_inputs(context, retry=None, tally=None):
             # TODO: There is still a logical knot in here that needs to be unwound
             # If global state is false, the next step shouldn't be to deactivate the global state
             if not module.is_global_state_active():
-                await module.deactivate_global_state(context)
+                await module.deactivate_global_state(ctx)
 
             # If global state is true
             else:
                 # TODO: This is practically it's own function and can be made more modular in the future
                 # Turn off global state based on timeout value
                 timeout = 20
-                await module.deactivate_global_state(context, timeout)
+                await module.deactivate_global_state(ctx, timeout)
                 # Send a countdown message to user letting them know the module they turned off will turn back on
                 countdown_message = f"until {module_name} turns back on"
-                await countdown(context, timeout, countdown_message)
+                await countdown(
+                    ctx,
+                    timeout_seconds=timeout,
+                    text=countdown_message,
+                )
                 # If local state is false after timeout
                 if not module.is_local_state_active():
                     # Reactivate the local state
@@ -1910,8 +1947,8 @@ async def calculate_module_inputs(context, retry=None, tally=None):
                     # If value is less than or equal to threshold after timeout set input value to spectrum max
                     if module.config["input_value"] <= INPUT_SPECTRUM["threshold"]:
                         module.config["input_value"] = INPUT_SPECTRUM["scale"]
-                        await display_module_status(context, CULTURE_MODULES)
-                        await context.send(
+                        await display_module_status(ctx, CULTURE_MODULES)
+                        await ctx.send(
                             f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
                         )
 
@@ -1979,7 +2016,6 @@ async def display_module_status(context, module_dict):
             )
 
     await context.send(embed=embed)
-    await calculate_module_inputs(context)
 
 
 # MESSAGE PROCESSING
@@ -2077,7 +2113,7 @@ async def process_message(ctx, message):
                 if module_name == "wildcard":
                     get_module = CULTURE_MODULES.get("wildcard", None)
                     llm_prompt = get_module.config["llm_disclosure"]
-                    prompt_result = f"{filtered_message}\n\n```Message made using prompt created by {prompt_object.group_name} with\n* purpose:{prompt_object.group_purpose}\n* and goal: {prompt_object.group_goal}```"
+                    prompt_result = f"{filtered_message}\n\n```Message filtered by the voice of group: {prompt_object.decision_one}.```"
                     await send_webhook_message(webhook, message, prompt_result)
                 else:
                     await send_webhook_message(webhook, message, filtered_message)
@@ -2102,4 +2138,5 @@ async def apply_culture_modules(active_modules, message, message_content: str):
             module_name
         ]  # TODO: active_modules list should be the modules themselves, not their names
         message_content = await module.filter_message(message, message_content)
+
     return message_content

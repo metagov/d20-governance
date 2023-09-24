@@ -1,18 +1,23 @@
-from abc import ABC, abstractmethod
 import random
-import discord
 import asyncio
 import datetime
+
+import discord
 from discord import app_commands
-from d20_governance.utils.constants import *
+
+from d20_governance.utils.constants import GOVERNANCE_SVG_ICONS
+
 from langchain.prompts import PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chains import LLMChain
 from langchain.chat_models import ChatOpenAI
+
+from abc import ABC, abstractmethod
 from collections import defaultdict
+from colorama import Fore, Style
 
 
-# This is a custom List that tracks order or append and removal as well as groups of channels through sets
+# This is a custom set that tracks order or append and removal as well as groups of channels through sets
 class OrderedSet:
     def __init__(self):
         self.set = set()
@@ -34,10 +39,10 @@ class OrderedSet:
     def __len__(self):
         return len(
             self.list
-        )  # The lengthof the ListSet is the length of the internal list
+        )  # The length of the ListSet is the length of the internal list
 
     def __bool__(self):
-        return len(self) > 0  # Theinstance is "Truthy" if there are elements in it
+        return len(self) > 0  # The instance is "Truthy" if there are elements in it
 
 
 class RandomCultureModuleManager:
@@ -59,6 +64,9 @@ class ValueRevisionManager:
             "Trust": "Our community believes building trust is important, as it allows members to feel safe and comfortable sharing their thoughts and experiences.",
         }
         self.selected_value = {}
+        self.game_quest_values_dict = {}
+        self.quest_game_channels = []
+        self.lock = asyncio.Lock()
 
     def get_value_choices(self):
         choices = [
@@ -67,39 +75,55 @@ class ValueRevisionManager:
         ]
         return choices
 
-    def store_proposal(
+    async def store_proposal(
         self, proposed_value_name_input, proposed_value_definition_input
     ):
-        proposed_value_name = proposed_value_name_input.value.strip()
-        proposed_value_definition = proposed_value_definition_input.value.strip()
-        self.proposed_values_dict[proposed_value_name] = proposed_value_definition
+        async with self.lock:
+            proposed_value_name = proposed_value_name_input.value.strip()
+            proposed_value_definition = proposed_value_definition_input.value.strip()
+            self.proposed_values_dict[proposed_value_name] = proposed_value_definition
 
-    def update_values_dict(self, select_value, vote_result):
-        if not vote_result:
-            print("value dict not updated")
-        else:
-            del value_revision_manager.agora_values_dict[select_value]
-            value_revision_manager.agora_values_dict.update(vote_result)
-            message_content = ""
-            for (
-                value,
-                description,
-            ) in value_revision_manager.agora_values_dict.items():
-                message_content += f"{value}:\n{description}\n\n"
-            message = f"```{message_content}```"
-            module = CULTURE_MODULES.get("values", None)
-            module.config["values_list"] = message
+    async def update_values_dict(self, select_value, vote_result):
+        async with self.lock:
+            if not vote_result:
+                print("value dict not updated")
+            else:
+                if select_value in value_revision_manager.agora_values_dict:
+                    del value_revision_manager.agora_values_dict[select_value]
+                value_revision_manager.agora_values_dict.update(vote_result)
+                message_content = ""
+                for (
+                    value,
+                    description,
+                ) in value_revision_manager.agora_values_dict.items():
+                    message_content += f"{value}:\n{description}\n\n"
+                message = f"```{message_content}```"
+                module = CULTURE_MODULES.get("values", None)
+                module.config["values_list"] = message
 
-    def clear_proposed_values(self):
-        self.proposed_values_dict.clear()
+    async def clear_proposed_values(self):
+        async with self.lock:
+            self.proposed_values_dict.clear()
 
 
 value_revision_manager = ValueRevisionManager()
 
 
+class PromptObject:
+    def __init__(self):
+        self.decision_one = ""
+        self.decision_two = ""
+        self.decision_three = ""
+
+
+prompt_object = PromptObject()
+
+
 class CultureModule(ABC):
     def __init__(self, config):
         self.config = config  # This hold the configuration for the module
+        if "channels" not in self.config:
+            self.config["channels"] = set()
 
     async def filter_message(
         self, message: discord.Message, message_string: str
@@ -140,6 +164,26 @@ class CultureModule(ABC):
         else:
             await self.activate_global_state(ctx)
 
+    async def toggle_local_state_per_channel(self, ctx, channel):
+        if self.is_local_state_active_in_channel(channel):
+            await self.deactivate_local_state_in_channel(ctx, channel)
+        else:
+            await self.activate_local_state_in_channel(ctx, channel)
+
+    def is_local_state_active_in_channel(self, channel):
+        return channel in self.config["channels"]
+
+    async def activate_local_state_in_channel(self, ctx, channel):
+        self.config["channels"].add(channel)
+        await toggle_culture_module(ctx, self.config["name"], True)
+        await display_culture_module_state(ctx, self.config["name"], True)
+
+    async def deactivate_local_state_in_channel(self, ctx, channel):
+        if channel in self.config["channels"]:
+            self.config["channels"].remove(channel)
+            await toggle_culture_module(ctx, self.config["name"], False)
+            await display_culture_module_state(ctx, self.config["name"], False)
+
     # Timeout method
     async def timeout(self, timeout):
         print("Starting Timeout Task")
@@ -157,6 +201,8 @@ class Obscurity(CultureModule):
     async def filter_message(
         self, message: discord.Message, message_string: str
     ) -> str:
+        print(f"{Fore.GREEN}※ applying obscurity module{Style.RESET_ALL}")
+
         # Get the method from the module based on the value of "mode"
         method = getattr(self, self.config["mode"])
 
@@ -205,32 +251,6 @@ class Obscurity(CultureModule):
         return "".join(camel_case_words)
 
 
-class Diversity(CultureModule):
-    async def display_info(self, ctx):
-        # Display the message count for each user
-        message = "Message count by user:\n"
-
-        # Sort the user_message_count dictionary by message count in descending order
-        sorted_user_message_count = sorted(
-            USER_MESSAGE_COUNT.items(), key=lambda x: x[1], reverse=True
-        )
-
-        for user_id, count in sorted_user_message_count:
-            user = await ctx.guild.fetch_member(user_id)
-            message += f"{user.name}: {count}\n"
-        await ctx.send(f"```{message}```")
-
-
-class PromptObject:
-    def __init__(self):
-        self.group_name = ""
-        self.group_goal = ""
-        self.group_purpose = ""
-
-
-prompt_object = PromptObject()
-
-
 class Wildcard(CultureModule):
     async def filter_message(
         self, message: discord.Message, message_string: str
@@ -238,20 +258,24 @@ class Wildcard(CultureModule):
         """
         A LLM filter for messages made by users
         """
-        print("applying wildcard module")
-        get_module = CULTURE_MODULES.get("wildcard", None)
-        llm_prompt = get_module.config["llm_disclosure"]
+        print(f"{Fore.GREEN}※ applying wildcard module{Style.RESET_ALL}")
+        module = CULTURE_MODULES.get("wildcard", None)
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
-            input_variables=["input_text", "group_name", "group_goal", "group_purpose"],
-            template="Transform the content of the following input text: {input_text}. The aim is to make the content of the input text sound as though it was influences by the implict voice of the group that made this prompt. To do this use the name of the group ({group_name}), the group's goal ({group_goal}), and the purpose of the group ({group_purpose}). Do not speak as through you are the group, instead use the attributes of the group to influence the content, mainintaining the perspective of teh original input text. The resulting message should be roughly the same length as the input text.",
+            input_variables=[
+                "input_text",
+                "group_name",
+                "group_topic",
+                "group_way_of_speaking",
+            ],
+            template="You are from {group_name}. Please rewrite the following input ina way that makes the speaker sound {group_way_of_speaking} while maintaining the original meaning and intent. Incorporate the theme of {group_topic}. Don't complete any sentences, just rewrite them. Input: {input_text}",
         )
         chain = LLMChain(llm=llm, prompt=prompt)
         response = await chain.arun(
             {
-                "group_name": prompt_object.group_name,
-                "group_purpose": prompt_object.group_purpose,
-                "group_goal": prompt_object.group_goal,
+                "group_name": prompt_object.decision_one,
+                "group_topic": prompt_object.decision_two,
+                "group_way_of_speaking": prompt_object.decision_three,
                 "input_text": message_string,
             }
         )
@@ -265,7 +289,7 @@ class Amplify(CultureModule):
         """
         A LLM filter for messages during the /eloquence command/function
         """
-        print("applying amplify module")
+        print(f"{Fore.GREEN}※ applying amplify module{Style.RESET_ALL}")
         llm = ChatOpenAI(temperature=0.1, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate(
             input_variables=["input_text"],
@@ -280,7 +304,7 @@ class Ritual(CultureModule):
     async def filter_message(
         self, message: discord.Message, message_string: str
     ) -> str:
-        print("applying ritual module")
+        print(f"{Fore.GREEN}※ applying ritual module{Style.RESET_ALL}")
         async for msg in message.channel.history(limit=100):
             if msg.id == message.id:
                 continue
@@ -376,7 +400,7 @@ class Values(CultureModule):
         """
         Analyze message content based on values
         """
-        print("applying values module")
+        print(f"{Fore.GREEN}※ applying values module{Style.RESET_ALL}")
         llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         template = f"We hold and maintain a set of mutually agreed-upon values. Analyze whether the message '{text}' is in accordance with the values we hold:\n\n"
         current_values_dict = value_revision_manager.agora_values_dict
@@ -396,52 +420,49 @@ class Values(CultureModule):
         )
         return response, alignment
 
-    # FIXME: current_time variable not being assigned correctly
-    async def randomly_check_values(self, bot, ctx, channel):
-        while True:
-            print("in a value check loop")
-            current_time = datetime.utcnow()
-            print(f"time is: {current_time}")
-            # Randomly generate delay between executions
-            delay = random.randint(45, 55)
+    # TODO: Finish implementing and refine
+    # async def randomly_check_values(self, bot, ctx, channel):
+    #     while True:
+    #         print("in a value check loop")
+    #         current_time = datetime.datetime.utcnow()
+    #         print(f"time is: {current_time}")
+    #         # Randomly generate delay between executions
+    #         delay = random.randint(45, 55)
 
-            # Wait for the specified delay
-            await asyncio.sleep(delay)
+    #         # Wait for the specified delay
+    #         await asyncio.sleep(delay)
 
-            try:
-                # Fetch a random message from a game channel
-                messages = []
-                async for message in channel.history(limit=100, after=current_time):
-                    if (
-                        message.content.startswith("※")
-                        or isinstance(message, discord.Message)
-                        and not message.author.bot
-                    ):
-                        messages.append(message)
+    #         try:
+    #             # Fetch a random message from a game channel
+    #             messages = []
+    #             async for message in channel.history(limit=100, after=current_time):
+    #                 if (
+    #                     message.content.startswith("※")
+    #                     or isinstance(message, discord.Message)
+    #                     and not message.author.bot
+    #                 ):
+    #                     messages.append(message)
 
-                if not messages:
-                    print("No valid messages found in the channel")
-                    return
+    #             if not messages:
+    #                 print("No valid messages found in the channel")
+    #                 return
 
-                # Generate a list of valid message IDs
-                valid_message_ids = [message.id for message in messages]
+    #             # Generate a list of valid message IDs
+    #             valid_message_ids = [message.id for message in messages]
 
-                random_message_id = random.choice(valid_message_ids)
+    #             random_message_id = random.choice(valid_message_ids)
 
-                random_message = await channel.fetch_message(random_message_id)
-                print("fetched random message")
+    #             random_message = await channel.fetch_message(random_message_id)
+    #             print("fetched random message")
 
-                # Check values of the random message
-                await self.check_values(bot, channel, random_message)
-            except Exception as e:
-                print(f"Error occurred while checking values: {e}")
-            except discord.NotFound:
-                print("Random message not found")
-            except discord.HTTPException as e:
-                print(f"Error occurrent while fetching random message: {e}")
-
-
-values_module = Values(CultureModule)
+    #             # Check values of the random message
+    #             await self.check_values(bot, channel, random_message)
+    #         except Exception as e:
+    #             print(f"Error occurred while checking values: {e}")
+    #         except discord.NotFound:
+    #             print("Random message not found")
+    #         except discord.HTTPException as e:
+    #             print(f"Error occurrent while fetching random message: {e}")
 
 
 async def assign_role_to_user(user, role_name):
@@ -468,7 +489,7 @@ class Eloquence(CultureModule):
         """
         A LLM filter for messages during the /eloquence command/function
         """
-        print("applying eloquence module")
+        print(f"{Fore.GREEN}※ applying eloquence module{Style.RESET_ALL}")
         llm = ChatOpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
         prompt = PromptTemplate.from_template(
             template="You are from the Shakespearean era. Please rewrite the following input in a way that makes the speaker sound as eloquent, persuasive, and rhetorical as possible, while maintaining the original meaning and intent. Don't complete any sentences, jFust rewrite them. Input: {input_text}"
@@ -590,7 +611,7 @@ CULTURE_MODULES = {
             "llm_disclosure": None,
             "activated_message": "Messages will now be process through an LLM.",
             "deactivated_message": "Messages will no longer be processed through an LLM.",
-            "url": "https://raw.githubusercontent.com/metagov/d20-governance/main/assets/imgs/embed_thumbnails/obscurity.png",
+            "url": "",  # TODO: Add Wildcard URL
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
             "values_list": None,
@@ -647,22 +668,6 @@ CULTURE_MODULES = {
             "values_list": None,
         }
     ),
-    "diversity": Diversity(
-        {
-            "name": "diversity",
-            "global_state": False,
-            "local_state": False,
-            "mode": None,
-            "help": False,
-            "message_alter_mode": None,
-            "activated_message": "A measure of diversity influences the distribution of power.",
-            "deactivated_message": "Measurements of diversity continue, but no longer govern this environment's interactions.",
-            "url": "",  # TODO: make ritual img
-            "icon": GOVERNANCE_SVG_ICONS["culture"],
-            "input_value": 0,
-            "values_list": None,
-        }
-    ),
     "amplify": Amplify(
         {
             "name": "amplify",
@@ -674,7 +679,7 @@ CULTURE_MODULES = {
             "llm_disclosure": "Using the provided input text, generate a revised version that amplifies its sentiment to a much greater degree. Maintain the overall context and meaning of the message while significantly heightening the emotional tone.",
             "activated_message": "Sentiment amplification abounds.",
             "deactivated_message": "Sentiment amplification has ceased.",
-            "url": "",  # TODO: make ritual img
+            "url": "",  # TODO: make amplify img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
             "values_list": None,
@@ -692,7 +697,7 @@ CULTURE_MODULES = {
             "llm_disclosure": "You hold and maintain a set of mutually agreed upon values. The values you maintain are the values defined by the community. You review the contents of messages sent for validation and analyze the contents in terms of the values you hold. You describe in what ways the input text are aligned or unaligned with the values you hold.",
             "activated_message": "A means of validating the cultural alignment of this online communiuty is nafculture_moduow available. Respond to a message with check-values.",
             "deactivated_message": "Automatic measurement of values is no longer present, through an essence of the culture remains, and you can respond to messages with `check-values` to check value alignment.",
-            "url": "",  # TODO: make ritual img
+            "url": "",  # TODO: make values img
             "icon": GOVERNANCE_SVG_ICONS["culture"],
             "input_value": 0,
             "values_list": values_list,
