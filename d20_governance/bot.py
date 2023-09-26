@@ -235,7 +235,7 @@ class CultureModulesCog(commands.Cog):
             )
             return
 
-        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+        await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -249,7 +249,9 @@ class CultureModulesCog(commands.Cog):
             return
 
         if mode is None:
-            await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+            await module.toggle_local_state_per_channel(
+                ctx, ctx.guild.id, ctx.channel.id
+            )
         if mode not in available_modes:
             embed = discord.Embed(
                 title=f"Error - The mode '{mode}' is not available.",
@@ -257,7 +259,9 @@ class CultureModulesCog(commands.Cog):
             )
         else:
             module.config["mode"] = mode
-            await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+            await module.toggle_local_state_per_channel(
+                ctx, ctx.guild.id, ctx.channel.id
+            )
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -269,7 +273,7 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+        await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -281,7 +285,7 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+        await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -293,7 +297,7 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+        await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
     @commands.command()
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
@@ -305,7 +309,7 @@ class CultureModulesCog(commands.Cog):
         if module is None:
             return
 
-        await module.toggle_local_state_per_channel(ctx, ctx.channel.id)
+        await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
 
 bot = MyBot(command_prefix="/", description=description, intents=intents)
@@ -1833,6 +1837,7 @@ async def clear_decision_input_values(ctx):
 
     Used during vote retries
     """
+    print("Clearing decision input values...")
     for decision_module in CONTINUOUS_INPUT_DECISION_MODULES.values():
         decision_module["input_value"] = 0
     print("Decision input values set to 0")
@@ -1840,6 +1845,7 @@ async def clear_decision_input_values(ctx):
 
 @bot.command(hidden=True)
 async def list_values(ctx):
+    print("Listing values...")
     message_content = "The Community's Current Values:\n\n"
     for (
         value,
@@ -1859,6 +1865,7 @@ async def update_decision_module(context, new_decision_module):
 
     Only one decision module should be present at any given time
     """
+    print("Updating decision module...")
     channel_decision_modules = ACTIVE_GLOBAL_DECISION_MODULES.get(context.channel, [])
     if len(channel_decision_modules) > 0:
         channel_decision_modules = []
@@ -1873,7 +1880,8 @@ async def calculate_continuous_inputs(ctx):
     """
     Change local state of modules based on calculation of module inputs
     """
-
+    print("Calculating module inputs...")
+    
     max_value = max(
         module["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
     )
@@ -1885,6 +1893,7 @@ async def calculate_continuous_inputs(ctx):
 
     # If threshold has been reached in only one module, update the decision module
     if max_value >= INPUT_SPECTRUM["threshold"] and len(max_module_names) == 1:
+        # Update the decision module
         await update_decision_module(ctx, max_module_names[0])
         await ctx.send(f"```{max_module_names[0]} mode activated!```")
         return True
@@ -1894,6 +1903,7 @@ async def calculate_continuous_inputs(ctx):
     # TODO: re-evaluate the following logic, right now it will not be invoked
     # Calculate culture inputs
     async def evaluate_module_state(module_name):
+        print("Evaluating module state")
         module = CULTURE_MODULES.get(module_name, None)
         if module is None:
             return
@@ -1962,6 +1972,7 @@ async def display_module_status(context, module_dict):
     """
     Display the current status of culture input values
     """
+    print("Displaying module status...")
     if module_dict == CULTURE_MODULES:
         embed = discord.Embed(
             title="Culture Display Status",
@@ -2073,13 +2084,15 @@ async def process_message(ctx, message):
     """
     Process messages from on_message
     """
+    guild_id = ctx.guild.id
+    channel_id = ctx.channel.id
+    key = (guild_id, channel_id)
+
     if IS_QUIET and not message.author.bot:
         await message.delete()
     else:
-        # Check if any modes are active deleted the original message
-        active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL.get(
-            str(message.channel), OrderedSet()
-        )
+        # Check if any modes are active and deleted the original message
+        active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL.get(key, OrderedSet())
         if active_modules_by_channel:
             message_content = message.content
             if (
@@ -2134,10 +2147,9 @@ async def apply_culture_modules(active_modules, message, message_content: str):
     user_id = message.author.id
     USER_MESSAGE_COUNT[user_id] = USER_MESSAGE_COUNT.get(user_id, 0) + 1
 
+    # TODO: active_modules list should be the modules themselves, not their names
     for module_name in active_modules:
-        module: CultureModule = CULTURE_MODULES[
-            module_name
-        ]  # TODO: active_modules list should be the modules themselves, not their names
+        module: CultureModule = CULTURE_MODULES[module_name]
         message_content = await module.filter_message(message, message_content)
 
     return message_content
