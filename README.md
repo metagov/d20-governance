@@ -17,7 +17,7 @@
 ## Overview
 The d20 bot allows communities to play governance games in an LLM-mediated environment. Individuals and groups can come together to embark on a governance “quest”, where they make lightweight decisions about the community and experience varied mechanisms of decision-making. The bot moderates the governance game through different "culture modules" - playfully modifying users' messages to cultivate diverse interaction environments for participants.
 
-[Join our discord server to try it out!](https://discord.gg/ex9D8RcN)
+[Join our discord server to try it out!](https://discord.gg/sSSRxWVuxE)
 
 ### Build A Group Voice Game
 
