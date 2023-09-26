@@ -118,16 +118,15 @@ class MyBot(commands.Bot):
             if message.content.startswith("※"):
                 return
 
-            for module_name in (
-                CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
-            ):
-                if (
-                    message.content.lower() == f"{module_name} +1"
-                    or message.content.lower() == f"{module_name} -1"
-                ):
-                    change = 1 if message.content.lower().endswith("+1") else -1
-                    if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
-                        if VOTE_RETRY:
+            message_split = message.content.strip().split(" ")
+            if len(message_split) >= 2:
+                increment = message_split[-1]
+                if increment == "+1" or increment == "-1":
+                    module_name = message_split[0]
+                    change = 1 if increment == "+1" else -1
+                    # TODO: deduplicate these two branches
+                    if module_name in CONTINUOUS_INPUT_DECISION_MODULES.keys():
+                        if VOTE_RETRY: # Decision modules can only be changed via continuous input during a vote retry. 
                             decision_bucket = cooldowns["decisions"].get_bucket(message)
                             retry_after = decision_bucket.update_rate_limit()
                             if retry_after:
@@ -142,10 +141,9 @@ class MyBot(commands.Bot):
                             await display_module_status(
                                 context, CONTINUOUS_INPUT_DECISION_MODULES
                             )
-                            return
-                        else:
-                            return
-                    elif module_name in CULTURE_MODULES:
+                            # We do not call calculate_decision_module_inputs here as this is handled by the vote retry logic
+                        return
+                    elif module_name in CULTURE_MODULES.keys():
                         culture_bucket = cooldowns["cultures"].get_bucket(message)
                         retry_after = culture_bucket.update_rate_limit()
                         if retry_after:
@@ -157,6 +155,9 @@ class MyBot(commands.Bot):
                         module = CULTURE_MODULES[module_name]
                         module.config["input_value"] += change
                         await display_module_status(context, CULTURE_MODULES)
+                        await calculate_continuous_culture_inputs(context)
+                    else: 
+                        print(f"Continuous input module not found: {module_name}")
                         return
 
             await process_message(context, message)
@@ -258,6 +259,7 @@ class CultureModulesCog(commands.Cog):
                 title=f"Error - The mode '{mode}' is not available.",
                 color=discord.Color.red(),
             )
+            await ctx.send(embed=embed)
         else:
             module.config["mode"] = mode
             await module.toggle_local_state_per_channel(
@@ -452,8 +454,7 @@ async def start_quest(ctx, quest: Quest):
 #         self.timeout += 60
 #         await interaction.response.send_message("Vote duration extended by 60 seconds.")
 
-
-async def process_retry(ctx, retry_message):
+async def process_decision_retry(ctx, retry_message):
     await clear_decision_input_values(ctx)
     await ctx.send(retry_message)
     await ctx.send(
@@ -469,7 +470,7 @@ async def process_retry(ctx, retry_message):
     otherwise status quo will remain  
     """
     for _ in range(60):
-        reached_threshold = await calculate_continuous_inputs(ctx)
+        reached_threshold = await calculate_continuous_decision_inputs(ctx)
         if reached_threshold:
             return
         await asyncio.sleep(1)
@@ -566,7 +567,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                         # await view.wait()
                         print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
-                            await process_retry(game_channel_ctx, action.retry_message)
+                            await process_decision_retry(game_channel_ctx, action.retry_message)
                         retries -= 1
                     else:
                         if (
@@ -1750,7 +1751,7 @@ async def update_decision_module(context, new_decision_module):
         ACTIVE_GLOBAL_DECISION_MODULES[context.channel] = channel_decision_modules
 
 
-async def calculate_continuous_inputs(ctx):
+async def calculate_continuous_decision_inputs(ctx):
     """
     Change local state of modules based on calculation of module inputs
     """
@@ -1773,13 +1774,9 @@ async def calculate_continuous_inputs(ctx):
     else:
         return False
 
-    # TODO: re-evaluate the following logic, right now it will not be invoked
-    # Calculate culture inputs
-    async def evaluate_module_state(module_name):
-        print("Evaluating module state")
-        module = CULTURE_MODULES.get(module_name, None)
-        if module is None:
-            return
+# Calculate culture inputs
+async def calculate_continuous_culture_inputs(ctx):
+    for module_name, module in CULTURE_MODULES.items():
 
         # Toggle local and global state of modules based on input values
         # If local state not true and input value passes threshold
@@ -1836,8 +1833,7 @@ async def calculate_continuous_inputs(ctx):
                             f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
                         )
 
-    for module_name in CULTURE_MODULES.keys():
-        await evaluate_module_state(module_name)
+
 
 
 # TODO: reconcile redundant code here
