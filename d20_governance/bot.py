@@ -95,8 +95,8 @@ class MyBot(commands.Bot):
         """
         global VOTE_RETRY
         context = await bot.get_context(message)
-        guild_id = context.guild.id
-        channel_id = context.channel.id
+        guild_id = context.guild.id if context.guild else None
+        channel_id = context.channel.id if context.channel else None
         try:
             if message.author == bot.user:  # Ignore messages sent by the bot itself
                 return
@@ -126,45 +126,46 @@ class MyBot(commands.Bot):
                 if increment == "+1" or increment == "-1":
                     module_name = message_split[0]
                     change = 1 if increment == "+1" else -1
-                    # TODO: deduplicate these two branches
-                    if module_name in CONTINUOUS_INPUT_DECISION_MODULES.keys():
-                        if VOTE_RETRY: # Decision modules can only be changed via continuous input during a vote retry. 
-                            decision_bucket = cooldowns["decisions"].get_bucket(message)
-                            retry_after = decision_bucket.update_rate_limit()
+                    if channel_id is not None and guild_id is not None:
+                        # TODO: deduplicate and refactor this code
+                        if module_name in CONTINUOUS_INPUT_DECISION_MODULES.keys():
+                            if VOTE_RETRY: # Decision modules can only be changed via continuous input during a vote retry. 
+                                decision_bucket = cooldowns["decisions"].get_bucket(message)
+                                retry_after = decision_bucket.update_rate_limit()
+                                if retry_after:
+                                    await context.send(
+                                        f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+                                    )
+                                    return
+
+                                module = CONTINUOUS_INPUT_DECISION_MODULES[module_name]
+                                module.config[
+                                    "input_value"
+                                ] += change
+                                module.config["input_value"] = max(module.config["input_value"], 0)
+                                await display_module_status(
+                                    context, CONTINUOUS_INPUT_DECISION_MODULES
+                                )
+                                # We do not call calculate_decision_module_inputs here as this is handled by the vote retry logic
+                            return
+                        elif module_name in CULTURE_MODULES.keys():
+                            culture_bucket = cooldowns["cultures"].get_bucket(message)
+                            retry_after = culture_bucket.update_rate_limit()
                             if retry_after:
                                 await context.send(
-                                    f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+                                    f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
                                 )
                                 return
 
-                            module = CONTINUOUS_INPUT_DECISION_MODULES[module_name]
-                            module.config[
-                                "input_value"
-                            ] += change
+                            module = CULTURE_MODULES[module_name]
+                            module.config["input_value"] += change
                             module.config["input_value"] = max(module.config["input_value"], 0)
-                            await display_module_status(
-                                context, CONTINUOUS_INPUT_DECISION_MODULES
-                            )
-                            # We do not call calculate_decision_module_inputs here as this is handled by the vote retry logic
-                        return
-                    elif module_name in CULTURE_MODULES.keys():
-                        culture_bucket = cooldowns["cultures"].get_bucket(message)
-                        retry_after = culture_bucket.update_rate_limit()
-                        if retry_after:
-                            await context.send(
-                                f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
-                            )
+                            await display_module_status(context, CULTURE_MODULES)
+                            await calculate_continuous_culture_inputs(context, guild_id, channel_id)
                             return
-
-                        module = CULTURE_MODULES[module_name]
-                        module.config["input_value"] += change
-                        module.config["input_value"] = max(module.config["input_value"], 0)
-                        await display_module_status(context, CULTURE_MODULES)
-                        await calculate_continuous_culture_inputs(context, guild_id, channel_id)
-                        return
-                    else: 
-                        print(f"Continuous input module not found: {module_name}")
-                        return
+                        else: 
+                            print(f"Continuous input module not found: {module_name}")
+                            return
 
 
             # Process message if it was not a continuous input
