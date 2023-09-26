@@ -86,6 +86,7 @@ class MyBot(commands.Bot):
             await bot.tree.sync(guild=guild)
             await setup_server(guild)
             await delete_all_webhooks(guild)
+        check_and_delete_webhooks_if_needed.start()
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -820,6 +821,10 @@ async def end(ctx):
 
     print(f"{Fore.BLUE}⇓ Archived...{Style.RESET_ALL}")
 
+    guild_id = ctx.guild.id
+    guild = bot.get_guild(guild_id)
+    await delete_all_webhooks(guild)
+
 
 # VIEWS
 
@@ -842,136 +847,6 @@ class QuestBuilder(discord.ui.Select):
             for dropdown in [self.view.select1, self.view.select2, self.view.select3]
         ):
             self.view.enable_button()  # FIXME: Doesn't trigger function
-
-
-class QuestBuilderView(discord.ui.View):
-    def __init__(self, *, timeout=120):
-        super().__init__(timeout=timeout)
-        self.select1 = QuestBuilder(
-            placeholder="Select Quest",
-            options=[
-                discord.SelectOption(
-                    label="QUEST: WHIMSY",
-                    emoji="🤪",
-                    description="A whimsical governance game",
-                    value=SIMULATIONS["whimsy"],
-                ),
-                discord.SelectOption(
-                    label="QUEST: MASCOT",
-                    emoji="🐻‍❄️",
-                    description="Propose a new community mascot",
-                    value=SIMULATIONS["mascot"],
-                ),
-                discord.SelectOption(
-                    label="QUEST: COLONY",
-                    emoji="🛸",
-                    description="Governance under space colony",
-                    value=SIMULATIONS["colony"],
-                ),
-                discord.SelectOption(
-                    label="QUEST: ???",
-                    emoji="🤔",
-                    description="A random game of d20 governance",
-                    value=SIMULATIONS["llm_mode"],
-                ),
-                discord.SelectOption(
-                    label="MINIGAME: JOSH GAME",
-                    emoji="🙅",
-                    description="Decide the real Josh",
-                    value=SIMULATIONS["josh_game"],
-                ),
-                discord.SelectOption(
-                    label="TUTORIAL: BUILD A COMMUNITY",
-                    emoji="🎪",
-                    description="Build a community",
-                    value=SIMULATIONS["build_a_community"],
-                ),
-            ],
-        )
-        self.select2 = QuestBuilder(
-            placeholder="Select number of players",
-            options=[
-                discord.SelectOption(
-                    label=n,
-                    emoji="#️⃣",
-                    value=str(n),
-                )
-                for n in range(1, 20)
-            ],
-        )
-        self.select3 = QuestBuilder(
-            placeholder="Generate images?",
-            options=[
-                discord.SelectOption(
-                    label="Yes",
-                    emoji="🖼️",
-                    description="Turn image generation on",
-                    value=True,
-                ),
-                discord.SelectOption(
-                    label="No",
-                    emoji="🔳",
-                    description="Turn image generation off",
-                    value=False,
-                ),
-            ],
-        )
-        self.add_item(self.select1)
-        self.add_item(self.select2)
-        self.add_item(self.select3)
-
-        self.button = discord.ui.Button(
-            label="Propose Quest",
-            style=discord.ButtonStyle.green,
-            disabled=False,  # FIXME: should be set to True and enabled through enable_button
-            emoji="✅",
-        )
-        self.add_item(self.button)
-
-        self.button.callback = self.on_button_click
-
-    def get_results(self):
-        return (
-            self.select1.selected_value,
-            self.select2.selected_value,
-            self.select3.selected_value,
-        )
-
-    def enable_button(self):
-        self.button.disabled = False
-
-    async def on_button_click(self, interaction: discord.Interaction):
-        self.stop()
-        await interaction.response.defer()
-
-    async def wait_for_input(self, ctx):
-        self.ctx = ctx
-        await ctx.send("build your quest proposal:", view=self)
-
-        try:
-            await self.wait()
-        except asyncio.TimeoutError:
-            self.stop()
-        else:
-            return (
-                self.select1.selected_value,
-                int(self.select2.selected_value),
-                self.select3.selected_value
-                == "True",  # this is how you convert string to bool
-            )
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.channel != self.ctx.channel:
-            await interaction.response.send_message(
-                "this interaction is not in the expected channel.", ephemeral=True
-            )
-            return False
-        elif interaction.user != self.ctx.author:
-            await interaction.response.send_message(
-                "Only the original author can interact with this view.", ephemeral=True
-            )
-            return False
-        return True
 
 
 class JoinLeaveView(discord.ui.View):
@@ -1156,21 +1031,20 @@ class ValueRevisionView(discord.ui.View):
 @app_commands.choices(
     quest_mode=[
         app_commands.Choice(
-            name=f"{SIMULATIONS[quest]['emoji']} - {SIMULATIONS[quest]['name']}: {SIMULATIONS[quest]['description']}",
-            value=SIMULATIONS[quest]["file"],
+            name=f"{SIMULATIONS['build_a_community']['emoji']} - {SIMULATIONS['build_a_community']['name']}: {SIMULATIONS['build_a_community']['description']}",
+            value=SIMULATIONS["build_a_community"]["file"],
         )
-        for quest in SIMULATIONS
     ]
 )
 @app_commands.choices(
     number_of_players=[
-        app_commands.Choice(name="2️⃣ 2", value=2),
-        app_commands.Choice(name="3️⃣ 3", value=3),
-        app_commands.Choice(name="4️⃣ 4", value=4),
-        app_commands.Choice(name="5️⃣ 5", value=5),
-        app_commands.Choice(name="6️⃣ 6", value=6),
-        app_commands.Choice(name="7️⃣ 7", value=7),
-        app_commands.Choice(name="8️⃣ 8", value=8),
+        app_commands.Choice(name="2", value=2),
+        app_commands.Choice(name="3", value=3),
+        app_commands.Choice(name="4", value=4),
+        app_commands.Choice(name="5", value=5),
+        app_commands.Choice(name="6", value=6),
+        app_commands.Choice(name="7", value=7),
+        app_commands.Choice(name="8", value=8),
     ]
 )
 @app_commands.choices(
@@ -1881,7 +1755,6 @@ async def calculate_continuous_inputs(ctx):
     Change local state of modules based on calculation of module inputs
     """
     print("Calculating module inputs...")
-    
     max_value = max(
         module["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
     )
@@ -2058,7 +1931,9 @@ async def send_webhook_message(webhook, message, filtered_message):
             return
         payload = {
             "content": f"※ {filtered_message}",
-            "username": message.author.name,
+            "username": message.author.nick
+            if message.author.nick
+            else message.author.name,
             "avatar_url": message.author.avatar.url if message.author.avatar else None,
         }
         await webhook.send(**payload)
@@ -2078,6 +1953,22 @@ async def send_webhook_message(webhook, message, filtered_message):
         error_msg = f"An unexpected error occurred: {e}"
         print(error_msg)
         logging.error(error_msg)
+
+
+@tasks.loop(minutes=1.0)
+async def check_and_delete_webhooks_if_needed():
+    """
+    Regularly check if the webhook limit has been reached and clear webhooks if necessary
+    """
+    for guild in bot.guilds:
+        webhook_count = 0
+        for channel in guild.text_channels:
+            webhooks = await channel.webhooks()
+            webhook_count += len(webhooks)
+        if webhook_count > 8:
+            await delete_all_webhooks(guild)
+
+    print(f"Webhook check: # of webhooks: {webhook_count}")
 
 
 async def process_message(ctx, message):
