@@ -122,8 +122,10 @@ prompt_object = PromptObject()
 class CultureModule(ABC):
     def __init__(self, config):
         self.config = config  # This hold the configuration for the module
-        if "channels" not in self.config:
-            self.config["channels"] = set()
+        if "guild_channel_map" not in self.config:
+            self.config["guild_channel_map"] = {}
+        # if "channels" not in self.config:
+        # self.config["channels"] = set()
 
     async def filter_message(
         self, message: discord.Message, message_string: str
@@ -164,25 +166,44 @@ class CultureModule(ABC):
         else:
             await self.activate_global_state(ctx)
 
-    async def toggle_local_state_per_channel(self, ctx, channel):
-        if self.is_local_state_active_in_channel(channel):
-            await self.deactivate_local_state_in_channel(ctx, channel)
+    async def toggle_local_state_per_channel(self, ctx, guild_id, channel_id):
+        print("Toggling module...")
+        x = self.is_local_state_active_in_channel(guild_id, channel_id)
+        print(x)
+        if self.is_local_state_active_in_channel(guild_id, channel_id):
+            await self.deactivate_local_state_in_channel(ctx, guild_id, channel_id)
         else:
-            await self.activate_local_state_in_channel(ctx, channel)
+            await self.activate_local_state_in_channel(ctx, guild_id, channel_id)
 
-    def is_local_state_active_in_channel(self, channel):
-        return channel in self.config["channels"]
+    def is_local_state_active_in_channel(self, guild_id, channel_id):
+        print("Returning local state of active modules...")
+        return (
+            guild_id in self.config["guild_channel_map"]
+            and channel_id in self.config["guild_channel_map"][guild_id]
+        )
+        # return channel in self.config["channels"]
 
-    async def activate_local_state_in_channel(self, ctx, channel):
-        self.config["channels"].add(channel)
-        await toggle_culture_module(ctx, self.config["name"], True)
-        await display_culture_module_state(ctx, self.config["name"], True)
+    async def activate_local_state_in_channel(self, ctx, guild_id, channel_id):
+        print("Activating module...")
+        if guild_id not in self.config["guild_channel_map"]:
+            self.config["guild_channel_map"][guild_id] = set()
+        self.config["guild_channel_map"][guild_id].add(channel_id)
+        await toggle_culture_module(guild_id, channel_id, self.config["name"], True)
+        await display_culture_module_state(
+            ctx, guild_id, channel_id, self.config["name"], True
+        )
 
-    async def deactivate_local_state_in_channel(self, ctx, channel):
-        if channel in self.config["channels"]:
-            self.config["channels"].remove(channel)
-            await toggle_culture_module(ctx, self.config["name"], False)
-            await display_culture_module_state(ctx, self.config["name"], False)
+    async def deactivate_local_state_in_channel(self, ctx, guild_id, channel_id):
+        print("Deactivating module...")
+        channels_for_guild = self.config["guild_channel_map"].get(guild_id, None)
+        if channels_for_guild and channel_id in channels_for_guild:
+            self.config["guild_channel_map"][guild_id].discard(channel_id)
+            await toggle_culture_module(
+                guild_id, channel_id, self.config["name"], False
+            )
+            await display_culture_module_state(
+                ctx, guild_id, channel_id, self.config["name"], False
+            )
 
     # Timeout method
     async def timeout(self, timeout):
@@ -505,15 +526,13 @@ class Eloquence(CultureModule):
 ACTIVE_MODULES_BY_CHANNEL = defaultdict(OrderedSet)
 
 
-async def toggle_culture_module(ctx, module_name, state):
+async def toggle_culture_module(guild_id, channel_id, module_name, state):
     """
     If state is True, turn on the culture module
     if state is False, turn off the culture module
     """
-    channel_name = str(
-        ctx.channel
-    )  # TODO: add the modules, not just the channel name to this list
-    active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[channel_name]
+    key = (guild_id, channel_id)
+    active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[key]
 
     if state:
         active_modules_by_channel.add(module_name)
@@ -522,12 +541,13 @@ async def toggle_culture_module(ctx, module_name, state):
 
 
 # TODO: what does the variable "state" mean?
-async def display_culture_module_state(ctx, module_name, state):
+async def display_culture_module_state(ctx, guild_id, channel_id, module_name, state):
     """
     Send an embed displaying state of active culture moduled by channel
     """
-    channel_name = str(ctx.channel)
-    active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[channel_name]
+    print("Displaying culture module state...")
+    key = (guild_id, channel_id)
+    active_modules_by_channel = ACTIVE_MODULES_BY_CHANNEL[key]
 
     module = CULTURE_MODULES[module_name]
 
