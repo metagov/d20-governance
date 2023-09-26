@@ -1755,7 +1755,6 @@ async def calculate_continuous_inputs(ctx):
     Change local state of modules based on calculation of module inputs
     """
     print("Calculating module inputs...")
-
     max_value = max(
         module["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
     )
