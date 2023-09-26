@@ -613,7 +613,7 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                     raise Exception(f"Function {function_name} not found.")
                 function = globals().get(function_name)
                 args = progress_condition.arguments
-                tasks.append(function(game_channel_ctx, *args))
+                tasks.append(asyncio.create_task(function(game_channel_ctx, *args)))  # Modified line
                 print(
                     f"{Fore.BLUE}+ `{function_name}` in channel `{game_channel_ctx.channel}` with arguments {args} added to task list{Style.RESET_ALL}"
                 )  # Debugging line
@@ -624,10 +624,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                 condition_result = await future
                 if condition_result:
                     for task in pending:
-                        task.cancel() # Ensures all pending progress conditions are cancelled to avoid impacting future stages
+                        task.cancel()  # Ensures all pending progress conditions are cancelled to avoid impacting future stages
                     return True
-            await asyncio.sleep(1)  # sleep before checking again to avoid busy looping
-
+            await asyncio.sleep(1)  # sleep before checking
 
     # Run simultaneously and wait for both the action_runner and progress_checker to complete
     # If at least one of the progress conditions is met and all of the actions have completed, then the stage is complete

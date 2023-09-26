@@ -95,7 +95,6 @@ class VoteContext:
             decision_module_name=kwargs.get("decision_module_name"),
         )
 
-
 class DecisionModule(ABC):
     def __init__(self, config):
         self.config = config
