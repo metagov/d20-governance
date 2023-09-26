@@ -1023,16 +1023,6 @@ async def delete_all_webhooks(guild):
         print(f"{Fore.YELLOW}Webhooks from all guilds deleted{Style.RESET_ALL}")
 
 
-async def clear_decision_input_values(ctx):
-    """
-    Set decision module input values to 0
-
-    Used during vote retries
-    """
-    for decision_module in CONTINUOUS_INPUT_DECISION_MODULES:
-        CONTINUOUS_INPUT_DECISION_MODULES[decision_module]["input_value"] = 0
-    print("Decision input values set to 0")
-
 
 # LLM HELPERS
 
