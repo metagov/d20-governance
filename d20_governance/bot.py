@@ -95,6 +95,8 @@ class MyBot(commands.Bot):
         """
         global VOTE_RETRY
         context = await bot.get_context(message)
+        guild_id = context.guild.id
+        channel_id = context.channel.id
         try:
             if message.author == bot.user:  # Ignore messages sent by the bot itself
                 return
@@ -135,9 +137,11 @@ class MyBot(commands.Bot):
                                 )
                                 return
 
-                            CONTINUOUS_INPUT_DECISION_MODULES[module_name][
+                            module = CONTINUOUS_INPUT_DECISION_MODULES[module_name]
+                            module.config[
                                 "input_value"
                             ] += change
+                            module.config["input_value"] = max(module.config["input_value"], 0)
                             await display_module_status(
                                 context, CONTINUOUS_INPUT_DECISION_MODULES
                             )
@@ -154,12 +158,16 @@ class MyBot(commands.Bot):
 
                         module = CULTURE_MODULES[module_name]
                         module.config["input_value"] += change
+                        module.config["input_value"] = max(module.config["input_value"], 0)
                         await display_module_status(context, CULTURE_MODULES)
-                        await calculate_continuous_culture_inputs(context)
+                        await calculate_continuous_culture_inputs(context, guild_id, channel_id)
+                        return
                     else: 
                         print(f"Continuous input module not found: {module_name}")
                         return
 
+
+            # Process message if it was not a continuous input
             await process_message(context, message)
         except Exception as e:
             type, value, tb = sys.exc_info()
@@ -246,7 +254,7 @@ class CultureModulesCog(commands.Cog):
         Toggle obscurity module
         """
         available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
-        module = CULTURE_MODULES.get("obscurity", None)
+        module: CultureModule = CULTURE_MODULES.get("obscurity", None)
         if module is None:
             return
 
@@ -254,7 +262,8 @@ class CultureModulesCog(commands.Cog):
             await module.toggle_local_state_per_channel(
                 ctx, ctx.guild.id, ctx.channel.id
             )
-        if mode not in available_modes:
+
+        elif mode not in available_modes:
             embed = discord.Embed(
                 title=f"Error - The mode '{mode}' is not available.",
                 color=discord.Color.red(),
@@ -1775,7 +1784,8 @@ async def calculate_continuous_decision_inputs(ctx):
         return False
 
 # Calculate culture inputs
-async def calculate_continuous_culture_inputs(ctx):
+async def calculate_continuous_culture_inputs(ctx, guild_id, channel_id):
+    module: CultureModule
     for module_name, module in CULTURE_MODULES.items():
 
         # Toggle local and global state of modules based on input values
@@ -1793,7 +1803,7 @@ async def calculate_continuous_culture_inputs(ctx):
                 )
             else:
                 # Otherwiseactivate the global module
-                await module.activate_global_state(ctx)
+                await module.activate_global_state(ctx, guild_id, channel_id)
 
         # If local state is true and value is equales or gos under threshold
         elif (
@@ -1806,14 +1816,14 @@ async def calculate_continuous_culture_inputs(ctx):
             # TODO: There is still a logical knot in here that needs to be unwound
             # If global state is false, the next step shouldn't be to deactivate the global state
             if not module.is_global_state_active():
-                await module.deactivate_global_state(ctx)
+                await module.deactivate_global_state(ctx, guild_id, channel_id)
 
             # If global state is true
             else:
                 # TODO: This is practically it's own function and can be made more modular in the future
                 # Turn off global state based on timeout value
                 timeout = 20
-                await module.deactivate_global_state(ctx, timeout)
+                await module.deactivate_global_state(ctx, guild_id, channel_id, timeout)
                 # Send a countdown message to user letting them know the module they turned off will turn back on
                 countdown_message = f"until {module_name} turns back on"
                 await countdown(
@@ -1832,8 +1842,6 @@ async def calculate_continuous_culture_inputs(ctx):
                         await ctx.send(
                             f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
                         )
-
-
 
 
 # TODO: reconcile redundant code here
