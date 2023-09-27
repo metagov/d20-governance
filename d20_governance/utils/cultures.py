@@ -132,40 +132,7 @@ class CultureModule(ABC):
     ) -> str:
         return message_string
 
-    # Methods to handle local state
-    def is_local_state_active(self):
-        return self.config["local_state"]
-
-    def activate_local_state(self):
-        self.config["local_state"] = True
-
-    def deactivate_local_state(self):
-        self.config["local_state"] = False
-
-    # Methods to handle global state
-    def is_global_state_active(self):
-        return self.config["global_state"]
-
-    async def activate_global_state(self, ctx, guild_id, channel_id):
-        self.config["global_state"] = True
-        await toggle_culture_module(guild_id, channel_id, self.config["name"], True)
-        await display_culture_module_state(ctx, guild_id, channel_id, self.config["name"], True)
-
-    async def deactivate_global_state(self, ctx, guild_id, channel_id, timeout=None):
-        self.config["global_state"] = False
-        await toggle_culture_module(guild_id, channel_id, self.config["name"], False)
-        await display_culture_module_state(ctx, guild_id, channel_id, self.config["name"], False)
-
-        if timeout:
-            print("Timeout True")
-            asyncio.create_task(self.timeout(ctx, guild_id, channel_id, timeout))
-
-    async def toggle_global_state(self, ctx, guild_id, channel_id):
-        if self.is_global_state_active():
-            await self.deactivate_global_state(ctx, guild_id, channel_id)
-        else:
-            await self.activate_global_state(ctx, guild_id, channel_id)
-
+    # State management with channel and guild mapping
     async def toggle_local_state_per_channel(self, ctx, guild_id, channel_id):
         print("Toggling module...")
         if self.is_local_state_active_in_channel(guild_id, channel_id):

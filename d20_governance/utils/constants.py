@@ -161,8 +161,8 @@ DECISION_DICT = {}
 
 # SPECTRUM VALUES
 INPUT_SPECTRUM = {
-    "scale": 1,
-    "threshold": 1, 
+    "scale": 10,
+    "threshold": 5,
 }
 
 # INTERNAL ACCESS CONTROL SETTINGS
