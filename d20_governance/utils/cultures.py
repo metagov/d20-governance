@@ -132,44 +132,9 @@ class CultureModule(ABC):
     ) -> str:
         return message_string
 
-    # Methods to handle local state
-    def is_local_state_active(self):
-        return self.config["local_state"]
-
-    def activate_local_state(self):
-        self.config["local_state"] = True
-
-    def deactivate_local_state(self):
-        self.config["local_state"] = False
-
-    # Methods to handle global state
-    def is_global_state_active(self):
-        return self.config["global_state"]
-
-    async def activate_global_state(self, ctx):
-        self.config["global_state"] = True
-        await toggle_culture_module(ctx, self.config["name"], True)
-        await display_culture_module_state(ctx, self.config["name"], True)
-
-    async def deactivate_global_state(self, ctx, timeout=None):
-        self.config["global_state"] = False
-        await toggle_culture_module(ctx, self.config["name"], False)
-        await display_culture_module_state(ctx, self.config["name"], False)
-
-        if timeout:
-            print("Timeout True")
-            asyncio.create_task(self.timeout(timeout))
-
-    async def toggle_global_state(self, ctx):
-        if self.is_global_state_active():
-            await self.deactivate_global_state(ctx)
-        else:
-            await self.activate_global_state(ctx)
-
+    # State management with channel and guild mapping
     async def toggle_local_state_per_channel(self, ctx, guild_id, channel_id):
         print("Toggling module...")
-        x = self.is_local_state_active_in_channel(guild_id, channel_id)
-        print(x)
         if self.is_local_state_active_in_channel(guild_id, channel_id):
             await self.deactivate_local_state_in_channel(ctx, guild_id, channel_id)
         else:
@@ -181,7 +146,6 @@ class CultureModule(ABC):
             guild_id in self.config["guild_channel_map"]
             and channel_id in self.config["guild_channel_map"][guild_id]
         )
-        # return channel in self.config["channels"]
 
     async def activate_local_state_in_channel(self, ctx, guild_id, channel_id):
         print("Activating module...")
@@ -206,7 +170,7 @@ class CultureModule(ABC):
             )
 
     # Timeout method
-    async def timeout(self, timeout):
+    async def timeout(self, ctx, guild_id, channel_id, timeout):
         print("Starting Timeout Task")
         await asyncio.sleep(timeout)
         print("ending Timeout Task")
@@ -214,7 +178,7 @@ class CultureModule(ABC):
             not self.is_local_state_active()
         ):  # Check is module is still deactivated locally after waiting
             # if not
-            self.activate_global_state()
+            self.activate_global_state(ctx, guild_id, channel_id)
 
 
 class Obscurity(CultureModule):

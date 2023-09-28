@@ -95,6 +95,10 @@ class MyBot(commands.Bot):
         """
         global VOTE_RETRY
         context = await bot.get_context(message)
+        guild_id = context.guild.id if context.guild else None
+        channel_id = context.channel.id if context.channel else None
+        guild = context.guild
+        channel = bot.get_channel(channel_id)
         try:
             if message.author == bot.user:  # Ignore messages sent by the bot itself
                 return
@@ -118,47 +122,67 @@ class MyBot(commands.Bot):
             if message.content.startswith("※"):
                 return
 
-            for module_name in (
-                CONTINUOUS_INPUT_DECISION_MODULES.keys() | CULTURE_MODULES.keys()
-            ):
-                if (
-                    message.content.lower() == f"{module_name} +1"
-                    or message.content.lower() == f"{module_name} -1"
-                ):
-                    change = 1 if message.content.lower().endswith("+1") else -1
-                    if module_name in CONTINUOUS_INPUT_DECISION_MODULES:
-                        if VOTE_RETRY:
-                            decision_bucket = cooldowns["decisions"].get_bucket(message)
-                            retry_after = decision_bucket.update_rate_limit()
-                            if retry_after:
-                                await context.send(
-                                    f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+            message_split = message.content.strip().split(" ")
+            if len(message_split) >= 2:
+                increment = message_split[-1]
+                if increment == "+1" or increment == "-1":
+                    module_name = message_split[0]
+                    change = 1 if increment == "+1" else -1
+                    if channel_id is not None and guild_id is not None:
+                        # TODO: deduplicate and refactor this code
+                        if module_name in CONTINUOUS_INPUT_DECISION_MODULES.keys():
+                            if (
+                                VOTE_RETRY
+                            ):  # Decision modules can only be changed via continuous input during a vote retry.
+                                decision_bucket = cooldowns["decisions"].get_bucket(
+                                    message
+                                )
+                                retry_after = decision_bucket.update_rate_limit()
+                                if retry_after:
+                                    await context.send(
+                                        f"{context.author.mention}: Decision cooldown active, try again in {retry_after:.2f} seconds"
+                                    )
+                                    return
+
+                                module = CONTINUOUS_INPUT_DECISION_MODULES[module_name]
+                                module.config["input_value"] += change
+                                module.config["input_value"] = max(
+                                    module.config["input_value"], 0
+                                )
+                                await display_module_status(
+                                    context, CONTINUOUS_INPUT_DECISION_MODULES
+                                )
+                                # We do not call calculate_decision_module_inputs here as this is handled by the vote retry logic
+                            return
+                        elif module_name in CULTURE_MODULES.keys():
+                            if channel.name == "d20-agora":
+                                culture_bucket = cooldowns["cultures"].get_bucket(
+                                    message
+                                )
+                                retry_after = culture_bucket.update_rate_limit()
+                                if retry_after:
+                                    await context.send(
+                                        f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
+                                    )
+                                    return
+
+                                module = CULTURE_MODULES[module_name]
+                                module.config["input_value"] += change
+                                module.config["input_value"] = max(
+                                    module.config["input_value"], 0
+                                )
+                                await display_module_status(context, CULTURE_MODULES)
+                                await calculate_continuous_culture_inputs(
+                                    context, guild_id, channel_id
+                                )
+                                return
+                            else:
+                                print(
+                                    f"Continuous input module not found: {module_name}"
                                 )
                                 return
 
-                            CONTINUOUS_INPUT_DECISION_MODULES[module_name][
-                                "input_value"
-                            ] += change
-                            await display_module_status(
-                                context, CONTINUOUS_INPUT_DECISION_MODULES
-                            )
-                            return
-                        else:
-                            return
-                    elif module_name in CULTURE_MODULES:
-                        culture_bucket = cooldowns["cultures"].get_bucket(message)
-                        retry_after = culture_bucket.update_rate_limit()
-                        if retry_after:
-                            await context.send(
-                                f"{context.author.mention}: Culture cooldown active, try again in {retry_after:.2f} seconds"
-                            )
-                            return
-
-                        module = CULTURE_MODULES[module_name]
-                        module.config["input_value"] += change
-                        await display_module_status(context, CULTURE_MODULES)
-                        return
-
+            # Process message if it was not a continuous input
             await process_message(context, message)
         except Exception as e:
             type, value, tb = sys.exc_info()
@@ -220,7 +244,8 @@ class CultureModulesCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.command(hidden=True)
+    @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
     async def wildcard(self, ctx):
         """
         Toggle wildcard module
@@ -238,14 +263,14 @@ class CultureModulesCog(commands.Cog):
 
         await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
     async def obscurity(self, ctx, mode: str = None):
         """
         Toggle obscurity module
         """
         available_modes = ["scramble", "replace_vowels", "pig_latin", "camel_case"]
-        module = CULTURE_MODULES.get("obscurity", None)
+        module: CultureModule = CULTURE_MODULES.get("obscurity", None)
         if module is None:
             return
 
@@ -253,18 +278,20 @@ class CultureModulesCog(commands.Cog):
             await module.toggle_local_state_per_channel(
                 ctx, ctx.guild.id, ctx.channel.id
             )
-        if mode not in available_modes:
+
+        elif mode not in available_modes:
             embed = discord.Embed(
                 title=f"Error - The mode '{mode}' is not available.",
                 color=discord.Color.red(),
             )
+            await ctx.send(embed=embed)
         else:
             module.config["mode"] = mode
             await module.toggle_local_state_per_channel(
                 ctx, ctx.guild.id, ctx.channel.id
             )
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
     async def eloquence(self, ctx):
         """
@@ -276,7 +303,7 @@ class CultureModulesCog(commands.Cog):
 
         await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
     async def values(self, ctx):
         """
@@ -288,7 +315,7 @@ class CultureModulesCog(commands.Cog):
 
         await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
     async def amplify(self, ctx):
         """
@@ -300,7 +327,7 @@ class CultureModulesCog(commands.Cog):
 
         await module.toggle_local_state_per_channel(ctx, ctx.guild.id, ctx.channel.id)
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.check(lambda ctx: check_cmd_channel(ctx, "d20-agora"))
     async def ritual(self, ctx):
         """
@@ -335,14 +362,6 @@ async def help(interaction: discord.Interaction, command: str = None):
             f"**{prefix}{cmd.name}**\n{description or 'No description available.'}\n"
         )
 
-    # Loop through value culture module commands
-    cog = bot.get_cog("CultureModulesCog")
-    if cog:
-        cog_cmd_field = ""
-        for cmd in cog.get_commands():
-            description = cmd.brief or cmd.help
-            cog_cmd_field += f"**{prefix}{cmd.name}**\n{description or 'No description available.'}\n"
-
     embed = discord.Embed(
         title="Commands and About",
         description=f"Here's a list of available commands. Use `{prefix}help <command>` for more info.\n\nTo play with the bot, visit `#d20-agora` and select any of the culture modules.\n\nYou can also `/embark` from the `#d20-agora` on a quest to form a new group identity and voice.\n",
@@ -354,13 +373,8 @@ async def help(interaction: discord.Interaction, command: str = None):
         inline=False,
     )
     embed.add_field(
-        name="Value Module Commands",
-        value=cog_cmd_field,
-        inline=False,
-    )
-    embed.add_field(
-        name="Continuous Input Mechanism",
-        value="* You can turn culture modules on and off in `#d20-agora` using `<culture module> +1` or `<culture module -1>`.\n* For example: `eloquence +1` or `amplify -1`.",
+        name="Culture Modules",
+        value="You can turn culture modules on and off in `#d20-agora` using a continuous input mechanism.\n\n To toggle culture modules type `<culture module> +1` or `<culture module -1>`. For example: `eloquence +1` or `amplify -1`.\n\n Available culture modules include:\n\n* Amplify\n* Obscurity\n* Ritual\n* Eloquence\n* Values\n* Wildcard",
         inline=False,
     )
 
@@ -453,7 +467,7 @@ async def start_quest(ctx, quest: Quest):
 #         await interaction.response.send_message("Vote duration extended by 60 seconds.")
 
 
-async def process_retry(ctx, retry_message):
+async def process_decision_retry(ctx, retry_message):
     await clear_decision_input_values(ctx)
     await ctx.send(retry_message)
     await ctx.send(
@@ -469,7 +483,7 @@ async def process_retry(ctx, retry_message):
     otherwise status quo will remain  
     """
     for _ in range(60):
-        reached_threshold = await calculate_continuous_inputs(ctx)
+        reached_threshold = await calculate_continuous_decision_inputs(ctx)
         if reached_threshold:
             return
         await asyncio.sleep(1)
@@ -566,7 +580,9 @@ async def process_stage(ctx, stage: Stage, quest: Quest, message_obj: discord.Me
                         # await view.wait()
                         print(f"Number of retries remaining: {retries}")
                         if hasattr(action, "retry_message") and action.retry_message:
-                            await process_retry(game_channel_ctx, action.retry_message)
+                            await process_decision_retry(
+                                game_channel_ctx, action.retry_message
+                            )
                         retries -= 1
                     else:
                         if (
@@ -975,7 +991,7 @@ class NewValueModal(discord.ui.Modal, title="Propose new value"):
         )
 
         await interaction.response.send_message(
-            f"**{interaction.user.name} proposed a new value:**\n* **{self.proposed_value_name}:** {self.proposed_value_definition}"
+            f"```{interaction.user.name} proposed a new value:\n\nValue Name: {self.proposed_value_name}\nValue Description: {self.proposed_value_definition}```"
         )
 
         await asyncio.sleep(2)
@@ -1750,7 +1766,7 @@ async def update_decision_module(context, new_decision_module):
         ACTIVE_GLOBAL_DECISION_MODULES[context.channel] = channel_decision_modules
 
 
-async def calculate_continuous_inputs(ctx):
+async def calculate_continuous_decision_inputs(ctx):
     """
     Change local state of modules based on calculation of module inputs
     """
@@ -1773,71 +1789,29 @@ async def calculate_continuous_inputs(ctx):
     else:
         return False
 
-    # TODO: re-evaluate the following logic, right now it will not be invoked
-    # Calculate culture inputs
-    async def evaluate_module_state(module_name):
-        print("Evaluating module state")
-        module = CULTURE_MODULES.get(module_name, None)
-        if module is None:
-            return
 
-        # Toggle local and global state of modules based on input values
-        # If local state not true and input value passes threshold
-        if (
-            not module.is_local_state_active()
-            and module.config["input_value"] >= INPUT_SPECTRUM["threshold"]
-        ):
-            module.activate_local_state()
-            # If global state is true let user know that module is already activated
-            if module.is_global_state_active():
-                # already on
-                await ctx.send(
-                    f"```{module_name.capitalize()} module is already activated!```"
-                )
-            else:
-                # Otherwiseactivate the global module
-                await module.activate_global_state(ctx)
+async def calculate_continuous_culture_inputs(ctx, guild_id, channel_id):
+    module: CultureModule
+    for module_name, module in CULTURE_MODULES.items():
+        # Check if input_value reaches the spectrum threshold and local state it not yet active
+        if module.config["input_value"] > INPUT_SPECTRUM[
+            "threshold"
+        ] and not module.is_local_state_active_in_channel(guild_id, channel_id):
+            # Activate local state
+            await module.activate_local_state_in_channel(ctx, guild_id, channel_id)
+            await ctx.send(
+                f"```{module_name.capitalize()} module has been activated!```"
+            )
 
-        # If local state is true and value is equales or gos under threshold
-        elif (
-            module.is_local_state_active()
-            and module.config["input_value"] <= INPUT_SPECTRUM["threshold"]
-        ):
-            # Turn off local state
-            module.deactivate_local_state()
-            # If global state is false remove module from active modules list
-            # TODO: There is still a logical knot in here that needs to be unwound
-            # If global state is false, the next step shouldn't be to deactivate the global state
-            if not module.is_global_state_active():
-                await module.deactivate_global_state(ctx)
-
-            # If global state is true
-            else:
-                # TODO: This is practically it's own function and can be made more modular in the future
-                # Turn off global state based on timeout value
-                timeout = 20
-                await module.deactivate_global_state(ctx, timeout)
-                # Send a countdown message to user letting them know the module they turned off will turn back on
-                countdown_message = f"until {module_name} turns back on"
-                await countdown(
-                    ctx,
-                    timeout_seconds=timeout,
-                    text=countdown_message,
-                )
-                # If local state is false after timeout
-                if not module.is_local_state_active():
-                    # Reactivate the local state
-                    module.activate_local_state()
-                    # If value is less than or equal to threshold after timeout set input value to spectrum max
-                    if module.config["input_value"] <= INPUT_SPECTRUM["threshold"]:
-                        module.config["input_value"] = INPUT_SPECTRUM["scale"]
-                        await display_module_status(ctx, CULTURE_MODULES)
-                        await ctx.send(
-                            f"```{module.config['name'].capitalize()} has been turned back on and set to the max!```"
-                        )
-
-    for module_name in CULTURE_MODULES.keys():
-        await evaluate_module_state(module_name)
+        # Check if input_value goes below the threshold and local state is active
+        elif module.config["input_value"] <= INPUT_SPECTRUM[
+            "threshold"
+        ] and module.is_local_state_active_in_channel(guild_id, channel_id):
+            # Deactivate local state
+            await module.deactivate_local_state_in_channel(ctx, guild_id, channel_id)
+            await ctx.send(
+                f"```{module_name.capitalize()} module has been deactivated```"
+            )
 
 
 # TODO: reconcile redundant code here

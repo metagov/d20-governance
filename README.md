@@ -70,6 +70,7 @@ The agora channel (#d20-agora) is a free-form Discord channel where your communi
 - **Eloquence**: Transform messages to be elaborate, persuasive, and Shakespearean. 
 - **Obscurity**: Transform messages text to make it obscure and hard to read.
 - **Ritual**: Transform messages to be in agreement with previous messages. 
+- **Values**: Check messages to see if they are aligned with the values of the community. 
 - **Wildcard**: Transform messages to take on the voice of the most recent group to complete a quest.
 
 ### Values Feature 
