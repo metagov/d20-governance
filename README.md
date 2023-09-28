@@ -64,6 +64,7 @@ The agora channel (#d20-agora) is a free-form Discord channel where your communi
 - **Majority**: The Majority decision model allows for decisions when the community is not in full agreement. Majority voting aims to reach a decision even if not all players agree, more than half of the group agree. 
 - **Consensus**: Consensus voting is also known as unanimous consent. It aims for full agreement through discussion. 
 - **Lazy Consensus**: Lazy Consensus is a decision mechanism that assumes players to agree with the presented option unless they explicitly object to it. Decision occurs when no objections, rather than unanimous agreement. 
+- **Implicit Feudalism**: Implicit Feudalism is the decision making method used by the bot to make a decision with the group is unable to reach a decision using the above decision modules.
 
 #### Culture Modules
 - **Amplify**: Transform messages to highten the sentiment of the original message.
