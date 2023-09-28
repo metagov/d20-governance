@@ -140,6 +140,13 @@ class CultureModule(ABC):
         else:
             await self.activate_local_state_in_channel(ctx, guild_id, channel_id)
 
+    async def toggle_local_state_per_channel(self, ctx, guild_id, channel_id):
+        print("Toggling module...")
+        if self.is_local_state_active_in_channel(guild_id, channel_id):
+            await self.deactivate_local_state_in_channel(ctx, guild_id, channel_id)
+        else:
+            await self.activate_local_state_in_channel(ctx, guild_id, channel_id)
+
     def is_local_state_active_in_channel(self, guild_id, channel_id):
         print("Returning local state of active modules...")
         return (

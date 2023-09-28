@@ -278,7 +278,7 @@ class CultureModulesCog(commands.Cog):
             await module.toggle_local_state_per_channel(
                 ctx, ctx.guild.id, ctx.channel.id
             )
-
+            
         elif mode not in available_modes:
             embed = discord.Embed(
                 title=f"Error - The mode '{mode}' is not available.",
@@ -465,6 +465,7 @@ async def start_quest(ctx, quest: Quest):
 #         # Extend vote duration by 60 seconds
 #         self.timeout += 60
 #         await interaction.response.send_message("Vote duration extended by 60 seconds.")
+
 
 
 async def process_decision_retry(ctx, retry_message):
@@ -1771,6 +1772,7 @@ async def calculate_continuous_decision_inputs(ctx):
     Change local state of modules based on calculation of module inputs
     """
     print("Calculating module inputs...")
+
     max_value = max(
         module["input_value"] for module in CONTINUOUS_INPUT_DECISION_MODULES.values()
     )
@@ -1788,7 +1790,6 @@ async def calculate_continuous_decision_inputs(ctx):
         return True
     else:
         return False
-
 
 async def calculate_continuous_culture_inputs(ctx, guild_id, channel_id):
     module: CultureModule
