@@ -936,11 +936,12 @@ async def check_cmd_channel(ctx, channel_name):
     """
     # Check if the command being run is /help and allow it to bypass checks
     channel = discord.utils.get(ctx.guild.channels, name=channel_name)
+
     if ctx.command.name == "help":
         return True
 
     # Check if the command is being invoked by a user
-    if ctx.message.author and not ctx.message.author.bot:
+    elif ctx.message.author and not ctx.message.author.bot:
         if ctx.channel.name != channel.name:
             embed = discord.Embed(
                 title="Error: This command cannot be run in this channel.",
@@ -1021,7 +1022,6 @@ async def delete_all_webhooks(guild):
     for webhook in webhooks:
         await webhook.delete()
         print(f"{Fore.YELLOW}Webhooks from all guilds deleted{Style.RESET_ALL}")
-
 
 
 # LLM HELPERS

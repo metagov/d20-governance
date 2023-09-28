@@ -95,6 +95,7 @@ class VoteContext:
             decision_module_name=kwargs.get("decision_module_name"),
         )
 
+
 class DecisionModule(ABC):
     def __init__(self, config):
         self.config = config
@@ -154,7 +155,7 @@ class DecisionModule(ABC):
         self, vote_context: VoteContext, member_count, timeout
     ):
         start_time = time.time()
-        extension_time = timeout - 45
+        extension_time = timeout - 100
         extension_triggered = False
 
         while True:
@@ -281,9 +282,7 @@ class LazyConsensus(DecisionModule):
         for name, description in vote_context.options.items():
             view = LazyConsensusView(name, vote_context.timeout)
             views.append(view)
-            message = await vote_context.send_message(
-                f"**Name:** {name}\n**Description:** {description}", view=view
-            )
+            message = await vote_context.send_message(view=view)
             view.set_message(message)
 
         await asyncio.gather(*(view.wait() for view in views))
@@ -338,6 +337,18 @@ class LazyConsensusView(discord.ui.View):
         await interaction.response.send_message(
             "Your objection has been recorded.", ephemeral=True
         )
+
+    @discord.ui.button(
+        style=discord.ButtonStyle.gray,
+        label="No Objection",
+        custom_id="no",
+    )
+    async def no_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        # await interaction.response.defer()
+        await interaction.response.send_message("Noted", ephemeral=True)
+        return
 
     def set_message(self, message):
         self.message = message
