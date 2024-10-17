@@ -19,6 +19,8 @@ The d20 bot allows communities to play governance games in an LLM-mediated envir
 
 [Join our discord server to try it out!](https://discord.gg/sSSRxWVuxE)
 
+[Visit our website for more information](https://metagov.github.io/d20-governance/)
+
 ### Build A Group Voice Game
 
 #### Stages
